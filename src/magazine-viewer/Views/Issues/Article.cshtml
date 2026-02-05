@@ -1,0 +1,713 @@
+@model (MagazineViewer.Models.Issue Issue, IEnumerable<MagazineViewer.Models.MagazineContent> Content, IEnumerable<MagazineViewer.Models.LinkedIssueView> LinkedIssues)
+
+
+
+
+
+@{
+    var firstContent = Model.Content.FirstOrDefault();
+    var articleTitle = firstContent?.Title ?? firstContent?.CategoryName ?? "Article";
+    ViewData["Title"] = $"{Model.Issue.MagazineName} - {articleTitle}";
+    var linkedIssues = Model.LinkedIssues?.ToList() ?? new List<MagazineViewer.Models.LinkedIssueView>();
+    var hasLinkedIssues = linkedIssues.Any(i => i.IssueId != null);
+<!-- Subtle message for linked issues -->
+if (hasLinkedIssues)
+{
+    <div id="linkedIssuesHint" style="display:block; color:#888; font-size:15px; margin-bottom:8px;">
+        Press <strong>Ctrl</strong> to see the linked Issues
+    </div>
+}
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2>@Model.Issue.MagazineName - @Model.Issue.DisplayName (@Model.Issue.Year)</h2>
+        <h4 class="text-muted">@articleTitle</h4>
+    </div>
+    <a href="/Issues/Details/@Model.Issue.IssueId" class="btn btn-secondary">Back to Issue</a>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        @TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        @TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@if (Model.Content.Any())
+{
+    var validContent = Model.Content
+        .Where(c => !string.IsNullOrEmpty(c.ImagePath))
+        .OrderBy(c => c.Page)
+        .ToList();
+    
+    @if (validContent.Any())
+    {
+        var content = validContent.First();
+        
+        <!-- Article Info Card -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4 class="mb-0">Article Details</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Category:</strong> 
+                            @if (!string.IsNullOrEmpty(content.CategoryName))
+                            {
+                                <span class="badge bg-primary">@content.CategoryName</span>
+                            }
+                        </p>
+                        @if (!string.IsNullOrEmpty(content.Author))
+                        {
+                            <p><strong>Author:</strong> @content.Author</p>
+                        }
+                        <p>
+                            <a href="/Issues/EditIndex?issueId=@Model.Issue.IssueId" class="btn btn-primary btn-sm">Edit _index File</a>
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        @if (!string.IsNullOrEmpty(content.Photographer))
+                        {
+                            <p><strong>Photographer:</strong> @content.Photographer</p>
+                        }
+                        @if (!string.IsNullOrEmpty(content.ModelNames))
+                        {
+                            <p><strong>Models:</strong> 
+                                @{
+                                    var modelNames = content.ModelNames.Split(new[] { ", " }, StringSplitOptions.RemoveEmptyEntries);
+                                    for (int i = 0; i < modelNames.Length; i++)
+                                    {
+                                        <a href="/Models/Details?name=@Uri.EscapeDataString(modelNames[i])" class="btn btn-sm btn-outline-primary">@modelNames[i]</a>
+                                        if (i < modelNames.Length - 1)
+                                        {
+                                            <text> </text>
+                                        }
+                                    }
+                                }
+                            </p>
+                        }
+                        @if (content.ModelAge.HasValue)
+                        {
+                            <p><strong>Age:</strong> @content.ModelAge</p>
+                        }
+                        @if (!string.IsNullOrEmpty(content.ModelMeasurements))
+                        {
+                            <p><strong>Measurements:</strong> @content.ModelMeasurements</p>
+                        }
+                        @{
+                            var pageCount = MagazineViewer.Models.MagazineContent.CalculatePageCount(validContent);
+                        }
+                        <p><strong>Pages:</strong> @validContent.First().Page - @validContent.Last().Page (@pageCount pages)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Pages -->
+        <h3 class="mb-3">Pages</h3>
+        <div class="alert alert-info" id="ocrResult" style="display:none;"></div>
+        <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.1/dist/tesseract.min.js"></script>
+        <script>
+            // Landscape mode detection for mobile
+            function handleOrientationChange() {
+                var isLandscape = window.matchMedia("(orientation: landscape)").matches;
+                var msgId = 'landscapeNotice';
+                var existing = document.getElementById(msgId);
+                if (isLandscape && window.innerWidth < 900) {
+                    if (!existing) {
+                        var notice = document.createElement('div');
+                        notice.id = msgId;
+                        notice.style.position = 'fixed';
+                        notice.style.bottom = '10px';
+                        notice.style.left = '50%';
+                        notice.style.transform = 'translateX(-50%)';
+                        notice.style.background = 'rgba(0,0,0,0.85)';
+                        notice.style.color = '#fff';
+                        notice.style.padding = '10px 22px';
+                        notice.style.borderRadius = '8px';
+                        notice.style.zIndex = 20000;
+                        notice.style.fontSize = '1.1em';
+                        notice.innerHTML = 'Landscape mode detected. Enjoy a wider view!';
+                        document.body.appendChild(notice);
+                    }
+                } else {
+                    if (existing) existing.remove();
+                }
+            }
+            window.addEventListener('orientationchange', handleOrientationChange);
+            window.addEventListener('resize', handleOrientationChange);
+            document.addEventListener('DOMContentLoaded', handleOrientationChange);
+        let isSelecting = false, startX = 0, startY = 0, endX = 0, endY = 0, selectionBox = null, selectedImg = null;
+
+        // Selection logic for fullscreen OCR
+        // function attachOcrSelectionEvents() {
+        //     var img = document.getElementById('fullscreenImage');
+        //     if (!img) return;
+        //     let selectionBox = null;
+        //     function updateSelectionBox() {
+        //         if (!isSelecting) {
+        //             if (selectionBox) selectionBox.style.display = 'none';
+        //             return;
+        //         }
+        //         if (!selectionBox) {
+        //             selectionBox = document.createElement('div');
+        //             selectionBox.id = 'ocrSelectionBox';
+        //             selectionBox.style.position = 'absolute';
+        //             selectionBox.style.border = '2px solid #00e0ff';
+        //             selectionBox.style.background = 'rgba(0,224,255,0.12)';
+        //             selectionBox.style.pointerEvents = 'none';
+        //             selectionBox.style.zIndex = 10001;
+        //             selectionBox.style.display = 'block';
+        //             selectionBox.style.borderRadius = '4px';
+        //             selectionBox.style.boxShadow = '0 0 8px #00e0ff88';
+        //             img.parentElement.appendChild(selectionBox);
+        //         }
+        //         let rect = img.getBoundingClientRect();
+        //         let sx = Math.min(startX, endX);
+        //         let sy = Math.min(startY, endY);
+        //         let sw = Math.abs(endX - startX);
+        //         let sh = Math.abs(endY - startY);
+        //         selectionBox.style.left = (sx + rect.left - img.parentElement.getBoundingClientRect().left) + 'px';
+        //         selectionBox.style.top = (sy + rect.top - img.parentElement.getBoundingClientRect().top) + 'px';
+        //         selectionBox.style.width = sw + 'px';
+        //         selectionBox.style.height = sh + 'px';
+        //         selectionBox.style.display = 'block';
+        //     }
+        //     img.addEventListener('mousedown', function(e) {
+        //         isSelecting = true;
+        //         var rect = img.getBoundingClientRect();
+        //         startX = Math.round(e.clientX - rect.left);
+        //         startY = Math.round(e.clientY - rect.top);
+        //         endX = startX;
+        //         endY = startY;
+        //         selectedImg = img;
+        //         updateSelectionBox();
+        //     });
+        //     img.addEventListener('mousemove', function(e) {
+        //         if (!isSelecting) return;
+        //         var rect = img.getBoundingClientRect();
+        //         endX = Math.round(e.clientX - rect.left);
+        //         endY = Math.round(e.clientY - rect.top);
+        //         updateSelectionBox();
+        //     });
+        //     img.addEventListener('mouseup', function(e) {
+        //         if (!isSelecting) return;
+        //         isSelecting = false;
+        //         var rect = img.getBoundingClientRect();
+        //         endX = Math.round(e.clientX - rect.left);
+        //         endY = Math.round(e.clientY - rect.top);
+        //         updateSelectionBox();
+        //         // Calculate selection box in image coordinates
+        //         let sx = Math.min(startX, endX);
+        //         let sy = Math.min(startY, endY);
+        //         let sw = Math.abs(endX - startX);
+        //         let sh = Math.abs(endY - startY);
+        //         // Only run OCR if selection is non-trivial
+        //         if (sw > 5 && sh > 5) {
+        //             handleOcrSelection(img, sx, sy, sw, sh);
+        //         }
+        //         if (selectionBox) selectionBox.style.display = 'none';
+        //     });
+        //     img.addEventListener('mouseleave', function(e) {
+        //         isSelecting = false;
+        //         if (selectionBox) selectionBox.style.display = 'none';
+        //     });
+        // }
+
+        // Overlay for issue reference result
+            function showIssueReferenceOverlay(msg, link) {
+                if (!hasLinkedIssues) return; // Do not show overlay if there are no linked issues
+                let overlay = document.getElementById('issueReferenceOverlay');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.id = 'issueReferenceOverlay';
+                    overlay.style.position = 'fixed';
+                    overlay.style.zIndex = 10002;
+                    overlay.style.background = 'rgba(0,0,0,0.85)';
+                    overlay.style.color = '#fff';
+                    overlay.style.padding = '18px 28px';
+                    overlay.style.borderRadius = '8px';
+                    overlay.style.fontSize = '18px';
+                    overlay.style.boxShadow = '0 2px 16px rgba(0,0,0,0.3)';
+                    overlay.style.maxWidth = '90vw';
+                    overlay.style.maxHeight = '60vh';
+                    overlay.style.overflowY = 'auto';
+                    overlay.style.display = 'none'; // Always hidden after creation/update
+                    overlay.style.left = '50%';
+                    overlay.style.top = '20%';
+                    overlay.style.transform = 'translateX(-50%)';
+                    overlay.style.textAlign = 'center';
+                    overlay.style.cursor = 'pointer';
+                    overlay.onclick = function() { overlay.remove(); };
+                    document.body.appendChild(overlay);
+                }
+                overlay.innerHTML = link ? `<a href="${link}" style="color:#fff;text-decoration:underline;font-weight:bold;">${msg}</a><br><span style='font-size:14px'>(Click to close)</span>` : `${msg}<br><span style='font-size:14px'>(Click to close)</span>`;
+            }
+            // Ctrl key logic for showing/hiding linked issues overlay
+            document.addEventListener('keydown', function(e) {
+                var overlay = document.getElementById('issueReferenceOverlay');
+                if (overlay) {
+                    if (e.ctrlKey && hasLinkedIssues) {
+                        overlay.style.display = 'block';
+                    } else {
+                        overlay.style.display = 'none';
+                    }
+                }
+            });
+            document.addEventListener('keyup', function(e) {
+                var overlay = document.getElementById('issueReferenceOverlay');
+                if (overlay) overlay.style.display = 'none';
+            });
+
+        function runOcrOnCanvas(canvas) {
+            const resultDiv = document.getElementById('ocrResult');
+            const overlay = document.getElementById('fullscreenDebugOverlay');
+            const dims = canvas.width + 'x' + canvas.height;
+            if (canvas._ocrSelectionCoords) {
+                // const coords = canvas._ocrSelectionCoords;
+            }
+            resultDiv.innerHTML = 'Running OCR...';
+            resultDiv.style.display = 'block';
+            if (overlay) {
+                overlay.style.display = 'block';
+                // overlay.textContent = `[OCR DEBUG] Running OCR...\nSelected area: ${dims}`;
+            }
+            // console.debug('[OCR DEBUG] Starting OCR on area:', dims);
+            Tesseract.recognize(canvas, 'eng').then(({ data: { text } }) => {
+                let overlayMsg = `[OCR DEBUG] OCR Result:\nSelected area: ${dims}\n` + text;
+                resultDiv.innerHTML = 'OCR Result: <br><pre>' + text + '</pre>';
+                if (overlay) {
+                    overlay.style.display = 'block';
+                    // overlay.textContent = overlayMsg;
+                }
+                // console.debug('[OCR DEBUG] OCR text:', text);
+
+                // --- Parse for vol. and no. ---
+                // Match 'vol' or 'vol.' (case-insensitive, optional parens, allow line breaks), then digits
+                // Match 'no' or 'no.' (case-insensitive, optional parens, allow line breaks), then digits
+                // Example: (Vol 11\nNo 9)
+                const volMatch = text.match(/\(?\bvol\.?\)?[\s\n]*([0-9]+)/i);
+                const noMatch = text.match(/\(?\bno\.?\)?[\s\n]*([0-9]+)/i);
+                if (volMatch && noMatch) {
+                    const volume = parseInt(volMatch[1], 10);
+                    const number = parseInt(noMatch[1], 10);
+                    const magazineName = document.querySelector('h2')?.textContent?.split(' - ')[0]?.trim();
+                    if (magazineName && !isNaN(volume) && !isNaN(number)) {
+                        // console.debug('[OCR DEBUG] Parsed magazineName:', magazineName, 'volume:', volume, 'number:', number);
+                        fetch(`/Issues/FindByVolNo?magazineName=${encodeURIComponent(magazineName)}&volume=${volume}&number=${number}`)
+                            .then(r => r.json())
+                            .then(data => {
+                                // console.debug('[OCR DEBUG] Backend response:', data);
+                                if (data && data.issueId) {
+                                    showIssueReferenceOverlay(
+                                        `Found issue: ${magazineName} Vol. ${volume} No. ${number}.<br>Click here to go to this issue.`,
+                                        `/Issues/Details/${data.issueId}`
+                                    );
+                                } else {
+                                    showIssueReferenceOverlay(
+                                        `Reference found: ${magazineName} Vol. ${volume} No. ${number}, but no matching issue exists in the database.`,
+                                        null
+                                    );
+                                }
+                            });
+                    }
+                }
+            }).catch(err => {
+                resultDiv.innerHTML = 'OCR failed: ' + err;
+                if (overlay) {
+                    overlay.style.display = 'block';
+                    // overlay.textContent = `[OCR DEBUG] OCR failed: ${err}\nSelected area: ${dims}`;
+                }
+                // console.debug('[OCR DEBUG] OCR failed:', err, 'Selected area:', dims);
+            });
+        }
+
+        // Attach selection logic when fullscreen is opened and images are updated
+        function updateFullscreenImage() {
+            var imgLeft = document.getElementById('fullscreenImage');
+            var imgRight = document.getElementById('fullscreenImageRight');
+            imgLeft._ocrSelectionAttached = false;
+            imgRight._ocrSelectionAttached = false;
+            imgLeft.src = images[currentIndex];
+            var isSpread = isDoublePageSpread(currentIndex);
+            if (isSpread) {
+                imgRight.src = images[currentIndex + 1];
+                imgRight.style.display = 'block';
+                imgLeft.style.width = '50%';
+                imgRight.style.width = '50%';
+                document.getElementById('fullscreenSpreadContainer').style.justifyContent = 'center';
+                document.getElementById('imageCounter').textContent = `${currentIndex + 1}-${currentIndex + 2} / ${images.Length}`;
+            } else {
+                imgRight.style.display = 'none';
+                imgLeft.style.width = '100%';
+                document.getElementById('fullscreenSpreadContainer').style.justifyContent = 'center';
+                document.getElementById('imageCounter').textContent = `${currentIndex + 1} / ${images.Length}`;
+            }
+            resetZoom();
+        }
+
+        // Selection logic: always use createOcrCanvasWithCoords for OCR
+        function handleOcrSelection(img, sx, sy, sw, sh) {
+            // sx, sy, sw, sh: selection in displayed image coordinates
+            // Scale to natural image coordinates
+            const scaleX = img.naturalWidth / img.width;
+            const scaleY = img.naturalHeight / img.height;
+            const nsx = Math.round(sx * scaleX);
+            const nsy = Math.round(sy * scaleY);
+            const nsw = Math.round(sw * scaleX);
+            const nsh = Math.round(sh * scaleY);
+            console.debug('[OCR DEBUG] Scaling selection:', {sx, sy, sw, sh, scaleX, scaleY, nsx, nsy, nsw, nsh});
+            var canvas = createOcrCanvasWithCoords(img, nsx, nsy, nsw, nsh);
+            runOcrOnCanvas(canvas);
+        }
+
+        // When creating the canvas for OCR, attach the selection coordinates for debug
+        function createOcrCanvasWithCoords(img, sx, sy, sw, sh) {
+            var canvas = document.createElement('canvas');
+            canvas.width = sw;
+            canvas.height = sh;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+            canvas._ocrSelectionCoords = { sx, sy, sw, sh };
+            return canvas;
+        }
+        </script>
+        <div class="row" id="pagesContainer">
+            @for (int i = 0; i < validContent.Count; )
+            {
+                // If this and next page form a double-page spread, join them
+                if (i < validContent.Count - 1 && validContent[i].Page % 2 == 0 && validContent[i + 1].Page == validContent[i].Page + 1)
+                {
+                    <div class="col-md-6 col-sm-8 col-12 mb-4 page-col" id="page-spread-@i" data-page-index="@i" style="padding:0; margin:0;">
+                        <div class="card h-100" style="cursor: pointer; padding: 0; margin: 0; border: none; box-shadow: none; background: none; display: flex; flex-direction: row; align-items: stretch; gap: 0;" onclick="openFullscreen(@i)">
+                            <img src="@Url.Content($"~/image?path={Uri.EscapeDataString(validContent[i].ImagePath!)}")" class="page-thumbnail" alt="Page @validContent[i].Page" style="width: 50%; height: 300px; object-fit: contain; background: none; margin: 0; padding: 0; border: none; box-shadow: none; display: block; cursor: pointer;" data-page-index="@i" />
+                            <img src="@Url.Content($"~/image?path={Uri.EscapeDataString(validContent[i+1].ImagePath!)}")" class="page-thumbnail" alt="Page @validContent[i+1].Page" style="width: 50%; height: 300px; object-fit: contain; background: none; margin: 0; padding: 0; border: none; box-shadow: none; display: block; cursor: pointer;" data-page-index="@(i+1)" />
+                        </div>
+                    </div>
+                    i += 2;
+                }
+                else
+                {
+                    // Otherwise, render as a single page
+                    <div class="col-md-3 col-sm-4 col-6 mb-4 page-col" id="page-@i" data-page-index="@i">
+                        <div class="card h-100" style="cursor: pointer;" onclick="openFullscreen(@i)">
+                            <img src="@Url.Content($"~/image?path={Uri.EscapeDataString(validContent[i].ImagePath!)}")" class="card-img-top page-thumbnail" alt="Page @validContent[i].Page" style="width: 100%; height: 300px; object-fit: contain; background-color: #f8f9fa;" data-page-index="@i" />
+                            <div class="card-body p-2">
+                                <h6 class="card-title mb-0">Page @validContent[i].Page</h6>
+                            </div>
+                        </div>
+                    </div>
+                    i++;
+                }
+            }
+        </div>
+        
+        <!-- Fullscreen Viewer -->
+        <div id="fullscreenViewer" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: black; z-index: 9999; overflow: hidden;">
+            <button onclick="closeFullscreen()" style="position: absolute; top: 20px; right: 20px; z-index: 10000; background: rgba(255,255,255,0.9); border: none; padding: 10px 20px; cursor: pointer; font-size: 18px; border-radius: 5px;">Close (Esc)</button>
+            <div id="imageContainer" style="display: flex; align-items: center; justify-content: center; height: 100%; width: 100%; gap: 10px;">
+                <!-- Overlay to the left of the image -->
+                <div id="leftOverlay" style="position: relative; left: 0; min-width: 120px; max-width: 95vw; background: rgba(30,30,40,0.92); color: #fff; z-index: 10001; border-radius: 10px; margin-right: 2vw; box-shadow: 2px 0 12px #0008; display: none; padding: 10px 8px 10px 8px; font-size: 1em; width: auto; max-height: none; height: auto;">
+                    <h4 style="margin-top:0; font-size:1.3em;">Linked Issues</h4>
+                    <div id="leftOverlayContent">
+                        <span style="color:#bbb;">No linked issues found.</span>
+                    </div>
+                </div>
+                <button onclick="previousImage()" style="position: absolute; left: 20px; background: rgba(255,255,255,0.9); border: none; padding: 15px 25px; cursor: pointer; font-size: 24px; border-radius: 5px; z-index: 10000;">‹</button>
+                <div id="fullscreenSpreadContainer" style="width: fit-content; height: 100vh; margin: auto; position: relative; top: 0; left: 0; right: 0; bottom: 0; display: block;">
+                    <img id="fullscreenImage" draggable="false" style="width: 50%; height: auto; max-height: 100vh; object-fit: contain; user-select: none; margin: 0; padding: 0; border: none; display: block; background: none;" />
+                    <img id="fullscreenImageRight" style="width: 50%; height: auto; max-height: 100vh; object-fit: contain; user-select: none; margin: 0; padding: 0; border: none; display: none; background: none;" />
+
+                </div>
+                <button onclick="nextImage()" style="position: absolute; right: 20px; background: rgba(255,255,255,0.9); border: none; padding: 15px 25px; cursor: pointer; font-size: 24px; border-radius: 5px; z-index: 10000;">›</button>
+            </div>
+            <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: white; font-size: 18px; background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 5px; z-index: 10000;">
+                <span id="imageCounter"></span>
+                <!-- Removed mouse debug overlay -->
+            </div>
+        </div>
+        
+        <script>
+            // Expose linked issues as JSON for JS filtering
+            var allLinkedIssues = @Html.Raw(Json.Serialize(linkedIssues));
+            var images = @Html.Raw(Json.Serialize(validContent.Select(c => Url.Content($"~/image?path={Uri.EscapeDataString(c.ImagePath ?? string.Empty)}")).ToList()));
+            var pageNumbers = @Html.Raw(Json.Serialize(validContent.Select(c => c.Page).ToList()));
+            // Removed debugPageNumbers assignment to prevent error if element does not exist
+            var currentIndex = 0;
+            var zoomLevel = 1.0;
+            var isZoomed = false;
+            var panX = 0;
+            var panY = 0;
+            var isPanning = false;
+            var lastMouseX = 0;
+            var lastMouseY = 0;
+
+            // Removed mouse debug overlay logic
+            
+            function isDoublePageSpread(index) {
+                // Check if current page is even and next page is odd (consecutive)
+                if (index >= pageNumbers.Length - 1) return false;
+                var currentPage = pageNumbers[index];
+                var nextPage = pageNumbers[index + 1];
+                return currentPage % 2 === 0 && nextPage === currentPage + 1;
+            }
+            
+            function openFullscreen(index) {
+                currentIndex = index;
+                resetZoom();
+                updateFullscreenImage();
+                document.getElementById('fullscreenViewer').style.display = 'block';
+                document.body.style.overflow = 'hidden';
+                // Attach debug overlay and OCR selection events after image is loaded
+                setTimeout(function() {
+                    // attachDebugOverlayEvents(); // Removed undefined function
+                    attachOcrSelectionEvents && attachOcrSelectionEvents();
+                }, 100);
+            }
+            
+            function closeFullscreen() {
+                document.getElementById('fullscreenViewer').style.display = 'none';
+                document.body.style.overflow = 'auto';
+                resetZoom();
+            }
+            
+            function resetZoom() {
+                // Zoom functionality removed
+            }
+            
+            function updateOverlayForCurrentPages() {
+                var leftOverlay = document.getElementById('leftOverlay');
+                var overlayDiv = document.getElementById('leftOverlayContent');
+                var ctrlHint = document.getElementById('ctrlHint');
+                if (!leftOverlay || !overlayDiv) return;
+                // Determine visible page(s)
+                var isSpread = isDoublePageSpread(currentIndex);
+                var visiblePages = isSpread ? [pageNumbers[currentIndex], pageNumbers[currentIndex + 1]] : [pageNumbers[currentIndex]];
+                // Filter links for these pages
+                var filtered = allLinkedIssues.filter(function(li) {
+                    return visiblePages.includes(li.page);
+                });
+                if (filtered.length === 0) {
+                    overlayDiv.innerHTML = '<span style="color:#bbb;">No linked issues found.</span>';
+                    leftOverlay.style.display = 'none';
+                    if (ctrlHint) ctrlHint.style.display = 'none';
+                    return;
+                }
+                var html = '<ul style="padding-left: 1.2em;">';
+                filtered.forEach(function(li) {
+                    if (li.issueId) {
+                        html += `<li><a href="/Issues/Details/${li.issueId}" style="color:#fff;text-decoration:underline;" target="_blank" rel="noopener noreferrer">Vol ${li.linkedVolume} No ${li.linkedNumber}</a></li>`;
+                    } else {
+                        html += `<li><span style="color:#bbb;">Vol ${li.linkedVolume} No ${li.linkedNumber} (missing)</span></li>`;
+                    }
+                });
+                html += '</ul>';
+                overlayDiv.innerHTML = html;
+                leftOverlay.style.display = 'none'; // Always hidden by default
+                // Show subtle ctrl hint if there are working links
+                var hasWorkingLinks = filtered.some(function(li) { return li.issueId; });
+                if (hasWorkingLinks) {
+                    if (!ctrlHint) {
+                        var hint = document.createElement('div');
+                        hint.id = 'ctrlHint';
+                        hint.style.position = 'fixed';
+                        hint.style.top = '32px';
+                        hint.style.left = '32px';
+                        hint.style.transform = 'none';
+                        hint.style.background = 'rgba(30,30,40,0.85)';
+                        hint.style.color = '#bbb';
+                        hint.style.fontSize = '15px';
+                        hint.style.padding = '7px 18px';
+                        hint.style.borderRadius = '7px';
+                        hint.style.zIndex = '10002';
+                        hint.style.boxShadow = '0 2px 8px #0006';
+                        hint.textContent = 'Linked issues available — press Left Ctrl to show';
+                        document.body.appendChild(hint);
+                    } else {
+                        ctrlHint.style.display = 'block';
+                    }
+                } else {
+                    if (ctrlHint) ctrlHint.style.display = 'none';
+                }
+            }
+                        // Hide the hint when exiting fullscreen
+                        function closeFullscreen() {
+                            document.getElementById('fullscreenViewer').style.display = 'none';
+                            document.body.style.overflow = 'auto';
+                            resetZoom();
+                            var ctrlHint = document.getElementById('ctrlHint');
+                            if (ctrlHint) ctrlHint.style.display = 'none';
+                        }
+            // Show/hide overlay only when ctrl is held
+            document.addEventListener('keydown', function(e) {
+                var leftOverlay = document.getElementById('leftOverlay');
+                var isSpread = isDoublePageSpread(currentIndex);
+                var visiblePages = isSpread ? [pageNumbers[currentIndex], pageNumbers[currentIndex + 1]] : [pageNumbers[currentIndex]];
+                var filtered = allLinkedIssues.filter(function(li) {
+                    return visiblePages.includes(li.page);
+                });
+                // Only show overlay if left ctrl is held (not right ctrl)
+                if (leftOverlay) {
+                    if (e.ctrlKey && e.code === 'ControlLeft' && filtered.length > 0) {
+                        leftOverlay.style.display = 'inline-block';
+                    } else {
+                        leftOverlay.style.display = 'none';
+                    }
+                }
+            });
+            document.addEventListener('keyup', function(e) {
+                var leftOverlay = document.getElementById('leftOverlay');
+                if (leftOverlay) leftOverlay.style.display = 'none';
+            });
+
+            function updateFullscreenImage() {
+                console.debug('[NAV DEBUG] updateFullscreenImage called. currentIndex:', currentIndex, 'images:', images, 'pageNumbers:', pageNumbers);
+                var imgLeft = document.getElementById('fullscreenImage');
+                var imgRight = document.getElementById('fullscreenImageRight');
+                imgLeft.src = images[currentIndex];
+                var isSpread = isDoublePageSpread(currentIndex);
+                if (isSpread) {
+                    imgRight.src = images[currentIndex + 1];
+                    imgRight.style.display = 'block';
+                    imgLeft.style.width = '50%';
+                    imgRight.style.width = '50%';
+                    document.getElementById('fullscreenSpreadContainer').style.justifyContent = 'center';
+                    document.getElementById('imageCounter').textContent = `${currentIndex + 1}-${currentIndex + 2} / ${images.length}`;
+                } else {
+                    imgRight.style.display = 'none';
+                    imgLeft.style.width = '100%';
+                    document.getElementById('fullscreenSpreadContainer').style.justifyContent = 'center';
+                    document.getElementById('imageCounter').textContent = `${currentIndex + 1} / ${images.length}`;
+                }
+                updateOverlayForCurrentPages();
+                resetZoom();
+            }
+            
+            function updateImageTransform() {
+                // Zoom functionality removed
+            }
+                        var overlay = document.getElementById('fullscreenDebugOverlay');
+                        if (overlay) {
+                            overlay.style.display = 'block';
+                            overlay.textContent = '[OCR DEBUG] attachFullscreenOcrSelection called from imgLeft.onload';
+                        }
+            
+            function nextImage() {
+                console.debug('[NAV DEBUG] nextImage called. currentIndex:', currentIndex, 'images.length:', images.length);
+                // If showing double-page spread, skip the right page since we've already shown it
+                if (isDoublePageSpread(currentIndex)) {
+                    var overlay = document.getElementById('fullscreenDebugOverlay');
+                    if (overlay) {
+                        overlay.style.display = 'block';
+                        overlay.textContent = '[OCR DEBUG] attachFullscreenOcrSelection called from imgRight.onload';
+                    }
+                    // If the spread includes the last page, don't advance further
+                    if (currentIndex + 1 >= images.length - 1) {
+                        console.debug('[NAV DEBUG] At last page of spread, not advancing.');
+                        return;
+                    }
+                    currentIndex += 2;
+                } else if (currentIndex < images.length - 1) {
+                    // Prevent showing the last page if it was already shown in a spread
+                    if (currentIndex === images.length - 2 && isDoublePageSpread(currentIndex)) {
+                        console.debug('[NAV DEBUG] At last page (single), not advancing.');
+                        return;
+                    }
+                    currentIndex++;
+                } else {
+                    console.debug('[NAV DEBUG] Already at last image, not advancing.');
+                }
+                updateFullscreenImage();
+            }
+            
+            function previousImage() {
+                console.debug('[NAV DEBUG] previousImage called. currentIndex:', currentIndex);
+                if (currentIndex > 0) {
+                    currentIndex--;
+                    // Check if the new current page is an odd page that's part of a spread
+                    if (currentIndex > 0 && pageNumbers[currentIndex] % 2 === 1) {
+                        var prevPage = pageNumbers[currentIndex - 1];
+                        if (prevPage === pageNumbers[currentIndex] - 1) {
+                            currentIndex--; // Go back to the even page
+                            console.debug('[NAV DEBUG] Adjusted for spread, new currentIndex:', currentIndex);
+                        }
+                    }
+                    updateFullscreenImage();
+                } else {
+                    console.debug('[NAV DEBUG] Already at first image, not moving back.');
+                }
+                // Do nothing if at the first page
+            }
+            
+            // Click to zoom
+            // Zoom functionality removed
+            
+            // Mouse down - start panning
+            // Zoom functionality removed
+            
+            // Mouse move - pan
+            // Zoom functionality removed
+            
+            // Mouse up - stop panning
+            // Zoom functionality removed
+            
+            // Keyboard navigation
+            document.addEventListener('keydown', function(e) {
+                if (document.getElementById('fullscreenViewer').style.display === 'block') {
+                    console.debug('[NAV DEBUG] keydown event:', e.key, 'isZoomed:', isZoomed);
+                    if (e.key === 'ArrowRight' && !isZoomed) nextImage();
+                    else if (e.key === 'ArrowLeft' && !isZoomed) previousImage();
+                    else if (e.key === 'Escape') closeFullscreen();
+                }
+            });
+            
+            // Mouse wheel - zoom when zoomed, navigate when not
+            // Mouse wheel scrolls through pages
+            document.getElementById('fullscreenViewer').addEventListener('wheel', function(e) {
+                e.preventDefault();
+                console.debug('[NAV DEBUG] wheel event:', e.deltaY);
+                if (e.deltaY > 0) {
+                    nextImage();
+                } else if (e.deltaY < 0) {
+                    previousImage();
+                }
+            });
+
+
+        </script>
+    }
+    else
+    {
+        <p class="text-muted">No valid pages found for this article.</p>
+    }
+}
+else
+{
+    <p class="text-muted">No content found for this article.</p>
+}
+
+<style>
+    #fullscreenSpreadContainer {
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        max-width: 100vw;
+        max-height: 100vh;
+        width: auto;
+        height: 100vh;
+        margin: auto;
+        padding: 0;
+        box-sizing: border-box;
+    }
+<link rel="stylesheet" href="/css/Article.css" />

@@ -1,0 +1,25 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/magazine-viewer/MagazineViewer.csproj"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build IndexEditor",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "${workspaceFolder}/index-editor/IndexEditor.csproj"
+            ],
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}

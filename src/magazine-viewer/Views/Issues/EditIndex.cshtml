@@ -1,0 +1,30 @@
+@* All content removed as part of removing the All Issues page *@
+@model (string FilePath, string Content, int IssueId, int ArticleId)
+
+@{
+    ViewData["Title"] = "Edit _index.txt";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Edit _index.txt</h2>
+    <a href="/Issues/Article?issueId=@Model.IssueId&articleId=@Model.ArticleId" class="btn btn-secondary">Back to Article</a>
+</div>
+
+<div class="alert alert-info">
+    <strong>File:</strong> @Model.FilePath
+</div>
+
+<form method="post" action="/Issues/SaveIndex">
+    <input type="hidden" name="filePath" value="@Model.FilePath" />
+    <input type="hidden" name="issueId" value="@Model.IssueId" />
+    <input type="hidden" name="articleId" value="@Model.ArticleId" />
+    
+    <div class="mb-3">
+        <textarea name="content" class="form-control" rows="30" style="font-family: monospace; font-size: 14px;">@Model.Content</textarea>
+    </div>
+    
+    <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <a href="/Issues/Article?issueId=@Model.IssueId&articleId=@Model.ArticleId" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>

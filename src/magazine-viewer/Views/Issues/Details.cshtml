@@ -1,0 +1,361 @@
+@* All content removed as part of removing the All Issues page *@
+@model (MagazineViewer.Models.Issue Issue, IEnumerable<MagazineViewer.Models.MagazineContent> Content)
+
+@{
+    ViewData["Title"] = $"{Model.Issue.MagazineName} - {Model.Issue.DisplayName}";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>@Model.Issue.MagazineName - @Model.Issue.DisplayName</h2>
+    <a href="/Issues?magazineId=@Model.Issue.MagazineId" class="btn btn-secondary">Back to Issues</a>
+</div>
+
+@if (Model.Content.Any())
+{
+    var validContent = Model.Content
+        .Where(c => !string.IsNullOrEmpty(c.ImagePath))
+        .OrderBy(c => c.Page)
+        .GroupBy(c => c.ImagePath)
+        .Select(g => g.First())
+        .ToList();
+    
+    <!-- Cover Image -->
+    @if (!string.IsNullOrEmpty(Model.Issue.CoverImagePath))
+    {
+        <div class="text-center mb-4">
+            <img src="/image?path=@Uri.EscapeDataString(Model.Issue.CoverImagePath)" 
+                 alt="@Model.Issue.MagazineName @Model.Issue.DisplayName Cover" 
+                 style="max-width: 800px; max-height: 1200px; object-fit: contain; box-shadow: 0 4px 8px rgba(0,0,0,0.2);" 
+                 class="img-fluid" />
+        </div>
+    }
+    
+    <!-- Table of Contents -->
+    <!-- Table of Contents for all magazines, cover article first, no section header -->
+    <div class="card mb-4" style="background: #FFD700; border: none; box-shadow: 0 8px 16px rgba(0,0,0,0.3);">
+        <div class="card-header" style="background: #FFD700; border-bottom: 2px solid #000;">
+            <h4 class="mb-0 text-center" style="color: #000; font-family: 'Georgia', serif; letter-spacing: 2px; text-transform: uppercase; font-weight: bold;">Contents</h4>
+        </div>
+        <div class="card-body p-4">
+            @{
+                var articles = validContent
+                    .GroupBy(c => new { c.ArticleId, c.Title, c.CategoryName, c.Author, c.Photographer, c.ModelNames, c.ModelMeasurements, c.ModelAge })
+                    .Select(g => new {
+                        Article = g.Key,
+                        Page = g.Min(x => x.Page)
+                    })
+                    .OrderBy(x => x.Page)
+                    .ToList();
+                var coverArticle = articles.FirstOrDefault(a => (a.Article.CategoryName ?? "").ToLower() == "cover");
+                var nonCoverCategories = articles
+                    .Where(a => (a.Article.CategoryName ?? "").ToLower() != "cover" && (a.Article.CategoryName ?? "").ToLower() != "index")
+                    .GroupBy(a => a.Article.CategoryName ?? "(No Category)")
+                    .OrderBy(g => g.Key)
+                    .ToList();
+            }
+            @* Add cover article as the first item, no section header *@
+            @if (coverArticle != null)
+            {
+                <div class="mb-3">
+                    <h5 style="color: #000; font-family: 'Georgia', serif; border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 8px; font-size: 1.1rem;">Cover</h5>
+                    <div class="mb-1" style="cursor: pointer; padding: 4px 6px; background: rgba(0,0,0,0.03); border-left: 2px solid #000; transition: all 0.2s; min-height: 28px;"
+                         onclick="window.location.href='/Issues/Article?issueId=@Model.Issue.IssueId&articleId=@coverArticle.Article.ArticleId'"
+                         onmouseover="this.style.background='rgba(0,0,0,0.10)'; this.style.borderLeftColor='#DC143C'"
+                         onmouseout="this.style.background='rgba(0,0,0,0.03)'; this.style.borderLeftColor='#000'">
+                        <div class="d-flex align-items-center" style="min-height: 22px;">
+                            <div style="color: #000; font-size: 13px; font-family: 'Georgia', serif; width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                <strong>@(!string.IsNullOrEmpty(coverArticle.Article.Title) ? coverArticle.Article.Title : coverArticle.Article.CategoryName)</strong>
+                            </div>
+                            <div style="color: #000; font-size: 13px; font-family: 'Georgia', serif; flex: 1;">
+                                @if (!string.IsNullOrEmpty(coverArticle.Article.ModelNames))
+                                {<span>@coverArticle.Article.ModelNames@(coverArticle.Article.ModelAge.HasValue ? $", {coverArticle.Article.ModelAge}" : "")</span>}
+                            </div>
+                            <div style="color: #000; font-size: 15px; font-weight: bold; min-width: 36px; text-align: right;">
+                                @coverArticle.Page
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+            @foreach (var category in nonCoverCategories)
+            {
+                <div class="mb-3">
+                    <h5 style="color: #000; font-family: 'Georgia', serif; border-bottom: 1px solid #000; padding-bottom: 4px; margin-bottom: 8px; font-size: 1.1rem;">@category.Key</h5>
+                    @foreach (var article in category)
+                    {
+                        <div class="mb-1" style="cursor: pointer; padding: 4px 6px; background: rgba(0,0,0,0.03); border-left: 2px solid #000; transition: all 0.2s; min-height: 28px;"
+                             onclick="window.location.href='/Issues/Article?issueId=@Model.Issue.IssueId&articleId=@article.Article.ArticleId'"
+                             onmouseover="this.style.background='rgba(0,0,0,0.10)'; this.style.borderLeftColor='#DC143C'"
+                             onmouseout="this.style.background='rgba(0,0,0,0.03)'; this.style.borderLeftColor='#000'">
+                            <div class="d-flex align-items-center" style="min-height: 22px;">
+                                <div style="color: #000; font-size: 13px; font-family: 'Georgia', serif; width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    <strong>@(!string.IsNullOrEmpty(article.Article.Title) ? article.Article.Title : article.Article.CategoryName)</strong>
+                                </div>
+                                <div style="color: #000; font-size: 13px; font-family: 'Georgia', serif; flex: 1;">
+                                    @if (!string.IsNullOrEmpty(article.Article.ModelNames))
+                                    {<span>@article.Article.ModelNames@(article.Article.ModelAge.HasValue ? $", {article.Article.ModelAge}" : "")</span>}
+                                </div>
+                                <div style="color: #000; font-size: 15px; font-weight: bold; min-width: 36px; text-align: right;">
+                                    @article.Page
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+    
+    <!-- Pages -->
+    <h3 class="mb-3">Pages</h3>
+    <div class="row" id="pagesContainer">
+        @for (int i = 0; i < validContent.Count; )
+        {
+            // Check if this and next page form a double-page spread
+            if (i < validContent.Count - 1 && validContent[i].Page % 2 == 0 && validContent[i + 1].Page == validContent[i].Page + 1)
+            {
+                // Double-page spread: show both images side by side in one card, seamless
+                <div class="col-md-6 col-sm-8 col-12 mb-4 page-col" id="page-spread-@i" data-page-index="@i" style="padding:0; margin:0;">
+                    <div class="card h-100" style="cursor: pointer; display: flex; flex-direction: row; align-items: stretch; padding: 0; margin: 0; border: none; box-shadow: none; background: none;" onclick="openFullscreen(@i)">
+                        <img src="@Url.Content($"~/image?path={Uri.EscapeDataString(validContent[i].ImagePath!)}")" class="page-thumbnail" alt="Page @validContent[i].Page" style="width: 50%; height: 300px; object-fit: contain; background: none; margin: 0; border: none; box-shadow: none;" data-page-index="@i" />
+                        <img src="@Url.Content($"~/image?path={Uri.EscapeDataString(validContent[i+1].ImagePath!)}")" class="page-thumbnail" alt="Page @validContent[i+1].Page" style="width: 50%; height: 300px; object-fit: contain; background: none; margin: 0; border: none; box-shadow: none;" data-page-index="@(i+1)" />
+                    </div>
+                    <div class="card-body p-2" style="padding:0; margin:0;">
+                        <h6 class="card-title mb-0">Pages @validContent[i].Page - @validContent[i+1].Page</h6>
+                    </div>
+                </div>
+                i += 2;
+            }
+            else
+            {
+                var content = validContent[i];
+                <div class="col-md-3 col-sm-4 col-6 mb-4 page-col" id="page-@i" data-page-index="@i">
+                    <div class="card h-100" style="cursor: pointer;" onclick="openFullscreen(@i)">
+                        <img src="@Url.Content($"~/image?path={Uri.EscapeDataString(content.ImagePath!)}")" class="card-img-top page-thumbnail" alt="Page @content.Page" style="width: 100%; height: 300px; object-fit: contain; background-color: #f8f9fa;" data-page-index="@i" />
+                        <div class="card-body p-2">
+                            <h6 class="card-title mb-0">
+                                Page @content.Page
+                                @if (!string.IsNullOrEmpty(content.Title))
+                                {
+                                    <span class="text-muted small"> - @content.Title</span>
+                                }
+                            </h6>
+                        </div>
+                    </div>
+                </div>
+                i++;
+            }
+        }
+    </div>
+    
+    <!-- Fullscreen Viewer -->
+    <div id="fullscreenViewer" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: black; z-index: 9999; overflow: hidden;">
+        <button onclick="closeFullscreen()" style="position: absolute; top: 20px; right: 20px; z-index: 10000; background: rgba(255,255,255,0.9); border: none; padding: 10px 20px; cursor: pointer; font-size: 18px; border-radius: 5px;">Close (Esc)</button>
+        <div id="imageContainer" style="display: flex; align-items: center; justify-content: center; height: 100%; width: 100%; gap: 10px;">
+            <button onclick="previousImage()" style="position: absolute; left: 20px; background: rgba(255,255,255,0.9); border: none; padding: 15px 25px; cursor: pointer; font-size: 24px; border-radius: 5px; z-index: 10000;">‹</button>
+            <img id="fullscreenImage" style="max-width: 95%; max-height: 95%; object-fit: contain; transition: transform 0.1s ease-out; user-select: none;" />
+            <img id="fullscreenImageRight" style="max-width: 95%; max-height: 95%; object-fit: contain; transition: transform 0.1s ease-out; user-select: none; display: none;" />
+            <button onclick="nextImage()" style="position: absolute; right: 20px; background: rgba(255,255,255,0.9); border: none; padding: 15px 25px; cursor: pointer; font-size: 24px; border-radius: 5px; z-index: 10000;">›</button>
+        </div>
+        <div style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); color: white; font-size: 18px; background: rgba(0,0,0,0.7); padding: 10px 20px; border-radius: 5px; z-index: 10000;">
+            <span id="imageCounter"></span>
+        </div>
+    </div>
+    
+    <script>
+        var images = @Html.Raw(Json.Serialize(validContent.Select(c => Url.Content($"~/image?path={Uri.EscapeDataString(c.ImagePath ?? string.Empty)}")).ToList()));
+        var pageNumbers = @Html.Raw(Json.Serialize(validContent.Select(c => c.Page).ToList()));
+        var currentIndex = 0;
+        var zoomLevel = 1.0;
+        var isZoomed = false;
+        var panX = 0;
+        var panY = 0;
+        var isPanning = false;
+        var lastMouseX = 0;
+        var lastMouseY = 0;
+        var zoomCooldown = false;
+        
+        function isDoublePageSpread(index) {
+            // Check if current page is even and next page is odd (consecutive)
+            if (index >= pageNumbers.length - 1) return false;
+            var currentPage = pageNumbers[index];
+            var nextPage = pageNumbers[index + 1];
+            return currentPage % 2 === 0 && nextPage === currentPage + 1;
+        }
+        
+        function resetZoom() {
+            zoomLevel = 1.0;
+            isZoomed = false;
+            panX = 0;
+            panY = 0;
+            updateImageTransform();
+            
+            // Set cooldown to prevent immediate navigation after zoom out
+            zoomCooldown = true;
+            setTimeout(() => { zoomCooldown = false; }, 500);
+        }
+        
+        function scrollToPage(index) {
+            const element = document.getElementById('page-' + index);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                element.style.animation = 'highlight 2s';
+                setTimeout(() => { element.style.animation = ''; }, 2000);
+            }
+        }
+        
+        function openFullscreen(index) {
+            currentIndex = index;
+            resetZoom();
+            updateFullscreenImage();
+            document.getElementById('fullscreenViewer').style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeFullscreen() {
+            document.getElementById('fullscreenViewer').style.display = 'none';
+            document.body.style.overflow = 'auto';
+            resetZoom();
+        }
+        
+        function updateImageTransform() {
+            var img = document.getElementById('fullscreenImage');
+            var imgRight = document.getElementById('fullscreenImageRight');
+            img.style.transform = `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`;
+            img.style.cursor = isZoomed ? 'move' : 'zoom-in';
+            if (imgRight.style.display !== 'none') {
+                imgRight.style.transform = `scale(${zoomLevel}) translate(${panX}px, ${panY}px)`;
+                imgRight.style.cursor = isZoomed ? 'move' : 'zoom-in';
+            }
+        }
+        
+        function updateFullscreenImage() {
+            var imgLeft = document.getElementById('fullscreenImage');
+            var imgRight = document.getElementById('fullscreenImageRight');
+            
+            imgLeft.src = images[currentIndex];
+            
+            // Check if this should be a double-page spread
+            if (isDoublePageSpread(currentIndex)) {
+                imgRight.src = images[currentIndex + 1];
+                imgRight.style.display = 'block';
+                imgLeft.style.maxWidth = '47.5%';
+                imgRight.style.maxWidth = '47.5%';
+                document.getElementById('imageCounter').textContent = `${currentIndex + 1}-${currentIndex + 2} / ${images.length}`;
+            } else {
+                imgRight.style.display = 'none';
+                imgLeft.style.maxWidth = '95%';
+                document.getElementById('imageCounter').textContent = `${currentIndex + 1} / ${images.length}`;
+            }
+            resetZoom();
+        }
+        
+        function nextImage() {
+            // If showing double-page spread, skip the right page since we've already shown it
+            if (isDoublePageSpread(currentIndex) && currentIndex < images.length - 2) {
+                currentIndex += 2;
+            } else if (currentIndex < images.length - 1) {
+                currentIndex++;
+            }
+            updateFullscreenImage();
+        }
+        
+        function previousImage() {
+            // If previous image is part of a double-page spread, go back to the even page
+            if (currentIndex > 0) {
+                currentIndex--;
+                // Check if the new current page is an odd page that's part of a spread
+                if (currentIndex > 0 && pageNumbers[currentIndex] % 2 === 1) {
+                    var prevPage = pageNumbers[currentIndex - 1];
+                    if (prevPage === pageNumbers[currentIndex] - 1) {
+                        currentIndex--; // Go back to the even page
+                    }
+                }
+            }
+            updateFullscreenImage();
+        }
+        
+        // Click to zoom
+        document.getElementById('fullscreenImage').addEventListener('click', function(e) {
+            if (!isZoomed) {
+                // Zoom in to 2x on first click
+                zoomLevel = 2.0;
+                isZoomed = true;
+                updateImageTransform();
+            }
+        });
+        
+        // Mouse down - start panning
+        document.getElementById('fullscreenImage').addEventListener('mousedown', function(e) {
+            if (isZoomed) {
+                isPanning = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                e.preventDefault();
+            }
+        });
+        
+        // Mouse move - pan
+        document.addEventListener('mousemove', function(e) {
+            if (isPanning && isZoomed) {
+                var deltaX = (e.clientX - lastMouseX) / zoomLevel;
+                var deltaY = (e.clientY - lastMouseY) / zoomLevel;
+                panX += deltaX;
+                panY += deltaY;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                updateImageTransform();
+                e.preventDefault();
+            }
+        });
+        
+        // Mouse up - stop panning
+        document.addEventListener('mouseup', function(e) {
+            isPanning = false;
+        });
+        
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            if (document.getElementById('fullscreenViewer').style.display === 'block') {
+                if (e.key === 'ArrowRight' && !isZoomed) nextImage();
+                else if (e.key === 'ArrowLeft' && !isZoomed) previousImage();
+                else if (e.key === 'Escape') closeFullscreen();
+            }
+        });
+        
+        // Mouse wheel - zoom when zoomed, navigate when not
+        document.getElementById('fullscreenViewer').addEventListener('wheel', function(e) {
+            e.preventDefault();
+            
+            if (isZoomed) {
+                // Zoom in/out
+                var zoomDelta = e.deltaY > 0 ? -0.1 : 0.1;
+                zoomLevel = Math.max(1.0, Math.min(5.0, zoomLevel + zoomDelta));
+                
+                // If zoomed back to 100%, exit zoom mode
+                if (zoomLevel <= 1.0) {
+                    resetZoom();
+                } else {
+                    updateImageTransform();
+                }
+            } else if (!zoomCooldown) {
+                // Navigate pages (only if not in cooldown period)
+                if (e.deltaY > 0) nextImage();
+                else if (e.deltaY < 0) previousImage();
+            }
+        });
+
+
+    </script>
+    
+    <style>
+        @@keyframes highlight {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(0,123,255,0.5); }
+        }
+    </style>
+}
+else
+{
+    <p class="text-muted">No content found for this issue.</p>
+}

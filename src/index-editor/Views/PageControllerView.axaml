@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="IndexEditor.Views.PageControllerView">
+    <StackPanel Margin="12" Spacing="12">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+            <Button Name="PrevPageBtn" Content="◀" Width="36" Height="36"/>
+            <TextBlock Name="PageText" Text="Page 8" FontWeight="Bold" FontSize="18" VerticalAlignment="Center"/>
+            <Button Name="NextPageBtn" Content="▶" Width="36" Height="36"/>
+        </StackPanel>
+        <Button Name="NewArticleBtn" Content="New Article" Margin="0,8,0,0"/>
+        <Button Name="AddSegmentBtn" Content="Add Segment" Margin="0,4,0,0"/>
+        <Button Name="EndSegmentBtn" Content="End Segment" Margin="0,4,0,0"/>
+    </StackPanel>
+</UserControl>

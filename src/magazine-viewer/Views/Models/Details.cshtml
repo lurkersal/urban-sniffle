@@ -1,0 +1,110 @@
+@using MagazineViewer.Services
+@model (MagazineViewer.Models.Model Model, IEnumerable<MagazineViewer.Models.MagazineContent> Content, Dictionary<int, string?> CoverPaths)
+
+
+
+@{
+    var modelObj = Model.Model;
+    if (modelObj == null)
+    {
+        <div class="alert alert-danger">Model details not found.</div>
+        return;
+    }
+    ViewData["Title"] = modelObj.Name ?? "Model Details";
+}
+
+
+
+<h2 class="mb-3">@modelObj.Name</h2>
+
+@* Also Known As section: list all unique article titles for this model, each as a link, excluding titles that match the model's name or first name *@
+@{
+    var modelFullName = modelObj.Name?.Trim() ?? string.Empty;
+    var modelFirstName = modelFullName.Split(' ').FirstOrDefault()?.Trim() ?? string.Empty;
+    var akaArticles = Model.Content
+        .Where(c => !string.IsNullOrEmpty(c.Title))
+        .Where(c => !string.Equals(c.Title?.Trim() ?? string.Empty, modelFullName, StringComparison.OrdinalIgnoreCase)
+                 && !string.Equals(c.Title?.Trim() ?? string.Empty, modelFirstName, StringComparison.OrdinalIgnoreCase))
+        .GroupBy(c => new { c.Title, c.IssueId, c.ArticleId })
+        .Select(g => g.First())
+        .OrderBy(a => a.Title)
+        .ToList();
+}
+@if (akaArticles.Any())
+{
+    <div class="mb-4">
+        <h4>Also Known As</h4>
+        <ul>
+        @foreach (var aka in akaArticles)
+        {
+            <li>
+                <a href="/Issues/Article?issueId=@aka.IssueId&articleId=@aka.ArticleId">@aka.Title</a>
+            </li>
+        }
+        </ul>
+    </div>
+}
+
+
+<div class="mb-4">
+    <p><strong>Measurements:</strong> @Model.Model.Measurements</p>
+</div>
+
+
+
+<h3>Appearances</h3>
+
+@{
+    var allValidContent = Model.Content.Where(c => !string.IsNullOrEmpty(c.ImagePath)).OrderBy(c => c.IssueId).ThenBy(c => c.Page).ToList();
+    var groupedByIssue = allValidContent.GroupBy(c => new { c.IssueId, c.IssueName, c.MagazineName });
+}
+
+@{
+    var sortMode = Context.Request.Query["sortArticles"].ToString();
+    List<MagazineViewer.Models.MagazineContent> sortedArticles = new List<MagazineViewer.Models.MagazineContent>();
+    var allArticles = Model.Content.Where(c => !string.IsNullOrEmpty(c.ImagePath)).GroupBy(a => a.ArticleId).Select(g => g.OrderBy(x => x.Page).First()).ToList();
+    if (sortMode == "yearIssue")
+    {
+        sortedArticles = allArticles.OrderBy(a => a.Year).ThenBy(a => a.Number).ToList();
+    }
+    else // default to magazine
+    {
+        sortedArticles = allArticles.OrderBy(a => a.MagazineName).ThenBy(a => a.Year).ThenBy(a => a.Number).ToList();
+    }
+    var optionsHtml = (sortMode == "magazine" || string.IsNullOrEmpty(sortMode))
+        ? "<option value=\"magazine\" selected>Magazine</option>"
+        : "<option value=\"magazine\">Magazine</option>";
+    optionsHtml += (sortMode == "yearIssue")
+        ? "<option value=\"yearIssue\" selected>Year & Issue Number</option>"
+        : "<option value=\"yearIssue\">Year & Issue Number</option>";
+}
+
+@if (Model.Content.Any())
+{
+    <form method="get" id="sortArticlesForm" class="mb-3">
+        <label for="sortArticles" class="me-2">Sort articles by:</label>
+        <select id="sortArticles" name="sortArticles" onchange="this.form.submit()" class="form-select form-select-sm d-inline-block w-auto">
+            @Html.Raw(optionsHtml)
+        </select>
+    </form>
+
+    <div class="row">
+        @foreach (var article in sortedArticles)
+        {
+            <div class="col-md-3 mb-3">
+                <div class="card border-info">
+                    <a href="/Issues/Article?issueId=@article.IssueId&articleId=@article.ArticleId" style="text-decoration: none; color: inherit;">
+                        <img src="@Url.Content($"~/image?path={Uri.EscapeDataString(article.ImagePath!)}")" class="card-img-top" alt="Page @article.Page" style="height: 400px; object-fit: contain; background-color: #f8f9fa;" />
+                        <div class="card-body p-2">
+                            <p class="card-text">
+                                <strong>@article.Title</strong><br />
+                                <span>@article.Year, @article.MagazineName, Vol @article.Volume, No @article.Number</span><br />
+                            </p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        }
+    </div>
+}
+

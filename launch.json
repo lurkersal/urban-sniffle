@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": ".NET: Launch magazine-viewer",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/magazine-viewer/bin/Debug/net6.0/magazine-viewer.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/magazine-viewer",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        }
+    ]
+}

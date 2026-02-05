@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="IndexEditor.Views.PageController">
+    <StackPanel>
+        <TextBlock Text="Page Controller" FontWeight="Bold" FontSize="16" Margin="8,8,8,4"/>
+        <!-- Page controls go here -->
+    </StackPanel>
+</UserControl>

@@ -1,0 +1,48 @@
+﻿@model (IEnumerable<MagazineViewer.Models.Magazine> Magazines, IEnumerable<string> Categories)
+
+@{
+    ViewData["Title"] = "Magazine Viewer";
+}
+
+<div class="container mt-5">
+    <h1 class="text-center mb-5">Magazine Library</h1>
+    <div class="d-flex justify-content-center mb-5">
+        <!-- Front page image with clickable areas -->
+        <img src="@Url.Content("~/images/frontpage.png")" usemap="#magazinemap" alt="Magazine Front Page" class="img-fluid" style="max-width:100%; height:auto;" />
+        <map name="magazinemap">
+            @* Map magazine names to coordinates and link to their issues *@
+            @{
+                var areaData = new[] {
+                    new { Name = "Mayfair", Coords = "469,438,234,186" },
+                    new { Name = "Club International", Coords = "690,438,476,190" },
+                    new { Name = "Fiesta", Coords = "697,192,913,443" },
+                    new { Name = "Parade", Coords = "1161,441,929,181" },
+                    new { Name = "Escort", Coords = "439,761,211,466" },
+                    new { Name = "Men Only", Coords = "1177,755,949,469" }
+                };
+                foreach (var area in areaData)
+                {
+                    var mag = Model.Magazines.FirstOrDefault(m => m.Name.ToLower() == area.Name.ToLower());
+                    var href = mag != null ? $"/Issues?magazineId={mag.MagazineId}" : "";
+                    <area shape="rect" coords="@area.Coords" href="@href" alt="@area.Name" title="@area.Name" />
+                }
+            }
+        </map>
+    </div>
+        </div>
+    </div>
+    
+    <div class="row mb-5">
+    <!-- Browse section removed -->
+</div>
+
+<style>
+    .hover-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .hover-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+    }
+</style>

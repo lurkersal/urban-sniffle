@@ -1,0 +1,78 @@
+@model MagazineViewer.Models.ArticleSearchViewModel
+@{
+    ViewData["Title"] = "Advanced Article Search";
+}
+<h2>Advanced Article Search</h2>
+<form method="get" asp-action="Index">
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <label>Magazine</label>
+            <select name="MagazineId" class="form-control">
+                <option value="">All Magazines</option>
+                @foreach (var mag in Model.Magazines)
+                {
+                    <option value="@mag.MagazineId" selected="@(Model.SelectedMagazineId == mag.MagazineId)">@mag.Name</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label>Category</label>
+            <select name="Category" class="form-control">
+                <option value="">All Categories</option>
+                @foreach (var cat in Model.Categories)
+                {
+                    <option value="@cat" selected="@(Model.SelectedCategory == cat)">@cat</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label>Year</label>
+            <select name="Year" class="form-control">
+                <option value="">All Years</option>
+                @foreach (var year in Model.Years)
+                {
+                    <option value="@year" selected="@(Model.SelectedYear == year)">@year</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label>Keyword</label>
+            <input type="text" name="Keyword" value="@Model.Keyword" class="form-control" placeholder="Search article titles..." />
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Search</button>
+</form>
+@if (Model.Articles != null)
+{
+    <h3 class="mt-4">Results</h3>
+    @if (Model.Articles.Any())
+    {
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Magazine</th>
+                    <th>Category</th>
+                    <th>Year</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var article in Model.Articles)
+                {
+                    <tr>
+                        <td>
+                            <a href="/Issues/Article?issueId=@article.IssueId&articleId=@article.ArticleId">@(!string.IsNullOrEmpty(article.Title) ? article.Title : article.CategoryName)</a>
+                        </td>
+                        <td>@article.MagazineName</td>
+                        <td>@article.CategoryName</td>
+                        <td>@article.Year</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <p class="text-muted">No articles found matching your criteria.</p>
+    }
+}

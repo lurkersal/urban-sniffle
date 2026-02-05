@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch find-links (Mayfair 6 10)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "Build find-links",
+            "program": "${workspaceFolder}/find-links/src/bin/Debug/net6.0/find-links.dll",
+            "args": ["Mayfair", "6", "10"],
+            "cwd": "${workspaceFolder}/find-links/src",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        }
+    ]
+}

@@ -1,0 +1,449 @@
+@model (IEnumerable<MagazineViewer.Models.ModelWithArticleTypes> Models, MagazineViewer.Models.SearchFilters Filters, IEnumerable<MagazineViewer.Models.Magazine> Magazines, IEnumerable<string> Categories)
+
+@{
+    ViewData["Title"] = "Browse Models";
+}
+
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div class="d-flex align-items-center">
+        <h2 class="mb-0 me-3">Browse Models</h2>
+        <div>
+            <button id="listViewBtn" type="button" class="btn btn-outline-secondary btn-sm me-1 active" title="List view">
+                <i class="fa fa-list"></i>
+            </button>
+            <button id="gridViewBtn" type="button" class="btn btn-outline-secondary btn-sm" title="Grid view">
+                <i class="fa fa-th"></i>
+            </button>
+            <div class="btn-group ms-2" role="group" aria-label="Icon size">
+                <button id="iconSizeSmall" type="button" class="btn btn-outline-secondary btn-sm" title="Small icons"><i class="fa fa-th-large" style="font-size:0.8em;"></i></button>
+                <button id="iconSizeMedium" type="button" class="btn btn-outline-secondary btn-sm active" title="Medium icons"><i class="fa fa-th-large" style="font-size:1em;"></i></button>
+                <button id="iconSizeLarge" type="button" class="btn btn-outline-secondary btn-sm" title="Large icons"><i class="fa fa-th-large" style="font-size:1.3em;"></i></button>
+            </div>
+        </div>
+    </div>
+    <form id="modelSearchForm" method="get" class="mb-0 position-relative" style="min-width:520px; display:flex; gap:8px; align-items:center;">
+        <input id="modelSearchInput" type="text" name="ModelName" value="@Model.Filters.ModelName" class="form-control pr-5" placeholder="Search by model name..." style="width: 220px; display: inline-block;" autocomplete="off" />
+        <input id="articleTitleInput" type="text" name="ArticleTitle" value="@Model.Filters.ArticleTitle" class="form-control pr-5" placeholder="Search by article title..." style="width: 220px; display: inline-block;" autocomplete="off" />
+        <button id="clearSearchBtn" type="button" class="btn btn-link position-absolute" style="right:8px; top:50%; transform:translateY(-50%); color:#888; display:@(string.IsNullOrEmpty(Model.Filters.ModelName) && string.IsNullOrEmpty(Model.Filters.ArticleTitle) ? "none" : "block"); padding:0; z-index:2;" tabindex="-1" aria-label="Clear search">
+            <i class="fa fa-times-circle"></i>
+        </button>
+        <input type="hidden" id="viewModeField" name="ViewMode" value="" />
+        <input type="hidden" id="iconSizeField" name="IconSize" value="" />
+    </form>
+</div>
+
+<div id="modelsListView">
+    @if (Model.Models.Any())
+    {
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Articles (Covers / Model Sets)</th>
+                    <th>Measurements</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var m in Model.Models)
+                {
+                    <tr class="model-row" data-href="/Models/Details/@m.ModelId" style="cursor:pointer;">
+                        <td style="position:relative;">
+                            <span class="model-name-hover" data-articleimg="@((m as MagazineViewer.Models.ModelWithArticleTypes)?.FirstArticleImagePath)">@m.Name</span>
+                            @if ((m as MagazineViewer.Models.ModelWithArticleTypes)?.FirstArticleImagePath is string articlePath && !string.IsNullOrEmpty(articlePath))
+                            {
+                                <div class="cover-overlay" style="display:none; position:fixed; left:50vw; top:50vh; transform:translate(-50%,-50%); z-index:10000; background:#fff; border:1px solid #ccc; box-shadow:0 2px 24px rgba(0,0,0,0.35); padding:8px; min-width:240px; max-width:440px;">
+                                    <img src="/image?path=@Uri.EscapeDataString(articlePath)" alt="First Article" style="max-width:400px; max-height:520px; display:block; margin:auto;" />
+                                </div>
+                            }
+                        </td>
+                        <td>
+                            @if (m is MagazineViewer.Models.ModelWithArticleTypes mwat)
+                            {
+                                <span title="Covers / Model Articles">@mwat.CoverCount / @mwat.ModelArticleCount</span>
+                                @* Magazine icons *@
+                                var modelMagazines = Model.Magazines
+                                    .Where(mag => mag != null && mag.Name != null &&
+                                        (mag.Name == "Mayfair" || mag.Name == "Men Only" || mag.Name == "Club") &&
+                                        (ModelWithArticleTypesHasMagazine(mwat, mag.Name)))
+                                    .Select(mag => mag.Name)
+                                    .Distinct()
+                                    .ToList();
+                                var magazineIconMap = new Dictionary<string, string> {
+                                    { "Mayfair", "/images/Mayfair.png" },
+                                    { "Men Only", "/images/Men Only.png" },
+                                    { "Club", "/images/Club.png" }
+                                };
+                                foreach (var magName in modelMagazines)
+                                {
+                                    if (magazineIconMap.ContainsKey(magName))
+                                    {
+                                        <img src="@magazineIconMap[magName]" alt="" title="@magName" style="height:18px; margin-left:2px; vertical-align:middle;" />
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                @m.ArticleCount
+                            }
+                        </td>
+                        <td>@m.Measurements</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+</div>
+
+<div id="modelsGridView" style="display:none;">
+    <div id="modelsGridRow" class="row row-cols-2 row-cols-sm-3 row-cols-md-4 row-cols-lg-6 g-2 icon-size-medium">
+        @foreach (var m in Model.Models)
+        {
+            var articlePath = (m as MagazineViewer.Models.ModelWithArticleTypes)?.FirstArticleImagePath;
+            <div class="col grid-icon-col p-1">
+                <div class="card h-100 text-center model-grid-card m-0 p-1" data-href="/Models/Details/@m.ModelId" style="cursor:pointer; box-shadow:none; border:none; background:transparent;">
+                    @if (!string.IsNullOrEmpty(articlePath))
+                    {
+                        <div class="card-img-top d-flex align-items-center justify-content-center bg-light grid-icon-container icon-size-medium">
+                            <img src="/image?path=@Uri.EscapeDataString(articlePath)" alt="First Article" class="grid-icon-img icon-size-medium" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card-img-top d-flex align-items-center justify-content-center bg-light" style="height:180px; color:#bbb; font-size:2rem;">No Image</div>
+                    }
+                    <div class="card-body p-2">
+                        <div class="card-title mb-0" style="font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            @m.Name
+                            @if (m is MagazineViewer.Models.ModelWithArticleTypes mwat)
+                            {
+                                <span style="color:#888; font-size:0.95em;"> (@mwat.CoverCount/@mwat.ModelArticleCount)</span>
+                                @* Magazine icons *@
+                                var modelMagazines = Model.Magazines
+                                    .Where(mag => mag != null && mag.Name != null &&
+                                        (mag.Name == "Mayfair" || mag.Name == "Men Only" || mag.Name == "Club") &&
+                                        (ModelWithArticleTypesHasMagazine(mwat, mag.Name)))
+                                    .Select(mag => mag.Name)
+                                    .Distinct()
+                                    .ToList();
+                                var magazineIconMap = new Dictionary<string, string> {
+                                    { "Mayfair", "/Mayfair.png" },
+                                    { "Men Only", "/Men Only.png" },
+                                    { "Club", "/Club.png" }
+                                };
+                                foreach (var magName in modelMagazines)
+                                {
+                                    <img src="@magazineIconMap[magName]" alt="@magName" title="@magName" style="height:18px; margin-left:2px; vertical-align:middle;" />
+                                }
+                            }
+                        </div>
+                    @functions {
+                        // Dummy implementation: replace with real logic to check if model has appeared in a magazine
+                        // This should check the model's articles/covers for the given magazine name
+                        bool ModelWithArticleTypesHasMagazine(MagazineViewer.Models.ModelWithArticleTypes model, string magazineName)
+                        {
+                            return model.MagazineNames != null && model.MagazineNames.Contains(magazineName);
+                        }
+                    }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Font Awesome for icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+<style>
+    .cover-overlay {
+        transition: opacity 0.2s;
+        pointer-events: none;
+    }
+    .model-grid-card {
+        transition: box-shadow 0.2s;
+        box-shadow: none !important;
+        border: none !important;
+        background: transparent !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+    .model-grid-card:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+        background: #f8f8f8 !important;
+    }
+    .grid-icon-col {
+        padding-left: 2px !important;
+        padding-right: 2px !important;
+        padding-top: 2px !important;
+        padding-bottom: 2px !important;
+        margin: 0 !important;
+    }
+    .card-body.p-2 {
+        padding: 0.25rem !important;
+    }
+    .card-title.mb-0 {
+        margin-bottom: 0 !important;
+    }
+    #modelsGridRow.icon-size-small .card-title.mb-0 {
+        font-size: 0.82rem !important;
+    }
+    #modelsGridRow.icon-size-small .card-title.mb-0 span {
+        font-size: 0.75em !important;
+    }
+    .grid-icon-container.icon-size-small {
+        height: 100px;
+    }
+    .grid-icon-container.icon-size-medium {
+        height: 180px;
+    }
+    .grid-icon-container.icon-size-large {
+        height: 300px;
+    }
+    /* Responsive column sizing for icon sizes */
+    #modelsGridRow.icon-size-small .grid-icon-col {
+        flex: 0 0 12.5%;
+        max-width: 12.5%;
+    }
+    #modelsGridRow.icon-size-medium .grid-icon-col {
+        flex: 0 0 16.6667%;
+        max-width: 16.6667%;
+    }
+    #modelsGridRow.icon-size-large .grid-icon-col {
+        flex: 0 0 25%;
+        max-width: 25%;
+    }
+    .grid-icon-img.icon-size-small {
+        width: 40%;
+    }
+    .grid-icon-img.icon-size-medium {
+        width: 70%;
+    }
+    .grid-icon-img.icon-size-large {
+        width: 90%;
+    }
+    .grid-icon-img {
+        max-width: 100%;
+        max-height: 100%;
+        height: auto;
+        display: block;
+        margin: auto;
+        background: #f8f8f8;
+        object-fit: contain;
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Toggle list/grid view
+        var listBtn = document.getElementById('listViewBtn');
+        var gridBtn = document.getElementById('gridViewBtn');
+        var listView = document.getElementById('modelsListView');
+        var gridView = document.getElementById('modelsGridView');
+        var viewModeField = document.getElementById('viewModeField');
+        var iconSizeField = document.getElementById('iconSizeField');
+        // Restore view mode and icon size from model filters (server-provided)
+        var viewMode = '@(Model.Filters.ViewMode ?? "")';
+        var iconSize = '@(Model.Filters.IconSize ?? "")';
+        if (viewMode === 'grid') {
+            gridBtn.click();
+        } else if (viewMode === 'list') {
+            listBtn.click();
+        }
+        if (iconSize === 'icon-size-small') {
+            document.getElementById('iconSizeSmall').click();
+        } else if (iconSize === 'icon-size-large') {
+            document.getElementById('iconSizeLarge').click();
+        } else if (iconSize === 'icon-size-medium') {
+            document.getElementById('iconSizeMedium').click();
+        }
+        if (listBtn && gridBtn && listView && gridView) {
+            listBtn.addEventListener('click', function() {
+                listBtn.classList.add('active');
+                gridBtn.classList.remove('active');
+                listView.style.display = '';
+                gridView.style.display = 'none';
+                if (viewModeField) viewModeField.value = 'list';
+            });
+            gridBtn.addEventListener('click', function() {
+                gridBtn.classList.add('active');
+                listBtn.classList.remove('active');
+                gridView.style.display = '';
+                listView.style.display = 'none';
+                if (viewModeField) viewModeField.value = 'grid';
+            });
+        }
+
+        // Icon size buttons
+        var iconSizeBtns = [
+            document.getElementById('iconSizeSmall'),
+            document.getElementById('iconSizeMedium'),
+            document.getElementById('iconSizeLarge')
+        ];
+        var iconSizeClasses = ['icon-size-small', 'icon-size-medium', 'icon-size-large'];
+        var gridRow = document.getElementById('modelsGridRow');
+        iconSizeBtns.forEach(function(btn, idx) {
+            btn.addEventListener('click', function() {
+                iconSizeBtns.forEach(function(b) { b.classList.remove('active'); });
+                btn.classList.add('active');
+                document.querySelectorAll('.grid-icon-img').forEach(function(img) {
+                    iconSizeClasses.forEach(function(cls) { img.classList.remove(cls); });
+                    img.classList.add(iconSizeClasses[idx]);
+                });
+                document.querySelectorAll('.grid-icon-container').forEach(function(div) {
+                    iconSizeClasses.forEach(function(cls) { div.classList.remove(cls); });
+                    div.classList.add(iconSizeClasses[idx]);
+                });
+                if (gridRow) {
+                    iconSizeClasses.forEach(function(cls) { gridRow.classList.remove(cls); });
+                    gridRow.classList.add(iconSizeClasses[idx]);
+                }
+                if (iconSizeField) iconSizeField.value = iconSizeClasses[idx];
+            });
+        });
+
+        // Make table rows clickable
+        document.querySelectorAll('.model-row').forEach(function(row) {
+            row.addEventListener('click', function(e) {
+                if (e.target.closest('.cover-overlay')) return;
+                window.location = row.getAttribute('data-href');
+            });
+        });
+        // Make grid cards clickable
+        document.querySelectorAll('.model-grid-card').forEach(function(card) {
+            card.addEventListener('click', function() {
+                window.location = card.getAttribute('data-href');
+            });
+        });
+        // Submit form on model name enter
+        var modelInput = document.getElementById('modelSearchInput');
+        var articleInput = document.getElementById('articleTitleInput');
+        var searchForm = document.getElementById('modelSearchForm');
+        var clearBtn = document.getElementById('clearSearchBtn');
+        if ((modelInput || articleInput) && searchForm) {
+            function setViewAndSizeFields() {
+                if (viewModeField) {
+                    viewModeField.value = gridView.style.display === '' ? 'grid' : 'list';
+                }
+                if (iconSizeField) {
+                    var activeSize = iconSizeClasses.find(function(cls) {
+                        return document.querySelector('.grid-icon-img.' + cls);
+                    });
+                    iconSizeField.value = activeSize || 'icon-size-medium';
+                }
+            }
+            function submitOnEnter(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    setViewAndSizeFields();
+                    searchForm.submit();
+                }
+            }
+            if (modelInput) modelInput.addEventListener('keydown', submitOnEnter);
+            if (articleInput) articleInput.addEventListener('keydown', submitOnEnter);
+            searchForm.addEventListener('submit', function(e) {
+                setViewAndSizeFields();
+            });
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function() {
+                    if (modelInput) modelInput.value = '';
+                    if (articleInput) articleInput.value = '';
+                    clearBtn.style.display = 'none';
+                    setViewAndSizeFields();
+                    searchForm.submit();
+                });
+                if (modelInput) modelInput.addEventListener('input', function() {
+                    clearBtn.style.display = (modelInput.value || (articleInput && articleInput.value)) ? 'block' : 'none';
+                });
+                if (articleInput) articleInput.addEventListener('input', function() {
+                    clearBtn.style.display = (articleInput.value || (modelInput && modelInput.value)) ? 'block' : 'none';
+                });
+            }
+        }
+
+        // Overlay logic
+        let hoverTimeout;
+        document.querySelectorAll('.model-name-hover').forEach(function(span) {
+            const parentTd = span.closest('td');
+            const overlay = parentTd ? parentTd.querySelector('.cover-overlay') : null;
+            if (!overlay) return;
+            span.addEventListener('mouseenter', function() {
+                hoverTimeout = setTimeout(function() {
+                    overlay.style.display = 'block';
+                    overlay.style.opacity = '1';
+                }, 50);
+            });
+            span.addEventListener('mouseleave', function() {
+                clearTimeout(hoverTimeout);
+                overlay.style.display = 'none';
+                overlay.style.opacity = '0';
+            });
+            overlay.addEventListener('mouseenter', function() {
+                clearTimeout(hoverTimeout);
+                overlay.style.display = 'block';
+                overlay.style.opacity = '1';
+            });
+            overlay.addEventListener('mouseleave', function() {
+                overlay.style.display = 'none';
+                overlay.style.opacity = '0';
+            });
+        });
+    });
+</script>
+
+<style>
+    .cover-overlay {
+        transition: opacity 0.2s;
+        pointer-events: none;
+    }
+</style>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Make table rows clickable
+        document.querySelectorAll('.model-row').forEach(function(row) {
+            row.addEventListener('click', function(e) {
+                // Prevent row click if overlay is being hovered
+                if (e.target.closest('.cover-overlay')) return;
+                window.location = row.getAttribute('data-href');
+            });
+        });
+        // Submit form on model name enter
+        var modelInput = document.querySelector('input[name="ModelName"]');
+        if (modelInput) {
+            modelInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    modelInput.form.submit();
+                }
+            });
+        }
+
+        // Overlay logic
+        let hoverTimeout;
+        document.querySelectorAll('.model-name-hover').forEach(function(span) {
+            const parentTd = span.closest('td');
+            const overlay = parentTd ? parentTd.querySelector('.cover-overlay') : null;
+            if (!overlay) return;
+            span.addEventListener('mouseenter', function() {
+                hoverTimeout = setTimeout(function() {
+                    // Center overlay in viewport
+                    overlay.style.display = 'block';
+                    overlay.style.opacity = '1';
+                }, 50);
+            });
+            span.addEventListener('mouseleave', function() {
+                clearTimeout(hoverTimeout);
+                overlay.style.display = 'none';
+                overlay.style.opacity = '0';
+            });
+            overlay.addEventListener('mouseenter', function() {
+                clearTimeout(hoverTimeout);
+                overlay.style.display = 'block';
+                overlay.style.opacity = '1';
+            });
+            overlay.addEventListener('mouseleave', function() {
+                overlay.style.display = 'none';
+                overlay.style.opacity = '0';
+            });
+        });
+    });
+</script>

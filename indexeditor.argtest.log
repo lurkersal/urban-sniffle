@@ -1,0 +1,11 @@
+[DEBUG] Parsed article: Category='Cover', Title='Cover Title', Pages=[1]
+[DEBUG] Parsed article: Category='Fashion', Title='Fashion Spread', Pages=[2,3,4]
+[DEBUG] Parsed article: Category='Index', Title='Table of Contents', Pages=[5]
+[DEBUG] Total articles parsed: 3
+[DEBUG] Card[0] Category='Cover', Title='Cover Title', Pages=[1]
+[DEBUG] Card[0] Formatted: Model='', Age='', Photographer='', Measurements=''
+[DEBUG] Card[1] Category='Fashion', Title='Fashion Spread', Pages=[2,3,4]
+[DEBUG] Card[1] Formatted: Model='Model1, Model2', Age='20, 22', Photographer='Photographer1', Measurements='10, 11'
+[DEBUG] Card[2] Category='Index', Title='Table of Contents', Pages=[5]
+[DEBUG] Card[2] Formatted: Model='', Age='', Photographer='', Measurements=''
+[DEBUG] Total cards in list: 3

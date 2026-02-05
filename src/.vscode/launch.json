@@ -1,0 +1,62 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    
+    {
+      "name": ".NET Core Launch (magazine-parser)",
+      "type": "coreclr",
+      "request": "launch",
+      "program": "${workspaceFolder}/magazine-parser/src/bin/Debug/net8.0/magazine-parser.dll",
+      "args": [
+        "/mnt/wwn-0x50014ee2b8946bd6-part2/Magazines/Mayfair/Mayfair 12-12, 1977"
+      ],
+      "env": {
+        "MAGAZINE_IMAGE_ROOT": "/mnt/wwn-0x50014ee2b8946bd6-part2"
+      },
+      "cwd": "${workspaceFolder}/magazine-parser/src/bin/Debug/net8.0",
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Launch find-links (Mayfair)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "Build find-links",
+      "program": "${workspaceFolder}/src/find-links/bin/Debug/net8.0/find-links.dll",
+      "env": {
+        "MAGAZINE_IMAGE_ROOT": "/mnt/wwn-0x50014ee2b8946bd6-part2"
+      },
+      "args": [
+        "Mayfair",
+        "7"
+      ],
+      "cwd": "${workspaceFolder}/src/find-links",
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Launch MagazineViewer",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/magazine-viewer/bin/Debug/net8.0/MagazineViewer.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/magazine-viewer",
+      "stopAtEntry": false,
+      "console": "internalConsole"
+    },
+    {
+      "name": "Launch IndexEditor",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build IndexEditor",
+      "program": "${workspaceFolder}/index-editor/bin/Debug/net8.0/IndexEditor.dll",
+      "args": [
+        "/mnt/wwn-0x50014ee2b8946bd6-part2/Magazines/Mayfair/Mayfair 18-07, 1983"
+      ],
+      "cwd": "${workspaceFolder}/index-editor",
+      "stopAtEntry": false,
+      "console": "internalConsole"
+    }
+  ]
+}

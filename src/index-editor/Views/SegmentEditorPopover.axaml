@@ -1,0 +1,26 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="IndexEditor.Views.SegmentEditorPopover">
+    <Border Background="#FFF" BorderBrush="#AAA" BorderThickness="1" CornerRadius="8" Padding="16" Width="260">
+        <StackPanel Spacing="10">
+            <TextBlock Text="Edit Segment" FontWeight="Bold" FontSize="15"/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Start page" Width="80" VerticalAlignment="Center"/>
+                <TextBox Width="60" Text="8"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="End page" Width="80" VerticalAlignment="Center"/>
+                <TextBox Width="60" Text="9"/>
+            </StackPanel>
+            <!-- Inline validation message (hidden by default) -->
+            <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="False">
+                <TextBlock Text="⚠" Foreground="#E57373" FontSize="14"/>
+                <TextBlock Text="Page 9 already used by Interview" Foreground="#E57373" FontSize="12"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,10,0,0">
+                <Button Content="Save" Width="64"/>
+                <Button Content="Cancel" Width="64"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

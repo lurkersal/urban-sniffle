@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:IndexEditor.Views"
+        x:Class="IndexEditor.MainWindow"
+        Title="IndexEditor">
+    <Grid RowDefinitions="Auto,*" ColumnDefinitions="3*,6*,3*">
+        <!-- Top Bar -->
+        <Border Grid.Row="0" Grid.ColumnSpan="3">
+            <views:TopBar/>
+        </Border>
+        <!-- Article List (Left 3 columns) -->
+        <Border Grid.Row="1" Grid.Column="0">
+            <views:ArticleList/>
+        </Border>
+        <!-- Article Editor (Center 6 columns) -->
+        <Border Grid.Row="1" Grid.Column="1">
+            <views:ArticleEditor/>
+        </Border>
+        <!-- Page Controller (Right 3 columns) -->
+        <Border Grid.Row="1" Grid.Column="2">
+            <views:PageController/>
+        </Border>
+    </Grid>
+</Window>

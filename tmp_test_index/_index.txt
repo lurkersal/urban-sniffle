@@ -1,0 +1,4 @@
+1, Cover, Cover Title
+2|3-4, Fashion, Fashion Spread, Model1|Model2, 20|22, Photographer1, 10|11
+# a comment line
+5, Contents, Table of Contents

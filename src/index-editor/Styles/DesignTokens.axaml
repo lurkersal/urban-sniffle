@@ -1,0 +1,8 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Design tokens and theme resources go here -->
+    <Color x:Key="PrimaryColor">#1976D2</Color>
+    <Color x:Key="SecondaryColor">#424242</Color>
+    <Color x:Key="AccentColor">#FF4081</Color>
+    <Thickness x:Key="DefaultPadding">8</Thickness>
+</ResourceDictionary>
