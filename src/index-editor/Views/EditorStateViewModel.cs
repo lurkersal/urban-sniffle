@@ -17,6 +17,54 @@ namespace IndexEditor.Views
     {
         public event PropertyChangedEventHandler? PropertyChanged;
         public SelectArticleCommand SelectArticleCommand { get; }
+        
+        // Public helper: find the first page number for the given article that has an image file in the provided folder.
+        // Returns the page number if found, otherwise null.
+        public int? FindFirstPageWithImage(Common.Shared.ArticleLine article, string? folder)
+        {
+            if (article == null || article.Pages == null || article.Pages.Count == 0)
+                return null;
+            if (string.IsNullOrWhiteSpace(folder))
+                return null;
+
+            foreach (var p in article.Pages.OrderBy(x => x))
+            {
+                var candidates = new[] {
+                    Path.Combine(folder, p.ToString() + ".jpg"),
+                    Path.Combine(folder, p.ToString() + ".png"),
+                    Path.Combine(folder, p.ToString("D2") + ".jpg"),
+                    Path.Combine(folder, p.ToString("D2") + ".png"),
+                    Path.Combine(folder, p.ToString("D3") + ".jpg"),
+                    Path.Combine(folder, p.ToString("D3") + ".png"),
+                    Path.Combine(folder, "page-" + p.ToString() + ".jpg"),
+                    Path.Combine(folder, "p" + p.ToString() + ".jpg") };
+                foreach (var c in candidates)
+                {
+                    try { if (File.Exists(c)) return p; } catch { }
+                }
+            }
+            return null;
+        }
+
+        // Public action: navigate to the first page with an image for the given article (falls back to min page when no image found).
+        // This updates the shared EditorState.CurrentPage and triggers a state notification so the PageController will load the image.
+        public void NavigateToArticle(Common.Shared.ArticleLine article)
+        {
+            if (article == null) return;
+            int? pick = null;
+            try
+            {
+                pick = FindFirstPageWithImage(article, IndexEditor.Shared.EditorState.CurrentFolder);
+            }
+            catch { }
+
+            if (pick.HasValue)
+                IndexEditor.Shared.EditorState.CurrentPage = pick.Value;
+            else if (article.Pages != null && article.Pages.Count > 0)
+                IndexEditor.Shared.EditorState.CurrentPage = article.Pages.Min();
+            // Notify so UI updates and image gets reloaded
+            IndexEditor.Shared.EditorState.NotifyStateChanged();
+        }
 
         private ArticleLine? _selectedArticle;
         public ArticleLine? SelectedArticle
@@ -24,9 +72,49 @@ namespace IndexEditor.Views
             get => _selectedArticle;
             set
             {
-                if (_selectedArticle != value)
+                // Normalize the incoming article to an instance from our Articles collection if possible
+                ArticleLine? incoming = value;
+                if (incoming != null)
                 {
-                    _selectedArticle = value;
+                    var mapped = Articles.FirstOrDefault(a => object.ReferenceEquals(a, incoming))
+                                 ?? Articles.FirstOrDefault(a => a.Pages != null && incoming.Pages != null && a.Pages.SequenceEqual(incoming.Pages) && (a.Title ?? string.Empty) == (incoming.Title ?? string.Empty));
+                    if (mapped != null) incoming = mapped;
+                }
+
+                // If there's an active open segment, prevent changing selection to a DIFFERENT article.
+                var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
+                var activeArticle = IndexEditor.Shared.EditorState.ActiveArticle;
+                if (activeSeg != null && activeSeg.IsActive && incoming != null)
+                {
+                    if (activeArticle != null && !object.ReferenceEquals(activeArticle, incoming))
+                    {
+                        // Inform user and do not change selection while a segment is open
+                        IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first");
+                        // Push a property changed so UI bindings revert to the existing selected article
+                        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
+                        return;
+                    }
+                }
+
+                // If the incoming value is null but we already have a selected article that still
+                // exists in our Articles collection, ignore the transient null to avoid losing the editor view.
+                if (incoming == null && _selectedArticle != null && Articles.Contains(_selectedArticle))
+                {
+                    // ignore transient clear
+                    return;
+                }
+
+                if (_selectedArticle != incoming)
+                {
+                    _selectedArticle = incoming;
+                    // Ensure the global EditorState reflects the current selected article so
+                    // other views (PageController, etc.) can read the active article details.
+                    try
+                    {
+                        IndexEditor.Shared.EditorState.ActiveArticle = _selectedArticle;
+                        IndexEditor.Shared.EditorState.NotifyStateChanged();
+                    }
+                    catch { }
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
                     // Notify SelectedCategory so the editor ComboBox updates to the new article's category
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));

@@ -93,6 +93,28 @@ public partial class MainWindow : Window
                 try
                 {
                     var lines = System.IO.File.ReadAllLines(indexPath);
+                    // First pass: parse optional header metadata lines starting with '#'
+                    foreach (var raw in lines)
+                    {
+                        var line = raw.Trim();
+                        if (!line.StartsWith("#")) break; // headers are expected at the top
+                        var content = line.TrimStart('#').Trim();
+                        if (content.StartsWith("Magazine:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            IndexEditor.Shared.EditorState.CurrentMagazine = content.Substring("Magazine:".Length).Trim();
+                        }
+                        else if (content.StartsWith("Volume:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("Vol:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
+                            IndexEditor.Shared.EditorState.CurrentVolume = val.Replace("Volume:", string.Empty).Replace("Vol:", string.Empty).Trim();
+                        }
+                        else if (content.StartsWith("Number:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("No:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
+                            IndexEditor.Shared.EditorState.CurrentNumber = val.Replace("Number:", string.Empty).Replace("No:", string.Empty).Trim();
+                        }
+                        // continue reading header lines; article parsing happens below
+                    }
                     var articles = new List<Common.Shared.ArticleLine>();
                     foreach (var line in lines)
                     {
@@ -117,6 +139,26 @@ public partial class MainWindow : Window
                                        .ToList();
 
                     IndexEditor.Shared.EditorState.Articles = articles;
+                    // Also ensure the current view-model's ObservableCollection is populated so the UI updates reliably
+                    try
+                    {
+                        var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+                        if (vm != null)
+                        {
+                            try
+                            {
+                                vm.Articles.Clear();
+                                foreach (var a in articles)
+                                    vm.Articles.Add(a);
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"[DEBUG] Failed to populate vm.Articles: {ex.Message}");
+                            }
+                        }
+                    }
+                    catch { }
+
                     // Store the opened folder so controllers can load page images
                     IndexEditor.Shared.EditorState.CurrentFolder = FolderToOpen;
 

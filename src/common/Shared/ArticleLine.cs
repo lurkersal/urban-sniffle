@@ -302,8 +302,8 @@ namespace Common.Shared
             if (cat == "model" || cat == "cover")
                 return $"{categoryText}\n{pagesText}\nModel: {string.Join(", ", ModelNames)}\nAge: {string.Join(", ", Ages.Where(a => a.HasValue).Select(a => a.Value.ToString()))}\nPhotographer: {string.Join(", ", Photographers)}\nMeasurements: {string.Join(", ", Measurements)}";
 
-            // Feature, Fiction, Review: rename photographer as author
-            if (cat == "feature" || cat == "fiction" || cat == "review")
+            // Feature, Fiction, Review, Humour: rename photographer as author
+            if (cat == "feature" || cat == "fiction" || cat == "review" || cat == "humour" || cat == "humor")
                 return $"{categoryText}\n{pagesText}\nTitle: {Title}\nAuthor: {string.Join(", ", Photographers)}";
 
             // Photographer category: show photographer and title

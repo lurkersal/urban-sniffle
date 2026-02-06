@@ -21,27 +21,10 @@ namespace IndexEditor.Views
                 var pageInput = this.FindControl<TextBox>("PageInput");
                 if (pageInput != null)
                     pageInput.Text = EditorState.CurrentPage.ToString();
-                // Update active segment end live
-                if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
-                    EditorState.ActiveSegment.End = EditorState.CurrentPage;
+                // Do NOT update EditorState.ActiveSegment.End here; changing pages should not close the active segment.
+                // Notify UI/state but do NOT auto-select an article when the current page changes.
+                // Selection should only occur when the user explicitly presses the Sync button.
                 EditorState.NotifyStateChanged();
-
-                // If this page is the first page of an article, select that article and open it in the editor
-                try
-                {
-                    var vm = this.DataContext as EditorStateViewModel;
-                    if (vm != null)
-                    {
-                        var match = EditorState.Articles.FirstOrDefault(a => a.Pages != null && a.Pages.Count > 0 && a.Pages.Min() == EditorState.CurrentPage);
-                        if (match != null)
-                        {
-                            // Use the command so selection behavior is consistent
-                            if (vm.SelectArticleCommand.CanExecute(match))
-                                vm.SelectArticleCommand.Execute(match);
-                        }
-                    }
-                }
-                catch { /* swallow any exception to avoid breaking page changes */ }
             }
         }
 
@@ -53,10 +36,51 @@ namespace IndexEditor.Views
             var newArticleBtn = this.FindControl<Button>("NewArticleBtn");
             var addSegmentBtn = this.FindControl<Button>("AddSegmentBtn");
             var endSegmentBtn = this.FindControl<Button>("EndSegmentBtn");
+            var cancelSegmentBtn = this.FindControl<Button>("CancelSegmentBtn");
             var pageInput = this.FindControl<TextBox>("PageInput");
             var activeArticleTitle = this.FindControl<TextBlock>("ActiveArticleTitle");
             var activeSegmentText = this.FindControl<TextBlock>("ActiveSegmentText");
-            var statusText = this.FindControl<TextBlock>("StatusText");
+            var toastBorder = this.FindControl<Border>("ToastBorder");
+            var toastText = this.FindControl<TextBlock>("ToastText");
+
+            // Helper: show a small toast message that fades out using Avalonia.Animation
+            void ShowToast(string message, int displayMs = 1200)
+            {
+                try
+                {
+                    if (toastText != null) toastText.Text = message;
+                    if (toastBorder == null) return;
+                    // Show immediately
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        toastBorder.IsVisible = true;
+                        toastBorder.Opacity = 1.0;
+                    });
+
+                    // Hide after a delay (no fade)
+                    _ = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await System.Threading.Tasks.Task.Delay(displayMs).ConfigureAwait(false);
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                            {
+                                try { toastBorder.IsVisible = false; }
+                                catch { }
+                            });
+                        }
+                        catch { }
+                    });
+                }
+                catch { }
+            }
+
+            // Subscribe to global toast requests; capture the delegate so we can unsubscribe
+            Action<string> toastHandler = (msg) => { Avalonia.Threading.Dispatcher.UIThread.Post(() => ShowToast(msg)); };
+            IndexEditor.Shared.ToastService.ShowRequested += toastHandler;
+
+            // Unsubscribe when this control unloads to prevent leaks
+            this.DetachedFromVisualTree += (s, e) => { IndexEditor.Shared.ToastService.ShowRequested -= toastHandler; };
 
             if (prevBtn != null)
                 prevBtn.Click += (s, e) =>
@@ -95,12 +119,22 @@ namespace IndexEditor.Views
             void UpdateUi()
             {
                 // Buttons enablement
-                if (addSegmentBtn != null) addSegmentBtn.IsEnabled = EditorState.ActiveArticle != null;
+                // AddSegment: enabled only when an ActiveArticle exists and the current page is NOT already part of its Pages
+                if (addSegmentBtn != null)
+                {
+                    addSegmentBtn.IsEnabled = EditorState.ActiveArticle != null &&
+                                              (EditorState.ActiveArticle.Pages == null || !EditorState.ActiveArticle.Pages.Contains(EditorState.CurrentPage))
+                                              && (EditorState.ActiveSegment == null || !EditorState.ActiveSegment.IsActive);
+                }
                 if (endSegmentBtn != null) endSegmentBtn.IsEnabled = EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive;
+                if (cancelSegmentBtn != null) cancelSegmentBtn.IsEnabled = EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive;
 
-                // Active article display
+                // Active article display: use DisplayTitle and CategoryDisplay to match Article card behaviour
                 if (activeArticleTitle != null)
-                    activeArticleTitle.Text = EditorState.ActiveArticle != null && !string.IsNullOrWhiteSpace(EditorState.ActiveArticle.Title) ? EditorState.ActiveArticle.Title : "— none —";
+                    activeArticleTitle.Text = EditorState.ActiveArticle != null ? EditorState.ActiveArticle.DisplayTitle : "— none —";
+                var activeCategoryBlock = this.FindControl<TextBlock>("ActiveArticleCategory");
+                if (activeCategoryBlock != null)
+                    activeCategoryBlock.Text = EditorState.ActiveArticle != null ? EditorState.ActiveArticle.CategoryDisplay : string.Empty;
 
                 // Active segment display
                 if (activeSegmentText != null)
@@ -108,7 +142,8 @@ namespace IndexEditor.Views
                     if (EditorState.ActiveSegment != null)
                     {
                         var seg = EditorState.ActiveSegment;
-                        var segText = seg.End.HasValue ? $"{seg.Start} – {seg.End.Value}" : $"{seg.Start} – (extending)";
+                        // When active (End == null) display 'start → currentPage' so the user sees live range preview
+                        var segText = seg.End.HasValue ? $"{seg.Start} → {seg.End.Value}" : $"{seg.Start} → {EditorState.CurrentPage}";
                         activeSegmentText.Text = segText;
                     }
                     else
@@ -117,18 +152,7 @@ namespace IndexEditor.Views
                     }
                 }
 
-                // Status text: simple messages
-                if (statusText != null)
-                {
-                    if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
-                    {
-                        statusText.Text = $"● Segment extending (page {EditorState.CurrentPage} → {EditorState.ActiveSegment.End?.ToString() ?? "…"})";
-                    }
-                    else
-                    {
-                        statusText.Text = string.Empty;
-                    }
-                }
+                // status area removed
             }
 
             // Subscribe to state changes to refresh UI
@@ -144,22 +168,76 @@ namespace IndexEditor.Views
             if (newArticleBtn != null)
                 newArticleBtn.Click += (s, e) =>
                 {
-                    // End any currently active segment
-                    if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
-                        EditorState.ActiveSegment.End = EditorState.CurrentPage;
+                     try
+                    {
+                        // End any currently active segment
+                        if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
+                            EditorState.ActiveSegment.End = EditorState.CurrentPage;
 
-                    // Create article and add the current page as its first page
-                    var article = new Common.Shared.ArticleLine { Title = "", Category = "Letters" };
-                    article.Pages = new List<int> { EditorState.CurrentPage };
-                    EditorState.Articles.Add(article);
-                    EditorState.ActiveArticle = article;
+                        // Create article with no populated fields except the first page
+                        var article = new Common.Shared.ArticleLine();
+                        article.Pages = new List<int> { EditorState.CurrentPage };
 
-                    // Create and attach a new active segment starting at the current page
-                    var seg = new Common.Shared.Segment(EditorState.CurrentPage);
-                    article.Segments.Add(seg);
-                    EditorState.ActiveSegment = seg;
+                        // Insert article into EditorState.Articles in sorted order by first page
+                        if (EditorState.Articles == null)
+                            EditorState.Articles = new List<Common.Shared.ArticleLine> { article };
+                        else
+                        {
+                            int insertIndex = EditorState.Articles.FindIndex(a => a.Pages != null && a.Pages.Count > 0 && a.Pages.Min() > article.Pages.Min());
+                            if (insertIndex == -1)
+                                EditorState.Articles.Add(article);
+                            else
+                                EditorState.Articles.Insert(insertIndex, article);
+                        }
 
-                    EditorState.NotifyStateChanged();
+                        // Make it the active article
+                        EditorState.ActiveArticle = article;
+
+                        // Create and attach a new active segment starting at the current page
+                        var seg = new Common.Shared.Segment(EditorState.CurrentPage);
+                        article.Segments.Add(seg);
+                        EditorState.ActiveSegment = seg;
+
+                        // Notify state change so view-models sync
+                        EditorState.NotifyStateChanged();
+
+                        // Perform selection on UI thread after view-model has synced its Articles collection
+                        var vm = this.DataContext as EditorStateViewModel;
+                        if (vm != null)
+                        {
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                            {
+                                try
+                                {
+                                    // Find the instance in vm.Articles that corresponds to our new article (by reference or by page match)
+                                    var inList = vm.Articles.FirstOrDefault(a => object.ReferenceEquals(a, article))
+                                                ?? vm.Articles.FirstOrDefault(a => a.Pages != null && article.Pages != null && a.Pages.SequenceEqual(article.Pages));
+                                    var toSelect = inList ?? article;
+                                    if (vm.SelectArticleCommand.CanExecute(toSelect))
+                                        vm.SelectArticleCommand.Execute(toSelect);
+                                    // Also set SelectedArticle explicitly to ensure binding matches
+                                    vm.SelectedArticle = toSelect;
+                                    // Attempt to focus the list so the selection persists visually
+                                    try
+                                    {
+                                        var main = this.VisualRoot as Window;
+                                        var list = main?.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
+                                        var lb = list?.FindControl<Avalonia.Controls.ListBox>("ArticlesListBox");
+                                        lb?.Focus();
+                                    }
+                                    catch { }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"[WARN] selecting new article after insert failed: {ex.Message}");
+                                }
+                            }, Avalonia.Threading.DispatcherPriority.Background);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[ERROR] Creating new article failed: {ex.Message}");
+                    }
                 };
 
             if (addSegmentBtn != null)
@@ -167,17 +245,46 @@ namespace IndexEditor.Views
                 {
                     if (EditorState.ActiveArticle != null)
                     {
-                        // Append the current page to the article's Pages list if not present
-                        if (EditorState.ActiveArticle.Pages == null) EditorState.ActiveArticle.Pages = new List<int>();
-                        if (!EditorState.ActiveArticle.Pages.Contains(EditorState.CurrentPage))
+                        // If there's already an active segment, disallow creating another
+                        if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
                         {
-                            EditorState.ActiveArticle.Pages.Add(EditorState.CurrentPage);
-                            EditorState.ActiveArticle.Pages.Sort();
+                            // do nothing (UI indicates active segment via ActiveSegmentText)
+                            ShowToast("Finish or cancel the open segment first");
+                             return;
                         }
-                        // Create a short-lived segment representing this single page (optional)
-                        var seg = new Common.Shared.Segment(EditorState.CurrentPage, EditorState.CurrentPage);
+
+                        // If the current page is already part of the article's pages, do not create a new segment
+                        if (EditorState.ActiveArticle.Pages != null && EditorState.ActiveArticle.Pages.Contains(EditorState.CurrentPage))
+                        {
+                            ShowToast($"Page {EditorState.CurrentPage} already in article");
+                            return;
+                        }
+
+
+                        // Create a new OPEN (active) segment starting at the current page
+                        var seg = new Common.Shared.Segment(EditorState.CurrentPage);
                         EditorState.ActiveArticle.Segments.Add(seg);
-                        // Do not mark as ActiveSegment since it's closed; if you want it active, set ActiveSegment = seg;
+                        EditorState.ActiveSegment = seg;
+
+                        // Notify state change so view-models sync
+                        EditorState.NotifyStateChanged();
+                    }
+                };
+
+            if (cancelSegmentBtn != null)
+                cancelSegmentBtn.Click += (s, e) =>
+                {
+                    if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
+                    {
+                        // Remove the active segment from its owning article if present
+                        var art = EditorState.ActiveArticle;
+                        if (art != null && art.Segments != null && art.Segments.Contains(EditorState.ActiveSegment))
+                        {
+                            art.Segments.Remove(EditorState.ActiveSegment);
+                        }
+                        // Clear global active segment
+                        EditorState.ActiveSegment = null;
+                        // Notify to update UI
                         EditorState.NotifyStateChanged();
                     }
                 };
@@ -194,12 +301,31 @@ namespace IndexEditor.Views
                         var art = EditorState.ActiveArticle;
                         if (art != null)
                         {
-                            if (art.Pages == null) art.Pages = new List<int>();
+                            // Build a new list so we can assign via the Pages setter (raises PropertyChanged)
+                            var newPages = new List<int>(art.Pages ?? new List<int>());
                             for (int p = start; p <= end; p++)
                             {
-                                if (!art.Pages.Contains(p)) art.Pages.Add(p);
+                                if (!newPages.Contains(p)) newPages.Add(p);
                             }
-                            art.Pages.Sort();
+                            newPages.Sort();
+                            // Assign back to trigger ArticleLine.Pages setter and property notifications
+                            art.Pages = newPages;
+
+                            // Also try to sync the view-model's article instance (if present) so the editor card updates immediately
+                            try
+                            {
+                                var vm = this.DataContext as EditorStateViewModel;
+                                if (vm != null)
+                                {
+                                    var vmMatch = vm.Articles.FirstOrDefault(a => object.ReferenceEquals(a, art))
+                                                  ?? vm.Articles.FirstOrDefault(a => a.Pages != null && a.Pages.SequenceEqual(newPages) && (a.Title ?? string.Empty) == (art.Title ?? string.Empty));
+                                    if (vmMatch != null && !object.ReferenceEquals(vmMatch, art))
+                                    {
+                                        vmMatch.Pages = new List<int>(newPages);
+                                    }
+                                }
+                            }
+                            catch { }
                         }
                         // Close the segment
                         EditorState.ActiveSegment.End = EditorState.CurrentPage;
@@ -213,6 +339,31 @@ namespace IndexEditor.Views
 
             // Initial image load
             LoadCurrentPageImage();
+
+            // Wire the Sync button to explicitly select an article that starts on the current page
+            var syncBtn = this.FindControl<Button>("SyncToArticleBtn");
+            if (syncBtn != null)
+            {
+                syncBtn.Click += (s, e) =>
+                {
+                    try
+                    {
+                        var vm = this.DataContext as EditorStateViewModel;
+                        if (vm != null)
+                        {
+                            var match = EditorState.Articles.FirstOrDefault(a => a.Pages != null && a.Pages.Count > 0 && a.Pages.Min() == EditorState.CurrentPage);
+                            if (match != null)
+                            {
+                                vm.NavigateToArticle(match);
+                                if (vm.SelectArticleCommand.CanExecute(match))
+                                    vm.SelectArticleCommand.Execute(match);
+                                vm.SelectedArticle = match;
+                            }
+                        }
+                    }
+                    catch { }
+                };
+            }
         }
 
         private void LoadCurrentPageImage()
