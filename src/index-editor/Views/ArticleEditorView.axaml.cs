@@ -14,15 +14,14 @@ namespace IndexEditor.Views
         public ArticleEditorView()
         {
             InitializeComponent();
-            DataContext = new EditorStateViewModel();
+            // Use the window's DataContext (shared EditorStateViewModel). Do not create a new VM here —
+            // multiple instances caused duplicate category updates and selection sync issues.
+            // DataContext will be inherited from the parent Window; if it's null at runtime the
+            // DataContextChanged logic in other controls will set it.
             var editBtn = this.FindControl<Button>("EditSegmentBtn");
             var overlay = this.FindControl<Border>("SegmentEditorOverlay");
             var addSegmentBtn = this.FindControl<Button>("AddSegmentBtn");
             var titleBox = this.FindControl<TextBox>("TitleTextBox");
-            var categoryCombo = this.FindControl<ComboBox>("CategoryComboBox");
-
-            // Load categories from DB
-            _ = LoadCategoriesAsync(categoryCombo);
 
             if (editBtn != null && overlay != null)
             {
@@ -54,22 +53,6 @@ namespace IndexEditor.Views
                 if (titleBox != null && EditorState.ActiveArticle != null)
                     titleBox.Text = EditorState.ActiveArticle.Title;
             };
-        }
-
-        private async Task LoadCategoriesAsync(ComboBox? combo)
-        {
-            if (combo == null) return;
-            string configPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-            if (!File.Exists(configPath)) return;
-            var json = await File.ReadAllTextAsync(configPath);
-            var doc = JsonDocument.Parse(json);
-            if (!doc.RootElement.TryGetProperty("ConnectionStrings", out var connStrings)) return;
-            if (!connStrings.TryGetProperty("MagazineDb", out var connStrElem)) return;
-            string connStr = connStrElem.GetString() ?? "";
-            var categories = await CategoryRepository.GetCategoriesAsync(connStr);
-            combo.ItemsSource = categories;
-            if (categories.Count > 0)
-                combo.SelectedIndex = 0;
         }
 
         private string? _currentFolder;

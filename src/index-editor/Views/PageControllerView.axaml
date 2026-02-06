@@ -1,14 +1,55 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="IndexEditor.Views.PageControllerView">
-    <StackPanel Margin="12" Spacing="12">
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
-            <Button Name="PrevPageBtn" Content="◀" Width="36" Height="36"/>
-            <TextBlock Name="PageText" Text="Page 8" FontWeight="Bold" FontSize="18" VerticalAlignment="Center"/>
-            <Button Name="NextPageBtn" Content="▶" Width="36" Height="36"/>
-        </StackPanel>
-        <Button Name="NewArticleBtn" Content="New Article" Margin="0,8,0,0"/>
-        <Button Name="AddSegmentBtn" Content="Add Segment" Margin="0,4,0,0"/>
-        <Button Name="EndSegmentBtn" Content="End Segment" Margin="0,4,0,0"/>
-    </StackPanel>
+             x:Class="IndexEditor.Views.PageControllerView"
+             HorizontalAlignment="Stretch"
+             VerticalAlignment="Stretch">
+    <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <!-- Allow the controller to scroll if the window is small -->
+        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="12" Spacing="12" VerticalAlignment="Stretch">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+                    <Button Name="PrevPageBtn" Content="◀" Width="36" Height="36" Background="White" Foreground="Black"/>
+                    <TextBox Name="PageInput" Text="8" Width="80" HorizontalContentAlignment="Center" FontWeight="Bold" FontSize="18" VerticalAlignment="Center" Background="White" Foreground="Black"/>
+                    <Button Name="NextPageBtn" Content="▶" Width="36" Height="36" Background="White" Foreground="Black"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Name="NewArticleBtn" Content="New Article" Background="White" Foreground="Black" />
+                    <Button Name="AddSegmentBtn" Content="Add Segment" Background="White" Foreground="Black" />
+                    <Button Name="EndSegmentBtn" Content="End Segment" Background="White" Foreground="Black" />
+                </StackPanel>
+
+                <!-- Active Article and Active Segment panes -->
+                <StackPanel Orientation="Vertical" Spacing="8">
+                    <Border Background="#F7F7F7" CornerRadius="4" Padding="8">
+                        <StackPanel>
+                            <TextBlock Text="Active Article" FontWeight="Bold" Foreground="Black" />
+                            <TextBlock Name="ActiveArticleTitle" Text="— none —" FontSize="14" Foreground="Black" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#F7F7F7" CornerRadius="4" Padding="8">
+                        <StackPanel>
+                            <TextBlock Text="Active Segment" FontWeight="Bold" Foreground="Black" />
+                            <TextBlock Name="ActiveSegmentText" Text="— none —" FontSize="14" Foreground="Black" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Status / Feedback Area -->
+                <Border Background="#FFF9E6" CornerRadius="4" Padding="8" IsVisible="{Binding}">
+                    <StackPanel>
+                        <TextBlock Text="STATUS" FontWeight="Bold" Foreground="Black" />
+                        <TextBlock Name="StatusText" Text="" Foreground="Black" />
+                    </StackPanel>
+                </Border>
+                <!-- Page image (full width) with overlay message when missing -->
+                <Border Background="#FFFFFF" CornerRadius="4" Padding="4">
+                    <Grid>
+                        <Image Name="PageImage" Stretch="Uniform" HorizontalAlignment="Stretch" />
+                        <TextBlock Name="ImageMissingText" Text="Page image not found" Foreground="Red" Background="#80FFFFFF" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False" Padding="8"/>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
 </UserControl>

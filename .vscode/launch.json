@@ -1,0 +1,33 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "IndexEditor: Run (built DLL)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build IndexEditor",
+      "program": "${workspaceFolder}/src/index-editor/bin/Debug/net8.0/IndexEditor.dll",
+      "args": ["${input:folderToOpen}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "stopAtEntry": false,
+      "env": {
+        "DISPLAY": "${env:DISPLAY}"
+      }
+    },
+    {
+      "name": "Attach to IndexEditor (process)",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "${command:pickProcess}"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "folderToOpen",
+      "type": "promptString",
+      "description": "Folder to open (pass as first argument to IndexEditor)",
+      "default": "/mnt/wwn-0x50014ee2b8946bd6-part2/Magazines/Mayfair/Mayfair 18-07, 1983"
+    }
+  ]
+}

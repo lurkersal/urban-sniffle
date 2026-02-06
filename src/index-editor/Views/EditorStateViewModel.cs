@@ -1,17 +1,89 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Collections.Generic;
+using System.ComponentModel;
 using Common.Shared;
 using IndexEditor.Shared;
+using System.IO;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Avalonia.Threading;
+using System.Windows.Input;
+
 namespace IndexEditor.Views
 {
-    public class EditorStateViewModel
+    public class EditorStateViewModel : INotifyPropertyChanged
     {
+        public event PropertyChangedEventHandler? PropertyChanged;
         public SelectArticleCommand SelectArticleCommand { get; }
-        public ArticleLine? SelectedArticle { get; set; }
-        public ObservableCollection<Common.Shared.ArticleLine> Articles { get; } = new();
 
-        // Removed per-card helper properties. Bind directly to ArticleLine properties in the UI and use value converters or formatting in the DataTemplate.
+        private ArticleLine? _selectedArticle;
+        public ArticleLine? SelectedArticle
+        {
+            get => _selectedArticle;
+            set
+            {
+                if (_selectedArticle != value)
+                {
+                    _selectedArticle = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
+                    // Notify SelectedCategory so the editor ComboBox updates to the new article's category
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
+                    // Run validation after UI bindings have a chance to populate the editor fields.
+                    // Schedule validation at Background priority so two-way bindings and initial control
+                    // population complete first; this avoids a false-negative when the editor first shows an article.
+                    Dispatcher.UIThread.Post(() => _selectedArticle?.Validate(), Avalonia.Threading.DispatcherPriority.Background);
+                    // Also schedule a second validation after a short delay to handle any remaining
+                    // asynchronous population that may occur after initial layout/binding.
+                    Task.Run(async () =>
+                    {
+                        await Task.Delay(150).ConfigureAwait(false);
+                        Dispatcher.UIThread.Post(() => _selectedArticle?.Validate(), Avalonia.Threading.DispatcherPriority.Background);
+                    });
+                }
+            }
+        }
+
+        private bool _suppressCategorySet = false;
+        public string? SelectedCategory
+        {
+            get => SelectedArticle?.Category;
+            set
+            {
+                if (_suppressCategorySet) return;
+                if (SelectedArticle == null) return;
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    // Ignore transient clears from the UI (ItemsSource changes) to avoid wiping the model
+                    return;
+                }
+                var newVal = value!;
+                if (SelectedArticle.Category != newVal)
+                {
+                    SelectedArticle.Category = newVal;
+                    // Forward notify so bindings update
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
+                }
+            }
+        }
+
+        public ObservableCollection<Common.Shared.ArticleLine> Articles { get; } = new();
+        public ObservableCollection<string> Categories { get; } = new();
+
+        private bool _isLoadingCategories = false;
+        public bool IsLoadingCategories
+        {
+            get => _isLoadingCategories;
+            private set
+            {
+                if (_isLoadingCategories != value)
+                {
+                    _isLoadingCategories = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLoadingCategories)));
+                }
+            }
+        }
 
         public EditorStateViewModel()
         {
@@ -19,51 +91,211 @@ namespace IndexEditor.Views
             // Initialize from static EditorState
             foreach (var article in EditorState.Articles)
                 Articles.Add(article);
+
+            // Populate categories from articles (unique, sorted) as a fallback
+            var cats = new HashSet<string>(Articles.Select(a => a.Category).Where(c => !string.IsNullOrWhiteSpace(c)));
+            foreach (var c in cats.OrderBy(s => s))
+                Categories.Add(c);
+
+            // Asynchronously try to load categories from DB (do not block UI thread)
+            IsLoadingCategories = true;
+            Task.Run(async () =>
+            {
+                try
+                {
+                    var dbCats = await LoadCategoriesFromDatabaseAsync();
+                    if (dbCats != null && dbCats.Count > 0)
+                    {
+                        // Update the observable collection on the UI thread
+                        Dispatcher.UIThread.Post(() => UpdateCategories(dbCats.OrderBy(s => s).ToList()));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Console.WriteLine($"[DEBUG] Failed to load categories from DB (background): {ex.Message}");
+                }
+                finally
+                {
+                    Dispatcher.UIThread.Post(() => IsLoadingCategories = false);
+                }
+            });
+
             // Debug: Print type of every item
             for (int i = 0; i < Articles.Count; i++)
             {
                 var a = Articles[i];
-                if (a != null)
-                    System.Console.WriteLine($"[DEBUG] Articles[{i}] type: {a.GetType().FullName}");
+                System.Console.WriteLine($"[DEBUG] Articles[{i}] type: {a.GetType().FullName}");
             }
-            // Listen for changes if needed
+            // Listen for changes
             EditorState.StateChanged += SyncArticles;
 
             // Debug: Print formatted text for each article
             for (int i = 0; i < Articles.Count; i++)
             {
                 var a = Articles[i];
-                if (a != null)
+                string ageText = string.Join(", ", a.Ages.Where(age => age.HasValue).Select(age => age.Value.ToString()));
+                string modelText = string.Join(", ", a.ModelNames);
+                string photographerText = string.Join(", ", a.Photographers);
+                string measurementsText = string.Join(", ", a.Measurements);
+                System.Console.WriteLine($"[DEBUG] Card[{i}] Formatted: Model='{modelText}', Age='{ageText}', Photographer='{photographerText}', Measurements='{measurementsText}'");
+            }
+        }
+
+        private async Task<List<string>?> LoadCategoriesFromDatabaseAsync()
+        {
+            try
+            {
+                // Read appsettings.json from the app folder
+                var appsettingsPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
+                if (!File.Exists(appsettingsPath))
+                    return null;
+                using var fs = File.OpenRead(appsettingsPath);
+                using var doc = await JsonDocument.ParseAsync(fs);
+                if (!doc.RootElement.TryGetProperty("ConnectionStrings", out var connSection))
+                    return null;
+                if (!connSection.TryGetProperty("MagazineDb", out var connStringElem))
+                    return null;
+                var connString = connStringElem.GetString();
+                if (string.IsNullOrWhiteSpace(connString))
+                    return null;
+
+                var cats = await IndexEditor.Shared.CategoryRepository.GetCategoriesAsync(connString);
+                if (cats != null && cats.Count > 0)
                 {
-                    string ageText = string.Join(", ", a.Ages.Where(age => age.HasValue).Select(age => age.Value.ToString()));
-                    string modelText = string.Join(", ", a.ModelNames);
-                    string photographerText = string.Join(", ", a.Photographers);
-                    string measurementsText = string.Join(", ", a.Measurements);
-                    System.Console.WriteLine($"[DEBUG] Card[{i}] Formatted: Model='{modelText}', Age='{ageText}', Photographer='{photographerText}', Measurements='{measurementsText}'");
+                    System.Console.WriteLine($"[DEBUG] Loaded {cats.Count} categories from DB");
+                    return cats;
+                }
+                return null;
+            }
+            catch (System.Exception ex)
+            {
+                System.Console.WriteLine($"[DEBUG] Failed to load categories from DB: {ex.Message}");
+                return null;
+            }
+        }
+
+        private void UpdateCategories(List<string> newCats)
+        {
+            // Ensure selected category is preserved
+            var selectedCat = SelectedArticle?.Category;
+            System.Console.WriteLine($"[TRACE] UpdateCategories called. SelectedArticle.Category='{selectedCat}' NewCatsCount={newCats?.Count}");
+            if (!string.IsNullOrWhiteSpace(selectedCat) && !newCats.Contains(selectedCat))
+            {
+                newCats.Add(selectedCat);
+                System.Console.WriteLine($"[TRACE] Added selected category '{selectedCat}' to newCats to preserve selection");
+            }
+
+            // Add any new categories, but do NOT remove existing ones. Removing can change ComboBox indices
+            // and cause SelectedItem to shift and write back incorrect values into Article.Category.
+            var union = new HashSet<string>(Categories);
+            foreach (var c in newCats)
+                union.Add(c);
+            // Preserve insertion order by sorting the union; we only append missing items to the existing collection
+            var sorted = union.OrderBy(s => s).ToList();
+            foreach (var c in sorted)
+            {
+                if (!Categories.Contains(c))
+                {
+                    System.Console.WriteLine($"[TRACE] Adding category '{c}' to Categories (union)");
+                    Categories.Add(c);
                 }
             }
         }
 
         private void SyncArticles()
         {
-            Articles.Clear();
-            int i = 0;
-            foreach (var article in EditorState.Articles)
+            // During initial sync we suppress category writes that may arise from control rebinds
+            _suppressCategorySet = true;
+            // Perform an in-place minimal-diff update of the ObservableCollection to avoid
+            // recreating item controls. This preserves control instances and their bindings
+            // so TwoWay bindings (like Category) don't accidentally write into the wrong model.
+            var desired = EditorState.Articles ?? new List<Common.Shared.ArticleLine>();
+
+            // Remove items not present in desired
+            for (int i = Articles.Count - 1; i >= 0; i--)
             {
-                Articles.Add(article);
-                System.Console.WriteLine($"[DEBUG] Card[{i}] Category='{article.Category}', Title='{article.Title}', Pages=[{string.Join(",", article.Pages)}]");
-                if (article != null)
+                var existing = Articles[i];
+                if (!desired.Contains(existing))
                 {
-                    string ageText = string.Join(", ", article.Ages.Where(age => age.HasValue).Select(age => age.Value.ToString()));
-                    string modelText = string.Join(", ", article.ModelNames);
-                    string photographerText = string.Join(", ", article.Photographers);
-                    string measurementsText = string.Join(", ", article.Measurements);
-                    System.Console.WriteLine($"[DEBUG] Card[{i}] Formatted: Model='{modelText}', Age='{ageText}', Photographer='{photographerText}', Measurements='{measurementsText}'");
+                    Articles.RemoveAt(i);
                 }
-                i++;
             }
-            System.Console.WriteLine($"[DEBUG] Total cards in list: {Articles.Count}");
+
+            // Insert/move items to match desired order
+            for (int targetIndex = 0; targetIndex < desired.Count; targetIndex++)
+            {
+                var article = desired[targetIndex];
+                var currentIndex = Articles.IndexOf(article);
+                if (currentIndex == -1)
+                {
+                    Articles.Insert(targetIndex, article);
+                }
+                else if (currentIndex != targetIndex)
+                {
+                    Articles.Move(currentIndex, targetIndex);
+                }
+
+                // Ensure we are subscribed to property changes once
+                article.PropertyChanged -= OnArticlePropertyChanged;
+                article.PropertyChanged += OnArticlePropertyChanged;
+            }
+
+            // Recompute categories from current articles and update the category list
+            var cats = new HashSet<string>(Articles.Select(a => a.Category).Where(c => !string.IsNullOrWhiteSpace(c)));
+            UpdateCategories(cats.OrderBy(s => s).ToList());
+            System.Console.WriteLine($"[DEBUG] SyncArticles completed; Articles.Count={Articles.Count}");
+            _suppressCategorySet = false;
+        }
+
+        private void OnArticlePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (sender is ArticleLine article)
+            {
+                System.Console.WriteLine($"[TRACE] OnArticlePropertyChanged article Title='{article.Title}' Property='{e.PropertyName}' Category='{article.Category}' PagesText='{article.PagesText}'");
+                // If pages or category changed, we may need to reorder
+                if (e.PropertyName == nameof(ArticleLine.Pages) || e.PropertyName == nameof(ArticleLine.PagesText) || e.PropertyName == nameof(ArticleLine.Category))
+                {
+                    System.Console.WriteLine($"[TRACE] Triggering ReorderArticlesByPage because property '{e.PropertyName}' changed");
+                    ReorderArticlesByPage();
+                }
+            }
+        }
+
+        private void ReorderArticlesByPage()
+        {
+            // Suppress category writes while we reorder/move items to avoid transient writes
+            _suppressCategorySet = true;
+            // Compute ordered list (articles with no pages end up after those with pages)
+            var ordered = EditorState.Articles
+                .OrderBy(a => (a.Pages != null && a.Pages.Count > 0) ? a.Pages.Min() : int.MaxValue)
+                .ThenBy(a => a.Title)
+                .ToList();
+
+            // Update backing list
+            EditorState.Articles = ordered;
+
+            // Reorder the ObservableCollection in-place to avoid recreating item controls
+            for (int targetIndex = 0; targetIndex < ordered.Count; targetIndex++)
+            {
+                var article = ordered[targetIndex];
+                var currentIndex = Articles.IndexOf(article);
+                if (currentIndex == -1)
+                {
+                    // If the Articles collection doesn't contain the article (shouldn't happen), insert it
+                    Articles.Insert(targetIndex, article);
+                }
+                else if (currentIndex != targetIndex)
+                {
+                    // Move the item to the target index
+                    Articles.Move(currentIndex, targetIndex);
+                }
+            }
+
+            // Update categories set based on new ordering without re-syncing all article subscriptions
+            var cats = new HashSet<string>(EditorState.Articles.Select(a => a.Category).Where(c => !string.IsNullOrWhiteSpace(c)));
+            UpdateCategories(cats.OrderBy(s => s).ToList());
+            System.Console.WriteLine($"[TRACE] ReorderArticlesByPage completed; Articles.Count={Articles.Count}");
+            _suppressCategorySet = false;
         }
     }
 }
-

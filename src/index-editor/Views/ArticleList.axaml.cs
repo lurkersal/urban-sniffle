@@ -20,6 +20,15 @@ namespace IndexEditor.Views
             };
         }
 
+        // Scroll the list so the specified article model is visible
+        public void ScrollToArticle(Common.Shared.ArticleLine? article)
+        {
+            if (article == null) return;
+            var list = this.FindControl<ListBox>("ArticlesListBox");
+            if (list == null) return;
+            list.ScrollIntoView(article);
+        }
+
         private void OnArticlePointerPressed(object? sender, PointerPressedEventArgs e)
         {
             try

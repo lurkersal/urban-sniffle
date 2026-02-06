@@ -11,39 +11,39 @@
     </UserControl.Resources>
     <Grid RowDefinitions="Auto,*">
         <TextBlock Grid.Row="0" Text="Article List" FontWeight="Bold" FontSize="16" Margin="8,8,8,4"/>
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0">
-            <ItemsControl ItemsSource="{Binding Articles}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border
-                            Background="{Binding Category, Converter={StaticResource ArticleCategoryToColorConverter}}"
-                            Margin="8,4" Padding="8" CornerRadius="4"
-                            BorderBrush="{Binding IsSelected, Converter={StaticResource SelectedArticleBorderConverter}}"
-                            BorderThickness="2"
-                            PointerPressed="OnArticlePointerPressed"
-                            Tag="{Binding}" >
-                            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto">
-                                <!-- Top row: Title (left, bold, large), Category (right, no label) -->
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding DisplayTitle}" FontWeight="Bold" FontSize="18" VerticalAlignment="Top"/>
-                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Category}" FontWeight="Bold" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+        <ListBox x:Name="ArticlesListBox" Grid.Row="1" ItemsSource="{Binding Articles}" SelectedItem="{Binding SelectedArticle, Mode=TwoWay}" BorderThickness="0">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border
+                        Background="{Binding Category, Converter={StaticResource ArticleCategoryToColorConverter}}"
+                        Margin="8,4" Padding="8" CornerRadius="4"
+                        BorderBrush="{Binding IsSelected, Converter={StaticResource SelectedArticleBorderConverter}}"
+                        BorderThickness="2"
+                        PointerPressed="OnArticlePointerPressed"
+                        Tag="{Binding}" >
+                        <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto">
+                            <!-- Top row: Title (left, bold, large), Category (right, no label) -->
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding DisplayTitle}" FontWeight="Bold" FontSize="18" VerticalAlignment="Top"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Category}" FontWeight="Bold" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Top"/>
 
-                                <!-- Second row: Model info for Model/Cover only -->
-                                <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" IsVisible="{Binding Category, Converter={StaticResource CoverModelCategoryConverter}}">
-                                    <TextBlock Text="{Binding ModelNames[0]}" FontSize="14" Margin="0,0,12,0"/>
-                                    <TextBlock Text="{Binding Ages[0]}" FontSize="14" Margin="0,0,12,0"/>
-                                    <TextBlock Text="{Binding Measurements[0]}" FontSize="14"/>
-                                </StackPanel>
+                            <!-- Second row: Model info for Model/Cover only -->
+                            <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Orientation="Horizontal" IsVisible="{Binding Category, Converter={StaticResource CoverModelCategoryConverter}}">
+                                <TextBlock Text="{Binding ModelName0}" FontSize="14" Margin="0,0,12,0"/>
+                                <TextBlock Text="{Binding Age0}" FontSize="14" Margin="0,0,12,0"/>
+                                <TextBlock Text="{Binding Measurements[0]}" FontSize="14"/>
+                            </StackPanel>
 
-                                <!-- Third row: Photographer (left) and Pages (right, always visible) -->
-                                <Grid Grid.Row="2" Grid.ColumnSpan="2">
-                                    <TextBlock Text="{Binding Photographers[0]}" FontSize="13" FontWeight="Normal" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
-                                    <TextBlock Text="{Binding Pages, Converter={StaticResource ArticleFieldFriendlyTextConverter}}" FontSize="13" FontWeight="Normal" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
-                                </Grid>
+                            <!-- Third row: Photographer (left) and Pages (right, always visible) -->
+                            <Grid Grid.Row="2" Grid.ColumnSpan="2">
+                                <TextBlock Text="{Binding Photographer0}" FontSize="13" FontWeight="Normal" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
+                                <TextBlock Text="{Binding Pages, Converter={StaticResource ArticleFieldFriendlyTextConverter}}" FontSize="13" FontWeight="Normal" HorizontalAlignment="Right" VerticalAlignment="Bottom"/>
                             </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+                            <!-- Auto-highlight overlay -->
+                            <Border Grid.RowSpan="3" Background="#80FFFF66" IsVisible="{Binding WasAutoHighlighted}" CornerRadius="4"/>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
     </Grid>
 </UserControl>
