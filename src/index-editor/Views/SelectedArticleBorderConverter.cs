@@ -10,7 +10,7 @@ namespace IndexEditor.Views
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
             if (value is bool isSelected && isSelected)
-                return new SolidColorBrush(Colors.DeepSkyBlue);
+                return new SolidColorBrush(Colors.Red);
             return new SolidColorBrush(Colors.Transparent);
         }
 

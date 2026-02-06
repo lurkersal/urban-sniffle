@@ -21,46 +21,38 @@ namespace IndexEditor.Views
         {
             if (parameter is ArticleLine article)
             {
+                // If there's an active segment, prevent selecting a different article
+                var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
+                var activeArticle = IndexEditor.Shared.EditorState.ActiveArticle;
+                if (activeSeg != null && activeSeg.IsActive)
+                {
+                    // Only allow selecting the article that already owns the active segment
+                    if (activeArticle != null && !object.ReferenceEquals(activeArticle, article))
+                    {
+                        // ignore selection change while segment is active and show a toast to explain why
+                        IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first");
+                        return;
+                    }
+                }
+
+                // Try to pick the article instance that exists in the view-model's Articles collection
+                var viewArticle = _viewModel.Articles.FirstOrDefault(a => object.ReferenceEquals(a, article))
+                              ?? _viewModel.Articles.FirstOrDefault(a =>
+                                  a.Pages != null && article.Pages != null && a.Pages.SequenceEqual(article.Pages) && (a.Title ?? string.Empty) == (article.Title ?? string.Empty));
+
+                // If we didn't find a logical in-list match, fall back to the passed instance
+                var toSelect = viewArticle ?? article;
+
                 foreach (var a in _viewModel.Articles)
                     a.IsSelected = false;
-                article.IsSelected = true;
+                toSelect.IsSelected = true;
                 // Update global editor state and viewmodel selection
-                IndexEditor.Shared.EditorState.ActiveArticle = article;
-                if (article.Pages != null && article.Pages.Count > 0)
-                {
-                    // Try to pick the first page that has an image in the open folder
-                    var folder = IndexEditor.Shared.EditorState.CurrentFolder;
-                    int? pick = null;
-                    if (!string.IsNullOrWhiteSpace(folder))
-                    {
-                        foreach (var p in article.Pages.OrderBy(x => x))
-                        {
-                            if (ImageExistsInFolder(folder, p)) { pick = p; break; }
-                        }
-                    }
-                    // Fallback to the minimum page if none found
-                    IndexEditor.Shared.EditorState.CurrentPage = pick ?? article.Pages.Min();
-                }
+                IndexEditor.Shared.EditorState.ActiveArticle = toSelect;
                 IndexEditor.Shared.EditorState.NotifyStateChanged();
-                _viewModel.SelectedArticle = article;
+                _viewModel.SelectedArticle = toSelect;
             }
         }
 
-        private bool ImageExistsInFolder(string folder, int page)
-        {
-            // Candidates: plain, padded 2/3, jpg/png, and simple prefixes
-            var candidates = new List<string>
-            {
-                Path.Combine(folder, page.ToString() + ".jpg"),
-                Path.Combine(folder, page.ToString() + ".png"),
-                Path.Combine(folder, page.ToString("D2") + ".jpg"),
-                Path.Combine(folder, page.ToString("D2") + ".png"),
-                Path.Combine(folder, page.ToString("D3") + ".jpg"),
-                Path.Combine(folder, page.ToString("D3") + ".png"),
-                Path.Combine(folder, "page-" + page.ToString() + ".jpg"),
-                Path.Combine(folder, "p" + page.ToString() + ".jpg")
-            };
-            return candidates.Any(Path.Exists);
-        }
+        // Navigation checks are performed by the UI (double-click handler) to avoid coupling selection with navigation.
     }
 }

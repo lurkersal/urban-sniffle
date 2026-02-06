@@ -7,7 +7,7 @@
     <Window.Resources>
         <local:NotNullToBoolConverter x:Key="NotNullToBool" />
     </Window.Resources>
-    <Grid RowDefinitions="Auto,*" ColumnDefinitions="3*,6*,3*">
+    <Grid RowDefinitions="Auto,*" ColumnDefinitions="*,*,*">
         <!-- Top Bar -->
         <Border Grid.Row="0" Grid.ColumnSpan="3">
             <views:TopBar/>

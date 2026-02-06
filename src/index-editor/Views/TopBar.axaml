@@ -4,6 +4,15 @@
     <Border Background="#F5F5F5" Height="48">
         <DockPanel VerticalAlignment="Center" Height="48">
             <TextBlock Text="Top Bar" VerticalAlignment="Center" Margin="16,0" FontWeight="Bold" FontSize="18"/>
+            <!-- Center area: magazine info -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Name="MagTypeText" Text="Magazine: —" Margin="8,0" VerticalAlignment="Center"/>
+                <TextBlock Name="VolumeText" Text="Vol: —" Margin="8,0" VerticalAlignment="Center"/>
+                <TextBlock Name="NumberText" Text="No: —" Margin="8,0" VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <Button Name="OpenFolderBtn" Content="Open Folder" DockPanel.Dock="Right" Margin="8" Width="96" />
+            <Button Name="SaveIndexBtn" Content="Save" DockPanel.Dock="Right" Margin="8" Width="72" />
             <!-- Add buttons and controls as needed -->
         </DockPanel>
     </Border>

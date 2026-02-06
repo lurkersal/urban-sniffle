@@ -35,4 +35,9 @@
   <ItemGroup>
     <ProjectReference Include="..\common\common.csproj" />
   </ItemGroup>
+  <!-- Exclude any test sources placed under Tests/ so a separate test project can build them -->
+  <ItemGroup>
+    <Compile Remove="Tests\**\*.cs" />
+    <None Remove="Tests\**" />
+  </ItemGroup>
 </Project>
