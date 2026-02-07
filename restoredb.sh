@@ -11,3 +11,5 @@ echo "Restoring schema from $SCHEMA_FILE..."
 PGPASSWORD=Barnowl1 psql -U postgres -h localhost -d magazines -f "$SCHEMA_FILE"
 
 echo "Database restored successfully!"
+
+
