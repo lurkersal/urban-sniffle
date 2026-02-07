@@ -304,7 +304,7 @@ namespace Common.Shared
 
             // Feature, Fiction, Review, Humour: rename photographer as author
             if (cat == "feature" || cat == "fiction" || cat == "review" || cat == "humour" || cat == "humor")
-                return $"{categoryText}\n{pagesText}\nTitle: {Title}\nAuthor: {string.Join(", ", Photographers)}";
+                return $"{categoryText}\n{pagesText}\nTitle: {Title}\nAuthor: {string.Join(", ", Authors)}";
 
             // Photographer category: show photographer and title
             if (cat == "photographer")

@@ -11,7 +11,6 @@ namespace IndexEditor.Views
 {
     public partial class PageControllerView : UserControl
     {
-
         public int Page
         {
             get => EditorState.CurrentPage;
@@ -170,9 +169,12 @@ namespace IndexEditor.Views
                 {
                      try
                     {
-                        // End any currently active segment
+                        // Do not auto-close an existing active segment; instead, block creating a new article while a segment is active
                         if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
-                            EditorState.ActiveSegment.End = EditorState.CurrentPage;
+                        {
+                            ShowToast("Finish or cancel the open segment first");
+                            return;
+                        }
 
                         // Create article with no populated fields except the first page
                         var article = new Common.Shared.ArticleLine();
@@ -248,7 +250,7 @@ namespace IndexEditor.Views
                         // If there's already an active segment, disallow creating another
                         if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
                         {
-                            // do nothing (UI indicates active segment via ActiveSegmentText)
+                            // show toast instead of silent no-op
                             ShowToast("Finish or cancel the open segment first");
                              return;
                         }
@@ -271,6 +273,7 @@ namespace IndexEditor.Views
                     }
                 };
 
+            // Cancel Segment: remove the active segment and clear state
             if (cancelSegmentBtn != null)
                 cancelSegmentBtn.Click += (s, e) =>
                 {
@@ -289,6 +292,7 @@ namespace IndexEditor.Views
                     }
                 };
 
+            // End Segment: when an active segment exists, update the article pages and UI
             if (endSegmentBtn != null)
                 endSegmentBtn.Click += (s, e) =>
                 {

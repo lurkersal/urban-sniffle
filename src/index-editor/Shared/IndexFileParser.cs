@@ -100,32 +100,30 @@ namespace IndexEditor.Shared
             article.Title = parts.Count > 2 ? parts[2] : "";
             if (parts.Count > 3)
                 article.ModelNames = parts[3].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-            if (parts.Count > 4)
+            // columns: 4=modelNames, 5=ages, 6=photographers, 7=authors, 8=measurements (0-based indices 3..7)
+            if (parts.Count > 4 && !string.IsNullOrWhiteSpace(parts[4]))
             {
+                // ages are numeric or empty; allow missing entries
                 var ageParts = parts[4].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                var ages = new List<int?>();
-                foreach (var ap in ageParts)
-                {
-                    if (int.TryParse(ap, out int a))
-                        ages.Add(a);
-                    else
-                        ages.Add(null);
-                }
-                article.Ages = ages;
+                article.Ages = ageParts.Select(ap => int.TryParse(ap, out var iv) ? (int?)iv : null).ToList();
             }
             if (parts.Count > 5 && !string.IsNullOrWhiteSpace(parts[5]))
                 article.Photographers = parts[5].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-            if (parts.Count > 6)
-                article.Measurements = parts[6].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            if (parts.Count > 6 && !string.IsNullOrWhiteSpace(parts[6]))
+                article.Authors = parts[6].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            if (parts.Count > 7 && !string.IsNullOrWhiteSpace(parts[7]))
+                article.Measurements = parts[7].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
             if (article.ModelNames == null || article.ModelNames.Count == 0)
-                article.ModelNames = new List<string> { string.Empty };
+                 article.ModelNames = new List<string> { string.Empty };
             if (article.Photographers == null || article.Photographers.Count == 0)
                 article.Photographers = new List<string> { string.Empty };
-            if (article.Measurements == null || article.Measurements.Count == 0)
-                article.Measurements = new List<string> { string.Empty };
-            if (article.Ages == null || article.Ages.Count == 0)
-                article.Ages = new List<int?> { null };
+            if (article.Authors == null || article.Authors.Count == 0)
+                article.Authors = new List<string> { string.Empty };
+             if (article.Measurements == null || article.Measurements.Count == 0)
+                 article.Measurements = new List<string> { string.Empty };
+             if (article.Ages == null || article.Ages.Count == 0)
+                 article.Ages = new List<int?> { null };
 
             return article;
         }

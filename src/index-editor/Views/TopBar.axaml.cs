@@ -49,6 +49,9 @@ namespace IndexEditor.Views
                             IndexEditor.Shared.ToastService.Show("No folder opened; cannot save _index.txt");
                             return;
                         }
+
+                        // Prevent double-save
+                        btn.IsEnabled = false;
                         var indexPath = System.IO.Path.Combine(folder, "_index.txt");
                         // Build lines from EditorState.Articles using same formatting as MainWindow.ParseArticleLine reversed
                         var lines = new List<string>();
@@ -61,8 +64,9 @@ namespace IndexEditor.Views
                             var modelNames = (a.ModelNames != null && a.ModelNames.Count > 0) ? string.Join('|', a.ModelNames) : string.Empty;
                             var ages = (a.Ages != null && a.Ages.Count > 0) ? string.Join('|', a.Ages.Select(v => v.HasValue ? v.Value.ToString() : string.Empty)) : string.Empty;
                             var photographers = (a.Photographers != null && a.Photographers.Count > 0) ? string.Join('|', a.Photographers) : string.Empty;
+                            var authors = (a.Authors != null && a.Authors.Count > 0) ? string.Join('|', a.Authors) : string.Empty;
                             var measurements = (a.Measurements != null && a.Measurements.Count > 0) ? string.Join('|', a.Measurements) : string.Empty;
-                            var parts = new List<string> { pagesText, Escape(a.Category), Escape(a.Title), Escape(modelNames), Escape(ages), Escape(photographers), Escape(measurements) };
+                            var parts = new List<string> { pagesText, Escape(a.Category), Escape(a.Title), Escape(modelNames), Escape(ages), Escape(photographers), Escape(authors), Escape(measurements) };
                             var line = string.Join(",", parts);
                             lines.Add(line);
                         }
@@ -75,8 +79,29 @@ namespace IndexEditor.Views
                         if (!string.IsNullOrWhiteSpace(IndexEditor.Shared.EditorState.CurrentNumber))
                             header.Add($"# Number: {IndexEditor.Shared.EditorState.CurrentNumber}");
                         var outLines = header.Concat(lines).ToArray();
-                        System.IO.File.WriteAllLines(indexPath, outLines);
-                        IndexEditor.Shared.ToastService.Show("_index.txt saved");
+
+                        // Atomic write: write to temp then replace
+                        var tempPath = indexPath + ".tmp";
+                        try
+                        {
+                            System.IO.File.WriteAllLines(tempPath, outLines);
+                            // If the target exists, use Replace to be atomic; otherwise move
+                            if (System.IO.File.Exists(indexPath))
+                            {
+                                System.IO.File.Replace(tempPath, indexPath, null);
+                            }
+                            else
+                            {
+                                System.IO.File.Move(tempPath, indexPath);
+                            }
+                            IndexEditor.Shared.ToastService.Show("_index.txt saved");
+                        }
+                        finally
+                        {
+                            try { if (System.IO.File.Exists(tempPath)) System.IO.File.Delete(tempPath); } catch { }
+                            // re-evaluate enablement based on active segment
+                            btn.IsEnabled = IndexEditor.Shared.EditorState.ActiveSegment == null;
+                        }
                     }
                     catch (Exception ex)
                     {
