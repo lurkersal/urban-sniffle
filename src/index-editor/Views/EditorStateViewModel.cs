@@ -200,7 +200,7 @@ namespace IndexEditor.Views
                 }
                 catch (Exception ex)
                 {
-                    System.Console.WriteLine($"[DEBUG] Failed to load categories from DB (background): {ex.Message}");
+                    // Failed to load categories from DB (suppressed)
                 }
                 finally
                 {
@@ -209,25 +209,13 @@ namespace IndexEditor.Views
             });
 
             // Debug: Print type of every item
-            for (int i = 0; i < Articles.Count; i++)
-            {
-                var a = Articles[i];
-                System.Console.WriteLine($"[DEBUG] Articles[{i}] type: {a.GetType().FullName}");
-            }
-            // Listen for changes
-            EditorState.StateChanged += SyncArticles;
+            // Skip debug printing of article types
+             // Listen for changes
+             EditorState.StateChanged += SyncArticles;
 
-            // Debug: Print formatted text for each article
-            for (int i = 0; i < Articles.Count; i++)
-            {
-                var a = Articles[i];
-                string ageText = string.Join(", ", a.Ages.Where(age => age.HasValue).Select(age => age.Value.ToString()));
-                string modelText = string.Join(", ", a.ModelNames);
-                string photographerText = string.Join(", ", a.Photographers);
-                string measurementsText = string.Join(", ", a.Measurements);
-                System.Console.WriteLine($"[DEBUG] Card[{i}] Formatted: Model='{modelText}', Age='{ageText}', Photographer='{photographerText}', Measurements='{measurementsText}'");
-            }
-        }
+             // Debug: Print formatted text for each article
+            // Skip debug formatted output for cards
+         }
 
         private async Task<List<string>?> LoadCategoriesFromDatabaseAsync()
         {
@@ -250,14 +238,13 @@ namespace IndexEditor.Views
                 var cats = await IndexEditor.Shared.CategoryRepository.GetCategoriesAsync(connString);
                 if (cats != null && cats.Count > 0)
                 {
-                    System.Console.WriteLine($"[DEBUG] Loaded {cats.Count} categories from DB");
                     return cats;
                 }
                 return null;
             }
             catch (System.Exception ex)
             {
-                System.Console.WriteLine($"[DEBUG] Failed to load categories from DB: {ex.Message}");
+                // Failed to load categories from DB (suppressed)
                 return null;
             }
         }
@@ -266,11 +253,11 @@ namespace IndexEditor.Views
         {
             // Ensure selected category is preserved
             var selectedCat = SelectedArticle?.Category;
-            System.Console.WriteLine($"[TRACE] UpdateCategories called. SelectedArticle.Category='{selectedCat}' NewCatsCount={newCats?.Count}");
+            // UpdateCategories called
             if (!string.IsNullOrWhiteSpace(selectedCat) && !newCats.Contains(selectedCat))
             {
                 newCats.Add(selectedCat);
-                System.Console.WriteLine($"[TRACE] Added selected category '{selectedCat}' to newCats to preserve selection");
+                // Added selected category to preserve selection
             }
 
             // Add any new categories, but do NOT remove existing ones. Removing can change ComboBox indices
@@ -284,7 +271,7 @@ namespace IndexEditor.Views
             {
                 if (!Categories.Contains(c))
                 {
-                    System.Console.WriteLine($"[TRACE] Adding category '{c}' to Categories (union)");
+                    // Adding category to Categories (union)
                     Categories.Add(c);
                 }
             }
@@ -331,7 +318,7 @@ namespace IndexEditor.Views
             // Recompute categories from current articles and update the category list
             var cats = new HashSet<string>(Articles.Select(a => a.Category).Where(c => !string.IsNullOrWhiteSpace(c)));
             UpdateCategories(cats.OrderBy(s => s).ToList());
-            System.Console.WriteLine($"[DEBUG] SyncArticles completed; Articles.Count={Articles.Count}");
+            // SyncArticles completed
             _suppressCategorySet = false;
         }
 
@@ -339,11 +326,10 @@ namespace IndexEditor.Views
         {
             if (sender is ArticleLine article)
             {
-                System.Console.WriteLine($"[TRACE] OnArticlePropertyChanged article Title='{article.Title}' Property='{e.PropertyName}' Category='{article.Category}' PagesText='{article.PagesText}'");
+                // OnArticlePropertyChanged
                 // If pages or category changed, we may need to reorder
                 if (e.PropertyName == nameof(ArticleLine.Pages) || e.PropertyName == nameof(ArticleLine.PagesText) || e.PropertyName == nameof(ArticleLine.Category))
                 {
-                    System.Console.WriteLine($"[TRACE] Triggering ReorderArticlesByPage because property '{e.PropertyName}' changed");
                     ReorderArticlesByPage();
                 }
             }
@@ -382,7 +368,7 @@ namespace IndexEditor.Views
             // Update categories set based on new ordering without re-syncing all article subscriptions
             var cats = new HashSet<string>(EditorState.Articles.Select(a => a.Category).Where(c => !string.IsNullOrWhiteSpace(c)));
             UpdateCategories(cats.OrderBy(s => s).ToList());
-            System.Console.WriteLine($"[TRACE] ReorderArticlesByPage completed; Articles.Count={Articles.Count}");
+            // ReorderArticlesByPage completed
             _suppressCategorySet = false;
         }
     }

@@ -13,79 +13,43 @@ namespace IndexEditor.Views
         {
             InitializeComponent();
             // When attached to the visual tree, ensure we inherit the Window DataContext (EditorStateViewModel)
+            // When attached, inherit the Window's DataContext (EditorStateViewModel) if not set,
+            // attach property-changed handlers to articles so UI animations trigger, and wire collection changes.
             this.AttachedToVisualTree += (s, e) =>
             {
-                try
+                if (this.DataContext == null || !(this.DataContext is EditorStateViewModel))
                 {
-                    if (this.DataContext == null || !(this.DataContext is EditorStateViewModel))
-                    {
-                        var root = this.VisualRoot as Window;
-                        if (root != null && root.DataContext is EditorStateViewModel vmRoot)
-                        {
-                            this.DataContext = vmRoot;
-                        }
-                    }
-                    // Diagnostic: print VM articles count and titles
-                    try
-                    {
-                        if (this.DataContext is EditorStateViewModel vm)
-                        {
-                            Console.WriteLine($"[DIAG] ArticleList attached. vm.Articles.Count={vm.Articles.Count}");
-                            int i = 0;
-                            foreach (var a in vm.Articles)
-                            {
-                                Console.WriteLine($"[DIAG] Article[{i}] Title='{a.Title}' Category='{a.Category}' Pages=[{string.Join(",", a.Pages)}]");
-                                i++;
-                            }
-
-                            // Attach property changed handlers to existing articles so animations trigger
-                            foreach (var art in vm.Articles)
-                            {
-                                try { art.PropertyChanged -= Article_PropertyChanged; } catch { }
-                                art.PropertyChanged += Article_PropertyChanged;
-                            }
-
-                            // Listen for future additions to attach handlers
-                            if (vm.Articles is INotifyCollectionChanged incc)
-                            {
-                                incc.CollectionChanged += (sender, args) =>
-                                {
-                                    if (args.NewItems != null)
-                                    {
-                                        foreach (var ni in args.NewItems)
-                                        {
-                                            if (ni is Common.Shared.ArticleLine newArt)
-                                            {
-                                                try { newArt.PropertyChanged -= Article_PropertyChanged; } catch { }
-                                                newArt.PropertyChanged += Article_PropertyChanged;
-                                            }
-                                        }
-                                    }
-                                };
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine("[DIAG] ArticleList attached but DataContext is not EditorStateViewModel");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"[DIAG] ArticleList attached diagnostic failed: {ex.Message}");
-                    }
-                    // Also log the ListBox items count at attach time
-                    try
-                    {
-                        var listBox = this.FindControl<ListBox>("ArticlesListBox");
-                        if (listBox != null)
-                        {
-                            var itemsCountNow = (listBox.Items as System.Collections.ICollection)?.Count ?? -1;
-                            Console.WriteLine($"[DIAG] (attach) ArticlesListBox.Items.Count = {itemsCountNow}");
-                        }
-                    }
-                    catch { }
+                    var root = this.VisualRoot as Window;
+                    if (root != null && root.DataContext is EditorStateViewModel vmRoot)
+                        this.DataContext = vmRoot;
                 }
-                catch { }
+
+                if (this.DataContext is EditorStateViewModel vmModel)
+                {
+                    foreach (var art in vmModel.Articles)
+                    {
+                        try { art.PropertyChanged -= Article_PropertyChanged; } catch { }
+                        art.PropertyChanged += Article_PropertyChanged;
+                    }
+
+                    if (vmModel.Articles is INotifyCollectionChanged incc)
+                    {
+                        incc.CollectionChanged += (sender, args) =>
+                        {
+                            if (args.NewItems != null)
+                            {
+                                foreach (var ni in args.NewItems)
+                                {
+                                    if (ni is Common.Shared.ArticleLine newArt)
+                                    {
+                                        try { newArt.PropertyChanged -= Article_PropertyChanged; } catch { }
+                                        newArt.PropertyChanged += Article_PropertyChanged;
+                                    }
+                                }
+                            }
+                        };
+                    }
+                }
             };
 
             var list = this.FindControl<ListBox>("ArticlesListBox");
@@ -108,58 +72,42 @@ namespace IndexEditor.Views
                 // Subscribe to global state changes to enforce selection and enabledness
                 IndexEditor.Shared.EditorState.StateChanged += () =>
                 {
-                    try
+                    var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     {
-                        var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
-                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        // Disable the list entirely while there's an active open segment
+                        list.IsEnabled = !(activeSeg != null && activeSeg.IsActive);
+                        // If a segment is active, force the SelectedItem to the owning active article
+                        if (activeSeg != null && activeSeg.IsActive && IndexEditor.Shared.EditorState.ActiveArticle != null)
                         {
-                            try
-                            {
-                                // Disable the list entirely while there's an active open segment
-                                list.IsEnabled = !(activeSeg != null && activeSeg.IsActive);
-                                // If a segment is active, force the SelectedItem to the owning active article
-                                if (activeSeg != null && activeSeg.IsActive && IndexEditor.Shared.EditorState.ActiveArticle != null)
-                                {
-                                    list.SelectedItem = IndexEditor.Shared.EditorState.ActiveArticle;
-                                }
-                            }
-                            catch { }
-                        });
-                    }
-                    catch { }
+                            list.SelectedItem = IndexEditor.Shared.EditorState.ActiveArticle;
+                        }
+                    });
                 };
 
                 list.SelectionChanged += (s, e) =>
                 {
-                    try
+                    var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
+                    var activeArticle = IndexEditor.Shared.EditorState.ActiveArticle;
+                    var selected = list.SelectedItem as Common.Shared.ArticleLine;
+                    if (activeSeg != null && activeSeg.IsActive && selected != null && activeArticle != null && !object.ReferenceEquals(selected, activeArticle))
                     {
-                        var items = list.Items as System.Collections.IList;
-                        if (items == null) return;
-
-                        // Prevent selection change while there's an active open segment
-                        var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
-                        var activeArticle = IndexEditor.Shared.EditorState.ActiveArticle;
-                        var selected = list.SelectedItem as Common.Shared.ArticleLine;
-                        if (activeSeg != null && activeSeg.IsActive && selected != null && activeArticle != null && !object.ReferenceEquals(selected, activeArticle))
-                        {
-                            // Revert to the active article selection (or clear if none)
-                            try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch { }
-                            try { list.SelectedItem = activeArticle; } catch { }
-                            return;
-                        }
-
-                        // Normal selection flow: propagate selection to EditorState
-                        if (selected != null)
-                        {
-                            try
-                            {
-                                foreach (var a in (this.DataContext as EditorStateViewModel)?.Articles ?? new System.Collections.ObjectModel.ObservableCollection<Common.Shared.ArticleLine>())
-                                    a.IsSelected = false;
-                            }
-                            catch { }
-                        }
+                        // Notify user and revert selection
+                        try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch { }
+                        try { list.SelectedItem = activeArticle; } catch { }
+                        return;
                     }
-                    catch { }
+
+                    // Normal selection flow: clear IsSelected on others (VM will update)
+                    if (selected != null)
+                    {
+                        try
+                        {
+                            foreach (var a in (this.DataContext as EditorStateViewModel)?.Articles ?? new System.Collections.ObjectModel.ObservableCollection<Common.Shared.ArticleLine>())
+                                a.IsSelected = false;
+                        }
+                        catch { }
+                    }
                 };
             }
 
@@ -276,5 +224,61 @@ namespace IndexEditor.Views
             }
             catch { }
         }
+
+        // New: handle pointer on a segment row - set active segment and jump page controller to segment start
+        private void OnSegmentPointerPressed(object? sender, PointerPressedEventArgs e)
+        {
+            try
+            {
+                // Determine the segment and containing article
+                if (sender is Border b && b.Tag is Common.Shared.Segment seg)
+                {
+                    // Find the article owning this segment by walking up the visual tree or searching VM
+                    var vm = this.DataContext as EditorStateViewModel;
+                    Common.Shared.ArticleLine? owner = null;
+                    if (vm != null)
+                    {
+                        owner = vm.Articles.FirstOrDefault(a => a.Segments != null && a.Segments.Contains(seg));
+                    }
+                    // Fallback: search shared EditorState.Articles
+                    if (owner == null)
+                    {
+                        owner = IndexEditor.Shared.EditorState.Articles.FirstOrDefault(a => a.Segments != null && a.Segments.Contains(seg));
+                    }
+
+                    if (owner == null) return;
+
+                    // If there's already an active segment on a different article, block and toast
+                    var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
+                    var activeArticle = IndexEditor.Shared.EditorState.ActiveArticle;
+                    if (activeSeg != null && activeSeg.IsActive && activeArticle != null && !object.ReferenceEquals(activeArticle, owner))
+                    {
+                        try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch { }
+                        return;
+                    }
+
+                    // Set the owner as selected/active article
+                    try
+                    {
+                        foreach (var a in (this.DataContext as EditorStateViewModel)?.Articles ?? new System.Collections.ObjectModel.ObservableCollection<Common.Shared.ArticleLine>())
+                            a.IsSelected = false;
+                    }
+                    catch { }
+                    owner.IsSelected = true;
+                    IndexEditor.Shared.EditorState.ActiveArticle = owner;
+
+                    // Set global active segment (if it's not already)
+                    IndexEditor.Shared.EditorState.ActiveSegment = seg;
+
+                    // Jump page controller to the segment start
+                    IndexEditor.Shared.EditorState.CurrentPage = seg.Start;
+
+                    // Notify UI to update (selection, buttons, etc.)
+                    IndexEditor.Shared.EditorState.NotifyStateChanged();
+                }
+            }
+            catch { }
+        }
+
     }
 }

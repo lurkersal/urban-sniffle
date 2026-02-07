@@ -12,64 +12,32 @@ public partial class MainWindow : Window
 
     private static void WriteDiagFile(string text)
     {
-        try
-        {
-            var path = "/tmp/indexeditor-diagnostic.log";
-            System.IO.File.AppendAllText(path, DateTime.UtcNow.ToString("o") + " " + text + "\n");
-        }
-        catch { }
+        // no-op in non-debug builds: diagnostic output suppressed
     }
 
     public MainWindow() : this(null) { }
 
     public MainWindow(string? folderToOpen = null)
     {
-        Console.WriteLine($"[TRACE] MainWindow ctor called with folderToOpen='{folderToOpen}'");
-        WriteDiagFile("[TRACE] MainWindow ctor starting");
+        // MainWindow constructor
         FolderToOpen = folderToOpen;
 
         InitializeComponent();
-        Console.WriteLine("[TRACE] MainWindow InitializeComponent completed");
+        // InitializeComponent completed
 
         // Immediate diagnostics (may run before Opened)
         try
         {
-            var bounds = this.Bounds;
-            var state = this.WindowState;
-            var diag = $"[DIAG] After InitializeComponent: Bounds={bounds}, WindowState={state}, IsVisible={this.IsVisible}, Topmost={this.Topmost}";
-            Console.WriteLine(diag);
-            WriteDiagFile(diag);
-
-            try
-            {
-                var screens = this.Screens;
-                if (screens != null)
-                {
-                    var sc = $"[DIAG] After Init: Screens.Count = {screens.ScreenCount}";
-                    Console.WriteLine(sc);
-                    WriteDiagFile(sc);
-                }
-                else
-                {
-                    Console.WriteLine("[DIAG] After Init: Screens not available");
-                    WriteDiagFile("[DIAG] After Init: Screens not available");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[DIAG] Exception reading Screens after init: {ex.Message}");
-                WriteDiagFile($"[DIAG] Exception reading Screens after init: {ex.Message}");
-            }
+            // Skip diagnostic screen logging in normal runs
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[DIAG] Exception during immediate diagnostics: {ex.Message}");
+            // Error during immediate diagnostics
             WriteDiagFile($"[DIAG] Exception during immediate diagnostics: {ex.Message}");
         }
 
         this.DataContext = new IndexEditor.Views.EditorStateViewModel();
-        Console.WriteLine("[TRACE] MainWindow DataContext assigned");
-        WriteDiagFile("[TRACE] MainWindow DataContext assigned");
+        // DataContext assigned
 
         // Configure startup and Opened handler
         try
@@ -80,8 +48,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[TRACE] Failed to set WindowStartupLocation or Opened handler: {ex.Message}");
-            WriteDiagFile($"[TRACE] Failed to set WindowStartupLocation or Opened handler: {ex.Message}");
+            // Non-fatal: continue without diagnostic logging
         }
 
         // Load articles from folder if provided
@@ -124,14 +91,15 @@ public partial class MainWindow : Window
                         if (parsed != null)
                         {
                             articles.Add(parsed);
-                            Console.WriteLine($"[DEBUG] Parsed article: Category='{parsed.Category}', Title='{parsed.Title}', Pages=[{string.Join(",", parsed.Pages)}]");
+                            var segs = parsed.Segments != null ? string.Join(",", parsed.Segments.Select(s => s.Display)) : string.Empty;
+                            // parsed article
                         }
                         else
                         {
-                            Console.WriteLine($"[DEBUG] Skipped line: '{line}'");
+                            // skipped line
                         }
                     }
-                    Console.WriteLine($"[DEBUG] Total articles parsed: {articles.Count}");
+                    // total articles parsed
 
                     // Order by first page
                     articles = articles.Where(a => a.Pages != null && a.Pages.Count > 0)
@@ -153,7 +121,7 @@ public partial class MainWindow : Window
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($"[DEBUG] Failed to populate vm.Articles: {ex.Message}");
+                                // ignore vm population failures in diagnostics
                             }
                         }
                     }
@@ -226,7 +194,7 @@ public partial class MainWindow : Window
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[DEBUG] Error while finding first page image: {ex.Message}");
+                        // Error while finding first page image
                     }
 
                     IndexEditor.Shared.EditorState.NotifyStateChanged();
@@ -235,79 +203,41 @@ public partial class MainWindow : Window
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error reading _index.txt: {ex.Message}");
+                    // Error reading index file
                     WriteDiagFile($"Error reading _index.txt: {ex.Message}");
                 }
             }
             else
             {
-                Console.WriteLine($"Index file not found: {indexPath}");
-                WriteDiagFile($"Index file not found: {indexPath}");
+                // Index file not found
             }
         }
 
-        Console.WriteLine("[TRACE] MainWindow constructor finished");
-        WriteDiagFile("[TRACE] MainWindow constructor finished");
+        // MainWindow constructor finished
     }
 
     private void OnWindowOpened(object? sender, EventArgs e)
     {
-        Console.WriteLine("[TRACE] MainWindow Opened event fired; attempting to activate and raise window");
-        WriteDiagFile("[TRACE] MainWindow Opened event fired");
+        // Opened event fired
         try
         {
             this.Activate();
             this.Topmost = true;
             this.Topmost = false;
-            Console.WriteLine("[TRACE] MainWindow activated and Topmost toggled");
-            WriteDiagFile("[TRACE] MainWindow activated and Topmost toggled");
+            // MainWindow activated
 
             try
             {
-                var bounds = this.Bounds;
-                var state = this.WindowState;
-                var diag = $"[DIAG] Window.Bounds = {bounds}, WindowState = {state}";
-                Console.WriteLine(diag);
-                WriteDiagFile(diag);
-
-                try
-                {
-                    var screens = this.Screens;
-                    if (screens != null)
-                    {
-                        var sc = $"[DIAG] Screens.Count = {screens.ScreenCount}";
-                        Console.WriteLine(sc);
-                        WriteDiagFile(sc);
-                        int idx = 0;
-                        foreach (var screen in screens.All)
-                        {
-                            var sline = $"[DIAG] Screen[{idx}] WorkingArea={screen.WorkingArea}, Bounds={screen.Bounds}, IsPrimary={screen.IsPrimary}";
-                            Console.WriteLine(sline);
-                            WriteDiagFile(sline);
-                            idx++;
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("[DIAG] Screens not available");
-                        WriteDiagFile("[DIAG] Screens not available");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[DIAG] Exception reading Screens in Opened handler: {ex.Message}");
-                    WriteDiagFile($"[DIAG] Exception reading Screens in Opened handler: {ex.Message}");
-                }
+                // skip diag
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[DIAG] Exception dumping screen info: {ex.Message}");
-                WriteDiagFile($"[DIAG] Exception dumping screen info: {ex.Message}");
+                // swallow screen exception diag
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[TRACE] Exception raising window: {ex.Message}");
+            // Exception raising window
             WriteDiagFile($"[TRACE] Exception raising window: {ex.Message}");
         }
     }
@@ -323,6 +253,32 @@ public partial class MainWindow : Window
         article.HasPageNumberError = hasError;
         if (article.Pages.Count == 0)
             return null;
+
+        // Populate segments from pages so UI shows per-part segments
+        try
+        {
+            var pages = article.Pages;
+            try { article.Segments.Clear(); } catch { }
+            if (pages != null && pages.Count > 0)
+            {
+                pages.Sort();
+                int i = 0;
+                while (i < pages.Count)
+                {
+                    int start = pages[i];
+                    int end = start;
+                    i++;
+                    while (i < pages.Count && pages[i] == end + 1)
+                    {
+                        end = pages[i];
+                        i++;
+                    }
+                    try { article.Segments.Add(new Common.Shared.Segment(start, end)); } catch { }
+                }
+            }
+        }
+        catch { }
+
         article.Category = parts.Count > 1 ? parts[1] : "";
         if (string.IsNullOrWhiteSpace(article.Category))
             return null;

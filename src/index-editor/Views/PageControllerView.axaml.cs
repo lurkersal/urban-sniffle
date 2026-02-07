@@ -49,22 +49,48 @@ namespace IndexEditor.Views
                 {
                     if (toastText != null) toastText.Text = message;
                     if (toastBorder == null) return;
-                    // Show immediately
+
+                    // Show immediately at full opacity
                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     {
                         toastBorder.IsVisible = true;
                         toastBorder.Opacity = 1.0;
                     });
 
-                    // Hide after a delay (no fade)
+                    // Run delay and fade-out asynchronously
                     _ = System.Threading.Tasks.Task.Run(async () =>
                     {
                         try
                         {
+                            // Wait for the display time
                             await System.Threading.Tasks.Task.Delay(displayMs).ConfigureAwait(false);
+
+                            // Perform fade-out on UI thread in small steps (approx 300-500ms total)
+                            const int steps = 8;
+                            const int stepMs = 40; // total ~320ms
+                            for (int i = 0; i < steps; i++)
+                            {
+                                var t = i + 1;
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                {
+                                    try
+                                    {
+                                        // linear fade
+                                        toastBorder.Opacity = Math.Max(0.0, 1.0 - (double)t / steps);
+                                    }
+                                    catch { }
+                                });
+                                await System.Threading.Tasks.Task.Delay(stepMs).ConfigureAwait(false);
+                            }
+
+                            // Finally hide and reset opacity on UI thread
                             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                             {
-                                try { toastBorder.IsVisible = false; }
+                                try
+                                {
+                                    toastBorder.IsVisible = false;
+                                    toastBorder.Opacity = 1.0;
+                                }
                                 catch { }
                             });
                         }
@@ -231,14 +257,14 @@ namespace IndexEditor.Views
                                 }
                                 catch (Exception ex)
                                 {
-                                    Console.WriteLine($"[WARN] selecting new article after insert failed: {ex.Message}");
+                                    // selecting new article after insert failed (suppressed)
                                 }
                             }, Avalonia.Threading.DispatcherPriority.Background);
                         }
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[ERROR] Creating new article failed: {ex.Message}");
+                        // creating new article failed (suppressed)
                     }
                 };
 
@@ -377,6 +403,13 @@ namespace IndexEditor.Views
             var missing = this.FindControl<TextBlock>("ImageMissingText");
             if (img == null) return;
             img.Source = null;
+            // Respect CLI flag to hide images
+            if (!IndexEditor.Shared.EditorState.ShowImages)
+            {
+                if (missing != null) { missing.Text = "Images disabled (--no-images)"; missing.IsVisible = true; }
+                if (pageInput != null) pageInput.Foreground = Brushes.Gray;
+                return;
+            }
             var folder = EditorState.CurrentFolder;
             if (string.IsNullOrWhiteSpace(folder))
             {
@@ -398,7 +431,7 @@ namespace IndexEditor.Views
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Failed to load image '{path}': {ex.Message}");
+                    // Failed to load image (suppressed)
                     if (missing != null) { missing.Text = $"Failed to load image: {Path.GetFileName(path)}"; missing.IsVisible = true; }
                     if (pageInput != null) pageInput.Foreground = Brushes.Red;
                 }

@@ -16,6 +16,8 @@ namespace IndexEditor.Shared
         public static string? CurrentNumber { get; set; }
         // Folder opened by the app (used to locate page image files)
         public static string? CurrentFolder { get; set; }
+        // Flag to disable loading/showing images (can be set via --no-images command-line argument)
+        public static bool ShowImages { get; set; } = true;
         public static event Action? StateChanged;
         public static void NotifyStateChanged() => StateChanged?.Invoke();
     }

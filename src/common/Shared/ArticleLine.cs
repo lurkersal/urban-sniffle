@@ -29,9 +29,7 @@ namespace Common.Shared
             {
                 if (_category != value)
                 {
-                    var old = _category;
                     _category = value;
-                    System.Console.WriteLine($"[TRACE] ArticleLine.Category changed from '{old}' to '{_category}' for article Title='{Title}'");
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Category)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayTitle)));
@@ -78,7 +76,43 @@ namespace Common.Shared
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PagesText)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PagesDisplay)));
                 Validate();
+
+                // Rebuild closed segments from the canonical Pages list so the UI reflects any changes
+                // (e.g., when an active segment is ended and Pages are updated to include the range).
+                RecomputeSegmentsFromPages();
             }
+        }
+
+        private void RecomputeSegmentsFromPages()
+        {
+            try
+            {
+                var pages = Pages ?? new List<int>();
+                var newSegs = new List<Segment>();
+                if (pages != null && pages.Count > 0)
+                {
+                    var sorted = pages.OrderBy(p => p).ToList();
+                    int i = 0;
+                    while (i < sorted.Count)
+                    {
+                        int start = sorted[i];
+                        int end = start;
+                        i++;
+                        while (i < sorted.Count && sorted[i] == end + 1)
+                        {
+                            end = sorted[i];
+                            i++;
+                        }
+                        // Closed segment (end set)
+                        newSegs.Add(new Segment(start, end));
+                    }
+                }
+                // Update the existing ObservableCollection so UI bindings observing collection changes update immediately
+                Segments.Clear();
+                foreach (var s in newSegs) Segments.Add(s);
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegment)));
+            }
+            catch { }
         }
 
         public bool HasPageNumberError { get; set; }
@@ -99,7 +133,7 @@ namespace Common.Shared
         public List<int?> HipSizes { get; set; } = new();
         public List<string?> CupSizes { get; set; } = new();
         public List<string> ValidationErrors { get; set; } = new();
-        public List<Segment> Segments { get; set; } = new();
+        public System.Collections.ObjectModel.ObservableCollection<Segment> Segments { get; set; } = new System.Collections.ObjectModel.ObservableCollection<Segment>();
         public Segment? ActiveSegment => Segments.FirstOrDefault(s => s.IsActive);
         public bool HasValidationError { get; private set; }
         public bool HasMeasurementsError { get; private set; }

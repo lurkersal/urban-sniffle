@@ -28,7 +28,7 @@ fi
 if command -v dotnet >/dev/null 2>&1; then
   echo "Building and running IndexEditor (project: $PROJECT_PATH)"
   echo "Folder argument: $FOLDER"
-  dotnet run --project "$PROJECT_PATH" -- "$FOLDER"
+  dotnet run --project "$PROJECT_PATH" -- "$FOLDER" --no-images
 else
   if [ -f "$DLL_PATH" ]; then
     echo "dotnet tool not found. Running built DLL: $DLL_PATH"

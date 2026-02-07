@@ -92,6 +92,38 @@ namespace IndexEditor.Shared
             article.HasPageNumberError = hasError;
             if (article.Pages.Count == 0)
                 return null;
+
+            // Populate segments from pages so '|' separated segments are visible in the UI
+            try
+            {
+                var pages = article.Pages;
+                // Ensure the Segments collection exists and update it in-place so UI bindings receive collection change notifications
+                try { if (article.Segments == null) article.Segments = new System.Collections.Generic.List<Common.Shared.Segment>() as dynamic; } catch { }
+                // Clear existing collection if possible
+                try { article.Segments.Clear(); } catch { }
+                if (pages != null && pages.Count > 0)
+                {
+                    pages.Sort();
+                    int i = 0;
+                    while (i < pages.Count)
+                    {
+                        int start = pages[i];
+                        int end = start;
+                        i++;
+                        while (i < pages.Count && pages[i] == end + 1)
+                        {
+                            end = pages[i];
+                            i++;
+                        }
+                        // Stored segments are closed ranges, so set End to the final page
+                        try { article.Segments.Add(new Common.Shared.Segment(start, end)); } catch { }
+                    }
+                }
+                // Debug: print the original pages text and created segments so we can confirm what the parser produced
+                // parser debug suppressed
+            }
+            catch { }
+
             article.Category = parts.Count > 1 ? parts[1] : "";
             if (string.IsNullOrWhiteSpace(article.Category))
                 return null;
