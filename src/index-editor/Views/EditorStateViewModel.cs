@@ -107,28 +107,37 @@ namespace IndexEditor.Views
                 if (_selectedArticle != incoming)
                 {
                     _selectedArticle = incoming;
-                    // Ensure the global EditorState reflects the current selected article so
-                    // other views (PageController, etc.) can read the active article details.
+                    // Update IsSelected flags on all articles so UI bindings reflect selection
                     try
                     {
-                        IndexEditor.Shared.EditorState.ActiveArticle = _selectedArticle;
-                        IndexEditor.Shared.EditorState.NotifyStateChanged();
+                        foreach (var a in Articles)
+                        {
+                            try { a.IsSelected = object.ReferenceEquals(a, _selectedArticle); } catch { }
+                        }
                     }
                     catch { }
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
-                    // Notify SelectedCategory so the editor ComboBox updates to the new article's category
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
-                    // Run validation after UI bindings have a chance to populate the editor fields.
-                    // Schedule validation at Background priority so two-way bindings and initial control
-                    // population complete first; this avoids a false-negative when the editor first shows an article.
-                    Dispatcher.UIThread.Post(() => _selectedArticle?.Validate(), Avalonia.Threading.DispatcherPriority.Background);
-                    // Also schedule a second validation after a short delay to handle any remaining
-                    // asynchronous population that may occur after initial layout/binding.
-                    Task.Run(async () =>
-                    {
-                        await Task.Delay(150).ConfigureAwait(false);
-                        Dispatcher.UIThread.Post(() => _selectedArticle?.Validate(), Avalonia.Threading.DispatcherPriority.Background);
-                    });
+                     // Ensure the global EditorState reflects the current selected article so
+                     // other views (PageController, etc.) can read the active article details.
+                     try
+                     {
+                         IndexEditor.Shared.EditorState.ActiveArticle = _selectedArticle;
+                         IndexEditor.Shared.EditorState.NotifyStateChanged();
+                     }
+                     catch { }
+                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
+                     // Notify SelectedCategory so the editor ComboBox updates to the new article's category
+                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
+                     // Run validation after UI bindings have a chance to populate the editor fields.
+                     // Schedule validation at Background priority so two-way bindings and initial control
+                     // population complete first; this avoids a false-negative when the editor first shows an article.
+                     Dispatcher.UIThread.Post(() => _selectedArticle?.Validate(), Avalonia.Threading.DispatcherPriority.Background);
+                     // Also schedule a second validation after a short delay to handle any remaining
+                     // asynchronous population that may occur after initial layout/binding.
+                     Task.Run(async () =>
+                     {
+                         await Task.Delay(150).ConfigureAwait(false);
+                         Dispatcher.UIThread.Post(() => _selectedArticle?.Validate(), Avalonia.Threading.DispatcherPriority.Background);
+                     });
                 }
             }
         }
@@ -198,10 +207,7 @@ namespace IndexEditor.Views
                         Dispatcher.UIThread.Post(() => UpdateCategories(dbCats.OrderBy(s => s).ToList()));
                     }
                 }
-                catch (Exception ex)
-                {
-                    // Failed to load categories from DB (suppressed)
-                }
+                catch { }
                 finally
                 {
                     Dispatcher.UIThread.Post(() => IsLoadingCategories = false);
@@ -242,11 +248,7 @@ namespace IndexEditor.Views
                 }
                 return null;
             }
-            catch (System.Exception ex)
-            {
-                // Failed to load categories from DB (suppressed)
-                return null;
-            }
+            catch { return null; }
         }
 
         private void UpdateCategories(List<string> newCats)

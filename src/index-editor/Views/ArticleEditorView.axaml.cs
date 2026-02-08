@@ -20,7 +20,7 @@ namespace IndexEditor.Views
             // DataContextChanged logic in other controls will set it.
             var editBtn = this.FindControl<Button>("EditSegmentBtn");
             var overlay = this.FindControl<Border>("SegmentEditorOverlay");
-            var addSegmentBtn = this.FindControl<Button>("AddSegmentBtn");
+            // AddSegment button removed from PageController; Ctrl+A keyboard shortcut is handled at the window level.
             var titleBox = this.FindControl<TextBox>("TitleTextBox");
 
             if (editBtn != null && overlay != null)
@@ -34,17 +34,7 @@ namespace IndexEditor.Views
                 };
             }
 
-            if (addSegmentBtn != null)
-            {
-                addSegmentBtn.Click += (s, e) =>
-                {
-                    if (EditorState.ActiveArticle != null)
-                    {
-                        // No Segments property in ContentLine; optionally handle segment logic elsewhere
-                        EditorState.NotifyStateChanged();
-                    }
-                };
-            }
+            // legacy AddSegmentBtn removed: no local click wiring needed
 
             // Listen for page changes to update UI (prototype only)
             EditorState.StateChanged += () =>
@@ -53,6 +43,81 @@ namespace IndexEditor.Views
                 if (titleBox != null && EditorState.ActiveArticle != null)
                     titleBox.Text = EditorState.ActiveArticle.Title;
             };
+
+            // Clicks are handled by the OnSegmentLozengePressed method wired in XAML.
+        }
+
+        // Public helper: focus the editor's primary input (Title textbox)
+        public void FocusEditor()
+        {
+            try
+            {
+                System.Console.WriteLine("[DEBUG] ArticleEditorView.FocusEditor: called");
+                var tb = this.FindControl<TextBox>("TitleTextBox");
+                System.Console.WriteLine(tb == null ? "[DEBUG] ArticleEditorView.FocusEditor: TitleTextBox not found" : "[DEBUG] ArticleEditorView.FocusEditor: TitleTextBox found");
+                if (tb != null) { tb.Focus(); return; }
+                // fallback to category if title absent
+                var cb = this.FindControl<ComboBox>("CategoryComboBox");
+                System.Console.WriteLine(cb == null ? "[DEBUG] ArticleEditorView.FocusEditor: CategoryComboBox not found" : "[DEBUG] ArticleEditorView.FocusEditor: CategoryComboBox found");
+                if (cb != null) cb.Focus();
+            }
+            catch { }
+        }
+
+        // Specifically focus the title textbox
+        public void FocusTitle()
+        {
+            System.Console.WriteLine("[DEBUG] ArticleEditorView.FocusTitle: called");
+            try
+            {
+                var tb = this.FindControl<TextBox>("TitleTextBox");
+                System.Console.WriteLine(tb == null ? "[DEBUG] ArticleEditorView.FocusTitle: TitleTextBox not found" : "[DEBUG] ArticleEditorView.FocusTitle: TitleTextBox found");
+                if (tb != null) tb.Focus();
+            }
+            catch { }
+        }
+
+        // Clicks are handled by the OnSegmentLozengePressed method wired in XAML.
+        private void OnSegmentLozengePressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+        {
+            try
+            {
+                if (sender is Border b && b.Tag is Common.Shared.Segment seg)
+                {
+                    // Find the article owning this segment
+                    var owner = IndexEditor.Shared.EditorState.ActiveArticle;
+                    // If the segment belongs to a different article, find it
+                    if (owner == null || (owner.Segments != null && !owner.Segments.Contains(seg)))
+                    {
+                        owner = IndexEditor.Shared.EditorState.Articles.FirstOrDefault(a => a.Segments != null && a.Segments.Contains(seg));
+                        if (owner != null)
+                            IndexEditor.Shared.EditorState.ActiveArticle = owner;
+                    }
+
+                    // If there's another active segment on a different article, block
+                    var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
+                    var activeArticle = IndexEditor.Shared.EditorState.ActiveArticle;
+                    if (activeSeg != null && activeSeg.IsActive && activeArticle != null && owner != null && !object.ReferenceEquals(activeArticle, owner))
+                    {
+                        try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch { }
+                        return;
+                    }
+
+                    // If reopening an existing closed segment, remember its end
+                    if (seg.End.HasValue)
+                    {
+                        seg.OriginalEnd = seg.End;
+                        seg.WasNew = false;
+                        seg.End = null;
+                    }
+
+                    // Set active segment and jump page
+                    IndexEditor.Shared.EditorState.ActiveSegment = seg;
+                    IndexEditor.Shared.EditorState.CurrentPage = seg.Start;
+                    IndexEditor.Shared.EditorState.NotifyStateChanged();
+                }
+            }
+            catch { }
         }
 
         private string? _currentFolder;

@@ -3,6 +3,8 @@
              xmlns:local="clr-namespace:IndexEditor.Views"
              x:Class="IndexEditor.Views.ArticleList">
     <UserControl.Resources>
+        <!-- Segment inactive background brush used for lozenge bars -->
+        <SolidColorBrush x:Key="SegmentInactiveBackground" Color="#F5F5F5" />
         <local:CoverModelCategoryConverter x:Key="CoverModelCategoryConverter" />
         <local:ArticleCategoryDisplayConverter x:Key="ArticleCategoryDisplayConverter" />
         <local:ArticleCategoryToColorConverter x:Key="ArticleCategoryToColorConverter" />
@@ -50,7 +52,7 @@
                     <Border
                         Background="Transparent"
                         Margin="8,4" Padding="8" CornerRadius="4"
-                        BorderBrush="{Binding IsSelected, Converter={StaticResource SelectedArticleBorderConverter}}"
+                        BorderBrush="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Converter={StaticResource SelectedArticleBorderConverter}}"
                         BorderThickness="1"
                         PointerPressed="OnArticlePointerPressed"
                         Tag="{Binding}" >
@@ -79,22 +81,29 @@
 
                             <!-- Segments list: simplified rows (transparent background) -->
                             <ItemsControl x:Name="SegmentsItems" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding Segments}" Margin="8,8,0,0">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Background="Transparent" CornerRadius="3" Padding="6" MinHeight="28" Margin="0,6,8,0" Tag="{Binding}" PointerPressed="OnSegmentPointerPressed">
-                                            <Grid ColumnDefinitions="Auto,Auto,*,Auto" VerticalAlignment="Center">
-                                                <!-- Indent -->
-                                                <Border Width="16" Background="Transparent"/>
-                                                <!-- Active-segment dot (6px) -->
-                                                <Ellipse Grid.Column="1" Width="6" Height="6" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="0,0,10,0"
-                                                         Fill="{Binding DataContext.Category, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource ArticleCategoryToColorConverter}}"
-                                                         IsVisible="{Binding IsActive}" Stroke="#333" StrokeThickness="0.5" />
-                                                <!-- Segment text -->
-                                                <TextBlock Grid.Column="2" Text="{Binding Display}" FontSize="13" FontWeight="SemiBold" Foreground="#222222" VerticalAlignment="Center" />
-                                                <!-- small placeholder column to align with article right column (optional) -->
-                                                <Border Grid.Column="3" Width="8" Background="Transparent"/>
+                                        <!-- Lozenge-shaped segment bar laid out horizontally -->
+                                        <Border CornerRadius="12" Padding="6,4" Margin="0,0,8,0" MinHeight="24" Tag="{Binding}" PointerPressed="OnSegmentPointerPressed" BorderBrush="#CCC" BorderThickness="1">
+                                            <Grid>
+                                                <!-- Inactive base -->
+                                                <Border Background="{StaticResource SegmentInactiveBackground}" CornerRadius="12" />
+                                                <!-- Inner subtle highlight (top) to simulate bevel -->
+                                                <Border BorderBrush="#FFFFFFAA" BorderThickness="0,1,0,0" CornerRadius="12" IsHitTestVisible="False" />
+                                                <!-- Inner subtle shadow (bottom-right) to simulate bevel -->
+                                                <Border BorderBrush="#0000001A" BorderThickness="0,0,1,1" CornerRadius="12" IsHitTestVisible="False" />
+                                                <!-- Active overlay (article category color) -->
+                                                <Border Background="{Binding DataContext.Category, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource ArticleCategoryToColorConverter}}"
+                                                        Opacity="0.6" CornerRadius="12" IsVisible="{Binding IsHighlighted}" />
+                                                <!-- Text label (black) -->
+                                                <TextBlock Text="{Binding Display}" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="Black" FontSize="13" FontWeight="SemiBold" />
                                             </Grid>
-                                        </Border>
+                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

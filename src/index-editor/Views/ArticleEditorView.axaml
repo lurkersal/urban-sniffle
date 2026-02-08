@@ -14,7 +14,7 @@
                 <StackPanel Orientation="Vertical" Spacing="6">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Category:" FontWeight="Bold" Width="120"/>
-                        <ComboBox SelectedItem="{Binding SelectedCategory, Mode=TwoWay}"
+                        <ComboBox Name="CategoryComboBox" SelectedItem="{Binding SelectedCategory, Mode=TwoWay}"
                                   ItemsSource="{Binding DataContext.Categories, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                   Width="240"/>
                         <TextBlock Text="Loading categories..." Foreground="Gray" FontSize="12" Margin="12,0,0,0"
@@ -23,7 +23,7 @@
 
                     <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle.Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter='1,2,3'}">
                         <TextBlock Text="Title:" FontWeight="Bold" Width="120"/>
-                        <TextBox Text="{Binding SelectedArticle.Title, Mode=TwoWay}" Width="240"/>
+                        <TextBox Name="TitleTextBox" Text="{Binding SelectedArticle.Title, Mode=TwoWay}" Width="240"/>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle.Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter='2'}">
@@ -55,6 +55,34 @@
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="Pages:" FontWeight="Bold" Width="120"/>
                         <TextBox Text="{Binding SelectedArticle.PagesText, Mode=TwoWay}" Width="240"/>
+                    </StackPanel>
+
+                    <!-- Segments row: lozenge-shaped segment bars stacked horizontally -->
+                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0" IsVisible="{Binding SelectedArticle}">
+                         <ItemsControl ItemsSource="{Binding SelectedArticle.Segments}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border CornerRadius="14" Padding="8,4" Margin="0,0,8,0" MinHeight="28" Tag="{Binding}" PointerPressed="OnSegmentLozengePressed">
+                                        <Grid>
+                                            <!-- Base inactive background -->
+                                            <Border Background="{StaticResource SegmentInactiveBackground}" CornerRadius="14" />
+                                            <!-- Inner subtle highlight (top) to simulate bevel -->
+                                            <Border BorderBrush="#FFFFFFAA" BorderThickness="0,1,0,0" CornerRadius="14" IsHitTestVisible="False" />
+                                            <!-- Inner subtle shadow (bottom-right) to simulate bevel -->
+                                            <Border BorderBrush="#0000001A" BorderThickness="0,0,1,1" CornerRadius="14" IsHitTestVisible="False" />
+                                            <!-- Active overlay (category colour) shown only when segment.IsHighlighted is true -->
+                                            <Border Background="{Binding DataContext.SelectedArticle.Category, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource CategoryToBrush}}" Opacity="0.6" CornerRadius="14" IsVisible="{Binding IsHighlighted}" />
+                                            <TextBlock Text="{Binding Display}" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Black" FontWeight="Normal" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </StackPanel>
             </Border>

@@ -13,6 +13,8 @@
 
             <Button Name="OpenFolderBtn" Content="Open Folder" DockPanel.Dock="Right" Margin="8" Width="96" />
             <Button Name="SaveIndexBtn" Content="Save" DockPanel.Dock="Right" Margin="8" Width="72" />
+            <!-- Shortcut hints -->
+            <TextBlock Name="ShortcutHint" Text="Esc=Cancel • ←/→=Page • ↑/↓=Article • Ctrl+S Save • Ctrl+O Open • Ctrl+N New • E Editor" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8" FontSize="12" Foreground="#333"/>
             <!-- Add buttons and controls as needed -->
         </DockPanel>
     </Border>

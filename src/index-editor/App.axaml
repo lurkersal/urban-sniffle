@@ -7,4 +7,9 @@
     <Application.Styles>
         <FluentTheme />
     </Application.Styles>
+
+    <Application.Resources>
+        <!-- Shared inactive segment background for lozenges -->
+        <SolidColorBrush x:Key="SegmentInactiveBackground" Color="#E8E8E8" />
+    </Application.Resources>
 </Application>

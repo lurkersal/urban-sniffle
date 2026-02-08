@@ -29,82 +29,44 @@ namespace IndexEditor.Views
 
         public PageControllerView()
         {
+            System.Console.WriteLine("[DEBUG] PageControllerView: constructor");
             InitializeComponent();
+
             var prevBtn = this.FindControl<Button>("PrevPageBtn");
             var nextBtn = this.FindControl<Button>("NextPageBtn");
-            var newArticleBtn = this.FindControl<Button>("NewArticleBtn");
-            var addSegmentBtn = this.FindControl<Button>("AddSegmentBtn");
             var endSegmentBtn = this.FindControl<Button>("EndSegmentBtn");
-            var cancelSegmentBtn = this.FindControl<Button>("CancelSegmentBtn");
             var pageInput = this.FindControl<TextBox>("PageInput");
             var activeArticleTitle = this.FindControl<TextBlock>("ActiveArticleTitle");
             var activeSegmentText = this.FindControl<TextBlock>("ActiveSegmentText");
             var toastBorder = this.FindControl<Border>("ToastBorder");
             var toastText = this.FindControl<TextBlock>("ToastText");
 
-            // Helper: show a small toast message that fades out using Avalonia.Animation
+            // Helper: show a small toast message that fades out
             void ShowToast(string message, int displayMs = 1200)
             {
                 try
                 {
                     if (toastText != null) toastText.Text = message;
                     if (toastBorder == null) return;
-
-                    // Show immediately at full opacity
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        toastBorder.IsVisible = true;
-                        toastBorder.Opacity = 1.0;
-                    });
-
-                    // Run delay and fade-out asynchronously
+                    Dispatcher.UIThread.Post(() => { toastBorder.IsVisible = true; toastBorder.Opacity = 1.0; });
                     _ = System.Threading.Tasks.Task.Run(async () =>
                     {
-                        try
+                        await System.Threading.Tasks.Task.Delay(displayMs).ConfigureAwait(false);
+                        const int steps = 8; const int stepMs = 40;
+                        for (int i = 0; i < steps; i++)
                         {
-                            // Wait for the display time
-                            await System.Threading.Tasks.Task.Delay(displayMs).ConfigureAwait(false);
-
-                            // Perform fade-out on UI thread in small steps (approx 300-500ms total)
-                            const int steps = 8;
-                            const int stepMs = 40; // total ~320ms
-                            for (int i = 0; i < steps; i++)
-                            {
-                                var t = i + 1;
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                {
-                                    try
-                                    {
-                                        // linear fade
-                                        toastBorder.Opacity = Math.Max(0.0, 1.0 - (double)t / steps);
-                                    }
-                                    catch { }
-                                });
-                                await System.Threading.Tasks.Task.Delay(stepMs).ConfigureAwait(false);
-                            }
-
-                            // Finally hide and reset opacity on UI thread
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                            {
-                                try
-                                {
-                                    toastBorder.IsVisible = false;
-                                    toastBorder.Opacity = 1.0;
-                                }
-                                catch { }
-                            });
+                            var t = i + 1;
+                            Dispatcher.UIThread.Post(() => { try { toastBorder.Opacity = Math.Max(0.0, 1.0 - (double)t / steps); } catch { } });
+                            await System.Threading.Tasks.Task.Delay(stepMs).ConfigureAwait(false);
                         }
-                        catch { }
+                        Dispatcher.UIThread.Post(() => { try { toastBorder.IsVisible = false; toastBorder.Opacity = 1.0; } catch { } });
                     });
                 }
                 catch { }
             }
 
-            // Subscribe to global toast requests; capture the delegate so we can unsubscribe
-            Action<string> toastHandler = (msg) => { Avalonia.Threading.Dispatcher.UIThread.Post(() => ShowToast(msg)); };
+            Action<string> toastHandler = (msg) => { Dispatcher.UIThread.Post(() => ShowToast(msg)); };
             IndexEditor.Shared.ToastService.ShowRequested += toastHandler;
-
-            // Unsubscribe when this control unloads to prevent leaks
             this.DetachedFromVisualTree += (s, e) => { IndexEditor.Shared.ToastService.ShowRequested -= toastHandler; };
 
             if (prevBtn != null)
@@ -124,20 +86,9 @@ namespace IndexEditor.Views
                     if (found.HasValue) Page = found.Value;
                 };
 
-            // Page input commit on Enter
             if (pageInput != null)
             {
-                pageInput.KeyDown += (s, e) =>
-                {
-                    if (e.Key == Avalonia.Input.Key.Enter)
-                    {
-                        if (int.TryParse(pageInput.Text, out var v) && v > 0)
-                        {
-                            Page = v;
-                        }
-                    }
-                };
-                // ensure UI reflects current page value
+                pageInput.KeyDown += (s, e) => { if (e.Key == Avalonia.Input.Key.Enter && int.TryParse(pageInput.Text, out var v) && v > 0) Page = v; };
                 pageInput.Text = EditorState.CurrentPage.ToString();
             }
 
@@ -145,14 +96,7 @@ namespace IndexEditor.Views
             {
                 // Buttons enablement
                 // AddSegment: enabled only when an ActiveArticle exists and the current page is NOT already part of its Pages
-                if (addSegmentBtn != null)
-                {
-                    addSegmentBtn.IsEnabled = EditorState.ActiveArticle != null &&
-                                              (EditorState.ActiveArticle.Pages == null || !EditorState.ActiveArticle.Pages.Contains(EditorState.CurrentPage))
-                                              && (EditorState.ActiveSegment == null || !EditorState.ActiveSegment.IsActive);
-                }
                 if (endSegmentBtn != null) endSegmentBtn.IsEnabled = EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive;
-                if (cancelSegmentBtn != null) cancelSegmentBtn.IsEnabled = EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive;
 
                 // Active article display: use DisplayTitle and CategoryDisplay to match Article card behaviour
                 if (activeArticleTitle != null)
@@ -190,211 +134,66 @@ namespace IndexEditor.Views
             // Initial sync
             UpdateUi();
 
-            if (newArticleBtn != null)
-                newArticleBtn.Click += (s, e) =>
-                {
-                     try
-                    {
-                        // Do not auto-close an existing active segment; instead, block creating a new article while a segment is active
-                        if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
-                        {
-                            ShowToast("Finish or cancel the open segment first");
-                            return;
-                        }
-
-                        // Create article with no populated fields except the first page
-                        var article = new Common.Shared.ArticleLine();
-                        article.Pages = new List<int> { EditorState.CurrentPage };
-
-                        // Insert article into EditorState.Articles in sorted order by first page
-                        if (EditorState.Articles == null)
-                            EditorState.Articles = new List<Common.Shared.ArticleLine> { article };
-                        else
-                        {
-                            int insertIndex = EditorState.Articles.FindIndex(a => a.Pages != null && a.Pages.Count > 0 && a.Pages.Min() > article.Pages.Min());
-                            if (insertIndex == -1)
-                                EditorState.Articles.Add(article);
-                            else
-                                EditorState.Articles.Insert(insertIndex, article);
-                        }
-
-                        // Make it the active article
-                        EditorState.ActiveArticle = article;
-
-                        // Create and attach a new active segment starting at the current page
-                        var seg = new Common.Shared.Segment(EditorState.CurrentPage);
-                        article.Segments.Add(seg);
-                        EditorState.ActiveSegment = seg;
-
-                        // Notify state change so view-models sync
-                        EditorState.NotifyStateChanged();
-
-                        // Perform selection on UI thread after view-model has synced its Articles collection
-                        var vm = this.DataContext as EditorStateViewModel;
-                        if (vm != null)
-                        {
-                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                            {
-                                try
-                                {
-                                    // Find the instance in vm.Articles that corresponds to our new article (by reference or by page match)
-                                    var inList = vm.Articles.FirstOrDefault(a => object.ReferenceEquals(a, article))
-                                                ?? vm.Articles.FirstOrDefault(a => a.Pages != null && article.Pages != null && a.Pages.SequenceEqual(article.Pages));
-                                    var toSelect = inList ?? article;
-                                    if (vm.SelectArticleCommand.CanExecute(toSelect))
-                                        vm.SelectArticleCommand.Execute(toSelect);
-                                    // Also set SelectedArticle explicitly to ensure binding matches
-                                    vm.SelectedArticle = toSelect;
-                                    // Attempt to focus the list so the selection persists visually
-                                    try
-                                    {
-                                        var main = this.VisualRoot as Window;
-                                        var list = main?.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
-                                        var lb = list?.FindControl<Avalonia.Controls.ListBox>("ArticlesListBox");
-                                        lb?.Focus();
-                                    }
-                                    catch { }
-                                }
-                                catch (Exception ex)
-                                {
-                                    // selecting new article after insert failed (suppressed)
-                                }
-                            }, Avalonia.Threading.DispatcherPriority.Background);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        // creating new article failed (suppressed)
-                    }
-                };
-
-            if (addSegmentBtn != null)
-                addSegmentBtn.Click += (s, e) =>
-                {
-                    if (EditorState.ActiveArticle != null)
-                    {
-                        // If there's already an active segment, disallow creating another
-                        if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
-                        {
-                            // show toast instead of silent no-op
-                            ShowToast("Finish or cancel the open segment first");
-                             return;
-                        }
-
-                        // If the current page is already part of the article's pages, do not create a new segment
-                        if (EditorState.ActiveArticle.Pages != null && EditorState.ActiveArticle.Pages.Contains(EditorState.CurrentPage))
-                        {
-                            ShowToast($"Page {EditorState.CurrentPage} already in article");
-                            return;
-                        }
-
-
-                        // Create a new OPEN (active) segment starting at the current page
-                        var seg = new Common.Shared.Segment(EditorState.CurrentPage);
-                        EditorState.ActiveArticle.Segments.Add(seg);
-                        EditorState.ActiveSegment = seg;
-
-                        // Notify state change so view-models sync
-                        EditorState.NotifyStateChanged();
-                    }
-                };
-
-            // Cancel Segment: remove the active segment and clear state
-            if (cancelSegmentBtn != null)
-                cancelSegmentBtn.Click += (s, e) =>
-                {
-                    if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
-                    {
-                        // Remove the active segment from its owning article if present
-                        var art = EditorState.ActiveArticle;
-                        if (art != null && art.Segments != null && art.Segments.Contains(EditorState.ActiveSegment))
-                        {
-                            art.Segments.Remove(EditorState.ActiveSegment);
-                        }
-                        // Clear global active segment
-                        EditorState.ActiveSegment = null;
-                        // Notify to update UI
-                        EditorState.NotifyStateChanged();
-                    }
-                };
-
-            // End Segment: when an active segment exists, update the article pages and UI
-            if (endSegmentBtn != null)
-                endSegmentBtn.Click += (s, e) =>
-                {
-                    if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
-                    {
-                        var start = EditorState.ActiveSegment.Start;
-                        var end = EditorState.CurrentPage;
-                        if (end < start) (start, end) = (end, start);
-                        // Add the page range [start..end] to the active article's Pages
-                        var art = EditorState.ActiveArticle;
-                        if (art != null)
-                        {
-                            // Build a new list so we can assign via the Pages setter (raises PropertyChanged)
-                            var newPages = new List<int>(art.Pages ?? new List<int>());
-                            for (int p = start; p <= end; p++)
-                            {
-                                if (!newPages.Contains(p)) newPages.Add(p);
-                            }
-                            newPages.Sort();
-                            // Assign back to trigger ArticleLine.Pages setter and property notifications
-                            art.Pages = newPages;
-
-                            // Also try to sync the view-model's article instance (if present) so the editor card updates immediately
-                            try
-                            {
-                                var vm = this.DataContext as EditorStateViewModel;
-                                if (vm != null)
-                                {
-                                    var vmMatch = vm.Articles.FirstOrDefault(a => object.ReferenceEquals(a, art))
-                                                  ?? vm.Articles.FirstOrDefault(a => a.Pages != null && a.Pages.SequenceEqual(newPages) && (a.Title ?? string.Empty) == (art.Title ?? string.Empty));
-                                    if (vmMatch != null && !object.ReferenceEquals(vmMatch, art))
-                                    {
-                                        vmMatch.Pages = new List<int>(newPages);
-                                    }
-                                }
-                            }
-                            catch { }
-                        }
-                        // Close the segment
-                        EditorState.ActiveSegment.End = EditorState.CurrentPage;
-                        EditorState.ActiveSegment = null;
-                        EditorState.NotifyStateChanged();
-                    }
-                };
-
-            // When state changes, try to load the page image for CurrentPage
-            EditorState.StateChanged += () => Dispatcher.UIThread.Post(() => LoadCurrentPageImage());
-
-            // Initial image load
-            LoadCurrentPageImage();
-
-            // Wire the Sync button to explicitly select an article that starts on the current page
-            var syncBtn = this.FindControl<Button>("SyncToArticleBtn");
-            if (syncBtn != null)
+            // Debug helper: if INDEXEDITOR_DEBUG_AUTOCREATE=1 is set, auto-trigger creating a new article
+            try
             {
-                syncBtn.Click += (s, e) =>
+                var auto = Environment.GetEnvironmentVariable("INDEXEDITOR_DEBUG_AUTOCREATE");
+                if (!string.IsNullOrEmpty(auto) && auto == "1")
                 {
+                    _ = System.Threading.Tasks.Task.Run(async () => { await System.Threading.Tasks.Task.Delay(600).ConfigureAwait(false); Dispatcher.UIThread.Post(() => { try { CreateNewArticle(); } catch { } }); });
+                }
+            }
+            catch { }
+
+            if (endSegmentBtn != null)
+                endSegmentBtn.Click += (s, e) => { /* call class-level EndActiveSegment */ EndActiveSegment(); };
+        }
+
+        // Ends the current active segment (if any) by setting its End to CurrentPage, updating the article pages,
+        // syncing the view-model, clearing ActiveSegment and notifying the EditorState.
+        public void EndActiveSegment()
+        {
+            try
+            {
+                if (EditorState.ActiveSegment == null || !EditorState.ActiveSegment.IsActive)
+                    return;
+
+                var start = EditorState.ActiveSegment.Start;
+                var end = EditorState.CurrentPage;
+                if (end < start) (start, end) = (end, start);
+
+                var art = EditorState.ActiveArticle;
+                if (art != null)
+                {
+                    var newPages = new List<int>(art.Pages ?? new List<int>());
+                    for (int p = start; p <= end; p++) if (!newPages.Contains(p)) newPages.Add(p);
+                    newPages.Sort();
+                    art.Pages = newPages;
+
                     try
                     {
                         var vm = this.DataContext as EditorStateViewModel;
                         if (vm != null)
                         {
-                            var match = EditorState.Articles.FirstOrDefault(a => a.Pages != null && a.Pages.Count > 0 && a.Pages.Min() == EditorState.CurrentPage);
-                            if (match != null)
+                            var vmMatch = vm.Articles.FirstOrDefault(a => object.ReferenceEquals(a, art))
+                                          ?? vm.Articles.FirstOrDefault(a => a.Pages != null && a.Pages.SequenceEqual(newPages) && (a.Title ?? string.Empty) == (art.Title ?? string.Empty));
+                            if (vmMatch != null && !object.ReferenceEquals(vmMatch, art))
                             {
-                                vm.NavigateToArticle(match);
-                                if (vm.SelectArticleCommand.CanExecute(match))
-                                    vm.SelectArticleCommand.Execute(match);
-                                vm.SelectedArticle = match;
+                                vmMatch.Pages = new List<int>(newPages);
                             }
                         }
                     }
                     catch { }
-                };
+                }
+
+                // Close and clear the active segment
+                EditorState.ActiveSegment.End = EditorState.CurrentPage;
+                EditorState.ActiveSegment = null;
+                EditorState.NotifyStateChanged();
             }
+            catch { }
         }
+
 
         private void LoadCurrentPageImage()
         {
@@ -477,6 +276,273 @@ namespace IndexEditor.Views
                 attempts++;
             }
             return null;
+        }
+
+        // Public API: create a new article (mirrors NewArticle button behavior)
+        public void CreateNewArticle()
+        {
+            try
+            {
+                if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
+                {
+                    IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first");
+                    return;
+                }
+
+                // Create the article and insert into the shared EditorState
+                var article = new Common.Shared.ArticleLine();
+                article.Pages = new List<int> { EditorState.CurrentPage };
+                if (EditorState.Articles == null)
+                    EditorState.Articles = new List<Common.Shared.ArticleLine> { article };
+                else
+                {
+                    int insertIndex = EditorState.Articles.FindIndex(a => a.Pages != null && a.Pages.Count > 0 && a.Pages.Min() > article.Pages.Min());
+                    if (insertIndex == -1)
+                        EditorState.Articles.Add(article);
+                    else
+                        EditorState.Articles.Insert(insertIndex, article);
+                }
+
+                EditorState.ActiveArticle = article;
+
+                // Attach a single-page CLOSED segment for the current page and do NOT make it active.
+                // First, guard against duplicate segments for the same page (defensive: CreateNewArticle may be invoked twice).
+                bool alreadyHas = false;
+                try
+                {
+                    if (article.Segments != null)
+                    {
+                        foreach (var s in article.Segments)
+                        {
+                            try
+                            {
+                                var start = s.Start;
+                                var end = s.End ?? s.Start;
+                                if (EditorState.CurrentPage >= start && EditorState.CurrentPage <= end)
+                                {
+                                    alreadyHas = true;
+                                    break;
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch { }
+                if (!alreadyHas)
+                {
+                    var seg = new Common.Shared.Segment(EditorState.CurrentPage);
+                    // Close immediately (single-page) and mark as not-new so it behaves like an existing segment
+                    seg.End = EditorState.CurrentPage;
+                    seg.WasNew = false;
+                    article.Segments.Add(seg);
+                    System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: Added closed segment for page " + EditorState.CurrentPage);
+                }
+                else
+                {
+                    System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: Skipped adding duplicate segment for page " + EditorState.CurrentPage);
+                }
+
+                // Ensure the article pages include the page (article.Pages was already initialized to this page),
+                // then notify so view-models and UI update.
+                EditorState.NotifyStateChanged();
+
+                // Try to select and focus the new article in the VM and editor
+                try
+                {
+                    System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: scheduling selection+focus");
+                    var vm = this.DataContext as EditorStateViewModel;
+                    if (vm != null)
+                    {
+                        // Perform selection on UI thread after vm.Articles is updated
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        {
+                            try
+                            {
+                                var inList = vm.Articles.FirstOrDefault(a => object.ReferenceEquals(a, article))
+                                            ?? vm.Articles.FirstOrDefault(a => a.Pages != null && article.Pages != null && a.Pages.SequenceEqual(article.Pages));
+                                var toSelect = inList ?? article;
+                                if (vm.SelectArticleCommand.CanExecute(toSelect))
+                                    vm.SelectArticleCommand.Execute(toSelect);
+
+                                vm.SelectedArticle = toSelect;
+
+                                // Ensure the ListBox shows the selection
+                                try
+                                {
+                                    var wnd = this.VisualRoot as Window;
+                                    var articleList = wnd?.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
+                                    if (articleList != null)
+                                    {
+                                        try
+                                        {
+                                            var lb = articleList.FindControl<Avalonia.Controls.ListBox>("ArticlesListBox");
+                                            if (lb != null)
+                                                lb.SelectedItem = toSelect;
+                                        }
+                                        catch { }
+                                    }
+                                }
+                                catch { }
+
+                                // Re-notify after a short delay to help DataTemplate creation (ArticleEditor) react
+                                try
+                                {
+                                    _ = System.Threading.Tasks.Task.Run(async () =>
+                                    {
+                                        await System.Threading.Tasks.Task.Delay(120).ConfigureAwait(false);
+                                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                        {
+                                            try { IndexEditor.Shared.EditorState.NotifyStateChanged(); System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: re-notified EditorState after selection"); } catch { }
+                                        });
+                                    });
+                                }
+                                catch { }
+
+                                // Short retry loop that attempts to focus the editor controls when they become available
+                                try
+                                {
+                                    var main = this.VisualRoot as Window;
+                                    _ = System.Threading.Tasks.Task.Run(async () =>
+                                    {
+                                        const int attempts = 12;
+                                        const int delayMs = 120;
+                                        for (int i = 0; i < attempts; i++)
+                                        {
+                                            try
+                                            {
+                                                await System.Threading.Tasks.Task.Delay(delayMs).ConfigureAwait(false);
+                                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                                {
+                                                    try
+                                                    {
+                                                        // 1) Try to find TitleTextBox or CategoryComboBox within the EditorContentHost's Content
+                                                        var host = main?.FindControl<ContentControl>("EditorContentHost");
+                                                        if (host?.Content is Avalonia.Controls.Control hostContent)
+                                                        {
+                                                            try
+                                                            {
+                                                                var tb = hostContent.FindControl<TextBox>("TitleTextBox");
+                                                                if (tb != null)
+                                                                {
+                                                                    System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox inside host.Content");
+                                                                    tb.Focus();
+                                                                    return;
+                                                                }
+                                                                var cb = hostContent.FindControl<ComboBox>("CategoryComboBox");
+                                                                if (cb != null)
+                                                                {
+                                                                    System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox inside host.Content");
+                                                                    cb.Focus();
+                                                                    return;
+                                                                }
+                                                            }
+                                                            catch { }
+                                                        }
+
+                                                        // 2) Try to find ArticleEditor control on the Window and call its helpers
+                                                        try
+                                                        {
+                                                            var ae = main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl")
+                                                                     ?? main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
+                                                            if (ae != null)
+                                                            {
+                                                                System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: calling ae.FocusTitle()/FocusEditor()");
+                                                                try { ae.FocusTitle(); } catch { }
+                                                                try { ae.FocusEditor(); } catch { }
+                                                                return;
+                                                            }
+                                                        }
+                                                        catch { }
+
+                                                        // 3) Directly search the Window for TitleTextBox or CategoryComboBox
+                                                        try
+                                                        {
+                                                            var tbDirect = main?.FindControl<TextBox>("TitleTextBox");
+                                                            if (tbDirect != null)
+                                                            {
+                                                                System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox directly on Window");
+                                                                try { tbDirect.Focus(); } catch { }
+                                                                return;
+                                                            }
+                                                            var cbDirect = main?.FindControl<ComboBox>("CategoryComboBox");
+                                                            if (cbDirect != null)
+                                                            {
+                                                                System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox directly on Window");
+                                                                try { cbDirect.Focus(); } catch { }
+                                                                return;
+                                                            }
+                                                        }
+                                                        catch { }
+
+                                                    }
+                                                    catch { }
+                                                });
+                                            }
+                                            catch { }
+                                        }
+                                        // If we exit the loop without focusing, log that attempt ended
+                                        System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focus attempts completed");
+                                    });
+                                }
+                                catch { }
+
+                            }
+                            catch { }
+                        }, Avalonia.Threading.DispatcherPriority.Background);
+                    }
+                }
+                catch { }
+
+            }
+            catch { }
+        }
+
+        // Public API to add an active segment at the current page. Returns true if a new active segment was created.
+        public bool AddSegmentAtCurrentPage()
+        {
+            try
+            {
+                var art = EditorState.ActiveArticle;
+                if (art == null)
+                {
+                    ToastService.Show("No active article selected");
+                    try { Console.WriteLine("[DEBUG] AddSegmentAtCurrentPage: no active article"); } catch { }
+                    return false;
+                }
+
+                // If an active segment exists, do not auto-close; block creation
+                if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
+                {
+                    ToastService.Show("Finish or cancel the open segment first");
+                    try { Console.WriteLine("[DEBUG] AddSegmentAtCurrentPage: active segment already open"); } catch { }
+                    return false;
+                }
+
+                // Do not allow adding if current page is already in the article's pages
+                var page = EditorState.CurrentPage;
+                if (art.Pages != null && art.Pages.Contains(page))
+                {
+                    ToastService.Show($"Page {page} already in article");
+                    try { Console.WriteLine($"[DEBUG] AddSegmentAtCurrentPage: page {page} already in article"); } catch { }
+                    return false;
+                }
+
+                // Create a new active segment starting at current page
+                var seg = new Common.Shared.Segment(page);
+                seg.WasNew = true;
+                seg.End = null; // active open segment
+                art.Segments.Add(seg);
+                // Also ensure the Pages list contains the start page
+                if (art.Pages == null) art.Pages = new List<int> { page };
+                else if (!art.Pages.Contains(page)) { art.Pages.Add(page); art.Pages.Sort(); }
+
+                EditorState.ActiveSegment = seg;
+                EditorState.NotifyStateChanged();
+                try { Console.WriteLine($"[DEBUG] AddSegmentAtCurrentPage: created new active segment start={page}"); } catch { }
+                return true;
+            }
+            catch { return false; }
         }
     }
 }

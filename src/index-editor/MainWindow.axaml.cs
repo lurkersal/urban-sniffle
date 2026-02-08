@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Threading;
+using Avalonia.Interactivity;
 
 namespace IndexEditor;
 
@@ -25,19 +28,53 @@ public partial class MainWindow : Window
         InitializeComponent();
         // InitializeComponent completed
 
+        // Note: InputBindings removed; rely on tunneling KeyDown handler to capture Ctrl+Key combinations.
+
+        // Global keyboard shortcuts: handle at window level
+        this.KeyDown += OnMainWindowKeyDown;
+        // Also register a tunneling handler so key events (Enter) are seen before focused controls (like buttons)
+        try { this.AddHandler<KeyEventArgs>(KeyDownEvent, OnMainWindowKeyDown, RoutingStrategies.Tunnel); } catch { }
+
         // Immediate diagnostics (may run before Opened)
         try
         {
             // Skip diagnostic screen logging in normal runs
         }
-        catch (Exception ex)
-        {
-            // Error during immediate diagnostics
-            WriteDiagFile($"[DIAG] Exception during immediate diagnostics: {ex.Message}");
-        }
+        catch { }
 
         this.DataContext = new IndexEditor.Views.EditorStateViewModel();
         // DataContext assigned
+
+        // Hook the invisible focus host so it can handle keyboard shortcuts reliably
+        try
+        {
+            var host = this.FindControl<Border>("KeyboardFocusHost");
+            if (host != null)
+            {
+                host.KeyDown += (s, ke) =>
+                {
+                    try
+                    {
+                        if (ke.Key == Key.N && ke.KeyModifiers.HasFlag(KeyModifiers.Control))
+                        {
+                            try { IndexEditor.Shared.ToastService.Show("Ctrl+N: creating new article"); } catch { }
+                            var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
+                            pc?.CreateNewArticle();
+                            ke.Handled = true;
+                        }
+                        else if (ke.Key == Key.A && ke.KeyModifiers.HasFlag(KeyModifiers.Control))
+                        {
+                            try { IndexEditor.Shared.ToastService.Show("Ctrl+A: adding segment"); } catch { }
+                            var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
+                            pc?.AddSegmentAtCurrentPage();
+                            ke.Handled = true;
+                        }
+                    }
+                    catch { }
+                };
+            }
+        }
+        catch { }
 
         // Configure startup and Opened handler
         try
@@ -46,10 +83,7 @@ public partial class MainWindow : Window
             this.Opened += OnWindowOpened;
             WriteDiagFile("[TRACE] Opened handler attached");
         }
-        catch (Exception ex)
-        {
-            // Non-fatal: continue without diagnostic logging
-        }
+        catch { }
 
         // Load articles from folder if provided
         if (!string.IsNullOrWhiteSpace(FolderToOpen))
@@ -119,10 +153,7 @@ public partial class MainWindow : Window
                                 foreach (var a in articles)
                                     vm.Articles.Add(a);
                             }
-                            catch (Exception ex)
-                            {
-                                // ignore vm population failures in diagnostics
-                            }
+                            catch { }
                         }
                     }
                     catch { }
@@ -192,20 +223,13 @@ public partial class MainWindow : Window
                             }
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        // Error while finding first page image
-                    }
+                    catch { }
 
                     IndexEditor.Shared.EditorState.NotifyStateChanged();
 
                     // Do not auto-select the first article; selection will happen when user requests it
                 }
-                catch (Exception ex)
-                {
-                    // Error reading index file
-                    WriteDiagFile($"Error reading _index.txt: {ex.Message}");
-                }
+                catch { WriteDiagFile("Error reading _index.txt"); }
             }
             else
             {
@@ -230,16 +254,33 @@ public partial class MainWindow : Window
             {
                 // skip diag
             }
-            catch (Exception ex)
+            catch { /* swallow screen exception diag */ }
+
+            // Ensure keyboard focus is on the window or the articles list so global shortcuts work immediately
+            try
             {
-                // swallow screen exception diag
+                // Delay focus to allow the window to finish opening
+                Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+                {
+                    try
+                    {
+                        this.Focus();
+                        // Also focus the invisible host so it receives keyboard input for shortcuts
+                        try { var host = this.FindControl<Border>("KeyboardFocusHost"); if (host != null) host.Focus(); } catch { }
+                        // Try to focus the articles listbox
+                        var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
+                        if (articleList != null)
+                        {
+                            try { var lb = articleList.FindControl<ListBox>("ArticlesListBox"); if (lb != null) lb.Focus(); } catch { }
+                        }
+                    }
+                    catch { }
+                });
             }
+            catch { }
+
         }
-        catch (Exception ex)
-        {
-            // Exception raising window
-            WriteDiagFile($"[TRACE] Exception raising window: {ex.Message}");
-        }
+        catch { WriteDiagFile("[TRACE] Exception raising window"); }
     }
 
     // Parsing helpers
@@ -379,33 +420,184 @@ public partial class MainWindow : Window
                     hasError = true;
                 }
             }
-            else if (int.TryParse(trimmed, out int singlePage))
+            else if (int.TryParse(trimmed, out int page))
             {
-                pages.Add(singlePage);
+                pages.Add(page);
             }
             else
             {
                 hasError = true;
             }
         }
+        pages = pages.Distinct().OrderBy(p => p).ToList();
         return pages;
     }
 
     private bool ImageExistsInFolder(string folder, int pageNumber)
     {
-        var candidates = new List<string>
+        // Check if the image file for the given page number exists in the specified folder
+        var filePath = System.IO.Path.Combine(folder, $"{pageNumber:D3}.jpg");
+        return System.IO.File.Exists(filePath);
+    }
+
+    // Main window event handlers
+    private void OnMainWindowKeyDown(object sender, KeyEventArgs e)
+    {
+        try { Console.WriteLine($"[KEY] KeyDown received: Key={e.Key} Mods={e.KeyModifiers}"); } catch { }
+        // Handle global key down events here
+        // For example, toggle fullscreen on F11
+        // Ctrl+A: add segment at current page (if possible)
+        try
         {
-            System.IO.Path.Combine(folder, pageNumber.ToString() + ".jpg"),
-            System.IO.Path.Combine(folder, pageNumber.ToString() + ".png"),
-            System.IO.Path.Combine(folder, pageNumber.ToString("D2") + ".jpg"),
-            System.IO.Path.Combine(folder, pageNumber.ToString("D2") + ".png"),
-            System.IO.Path.Combine(folder, pageNumber.ToString("D3") + ".jpg"),
-            System.IO.Path.Combine(folder, pageNumber.ToString("D3") + ".png"),
-            System.IO.Path.Combine(folder, "page-" + pageNumber.ToString() + ".jpg"),
-            System.IO.Path.Combine(folder, "p" + pageNumber.ToString() + ".jpg")
-        };
-        foreach (var p in candidates)
-            if (System.IO.File.Exists(p)) return true;
-        return false;
+            if (e.Key == Key.A && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            {
+                try
+                {
+                    var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
+                    if (pc != null)
+                    {
+                        var ok = pc.AddSegmentAtCurrentPage();
+                        if (ok) { try { Console.WriteLine("[DEBUG] Ctrl+A: added segment"); } catch { } }
+                    }
+                }
+                catch { }
+                e.Handled = true;
+                return;
+            }
+            // Ctrl+N: create new article
+            if (e.Key == Key.N && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            {
+                try
+                {
+                    try { IndexEditor.Shared.ToastService.Show("Ctrl+N pressed: creating new article"); } catch { }
+                    Console.WriteLine("[DEBUG] KeyDown: Ctrl+N received");
+                    var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
+                    if (pc != null)
+                    {
+                        pc.CreateNewArticle();
+                        try { Console.WriteLine("[DEBUG] Ctrl+N: CreateNewArticle invoked"); } catch { }
+                    }
+                }
+                catch { }
+                e.Handled = true;
+                return;
+            }
+        }
+        catch { }
+
+        if (e.Key == Key.F11)
+        {
+            this.WindowState = this.WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            // Exit fullscreen on Escape
+            if (this.WindowState == WindowState.FullScreen)
+            {
+                this.WindowState = WindowState.Normal;
+                e.Handled = true;
+            }
+        }
+        else if (e.Key == Key.Enter && !e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+        {
+            // If an active segment exists, end it here and prevent focused buttons from receiving Enter.
+            var seg = IndexEditor.Shared.EditorState.ActiveSegment;
+            if (seg != null && seg.IsActive)
+            {
+                try
+                {
+                    var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
+                    if (pc != null)
+                        pc.EndActiveSegment();
+                    else
+                    {
+                        // Fallback: set seg.End to current page and clear active segment
+                        seg.End = IndexEditor.Shared.EditorState.CurrentPage;
+                        seg.WasNew = false;
+                        IndexEditor.Shared.EditorState.ActiveSegment = null;
+                        IndexEditor.Shared.EditorState.NotifyStateChanged();
+                    }
+                    try { Console.WriteLine("[DEBUG] Enter pressed: ended active segment"); } catch { }
+                }
+                catch { }
+                e.Handled = true;
+                return;
+            }
+        }
+        else if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+        {
+            // Navigation: Left/Right change page, Up/Down change selected article
+            if (e.Key == Key.Left)
+            {
+                try { IndexEditor.Shared.EditorState.CurrentPage = Math.Max(1, IndexEditor.Shared.EditorState.CurrentPage - 1); IndexEditor.Shared.EditorState.NotifyStateChanged(); e.Handled = true; }
+                catch { }
+            }
+            else if (e.Key == Key.Right)
+            {
+                try { IndexEditor.Shared.EditorState.CurrentPage = IndexEditor.Shared.EditorState.CurrentPage + 1; IndexEditor.Shared.EditorState.NotifyStateChanged(); e.Handled = true; }
+                catch { }
+            }
+            else if (e.Key == Key.Up || e.Key == Key.Down)
+            {
+                try
+                {
+                    var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
+                    if (articleList != null)
+                    {
+                        var lb = articleList.FindControl<ListBox>("ArticlesListBox");
+                        if (lb != null)
+                        {
+                            var cur = lb.SelectedIndex;
+                            int next = cur;
+                            if (e.Key == Key.Up) next = Math.Max(0, cur - 1);
+                            else next = Math.Min((lb.ItemCount > 0 ? lb.ItemCount - 1 : 0), cur + 1);
+                            if (next != cur && lb.ItemCount > 0)
+                            {
+                                lb.SelectedIndex = next;
+                                try { lb.Focus(); } catch { }
+                                // Execute selection command on VM
+                                try
+                                {
+                                    var item = lb.SelectedItem as Common.Shared.ArticleLine;
+                                    var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+                                    if (vm != null && item != null && vm.SelectArticleCommand.CanExecute(item))
+                                        vm.SelectArticleCommand.Execute(item);
+                                }
+                                catch { }
+                            }
+                            e.Handled = true;
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
+    }
+
+    private void OnOpenButtonClick(object sender, RoutedEventArgs e)
+    {
+        // Open folder using OpenFolderDialog and update EditorState on UI thread
+        var dlg = new Avalonia.Controls.OpenFolderDialog();
+        var wnd = this.VisualRoot as Window ?? this;
+        _ = dlg.ShowAsync(wnd).ContinueWith(t =>
+        {
+            var path = t.Result;
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    IndexEditor.Shared.EditorState.CurrentFolder = path;
+                    LoadArticlesFromFolder(path);
+                });
+            }
+        });
+    }
+
+    private void LoadArticlesFromFolder(string folder)
+    {
+        // TODO: Implement loading articles from the specified folder
+        // This should update IndexEditor.Shared.EditorState.Articles and notify the UI
     }
 }
+

@@ -12,11 +12,13 @@ namespace IndexEditor.Views
         public ArticleList()
         {
             InitializeComponent();
+            // Console.WriteLine("[DEBUG] ArticleList constructed");
             // When attached to the visual tree, ensure we inherit the Window DataContext (EditorStateViewModel)
             // When attached, inherit the Window's DataContext (EditorStateViewModel) if not set,
             // attach property-changed handlers to articles so UI animations trigger, and wire collection changes.
             this.AttachedToVisualTree += (s, e) =>
             {
+                // Console.WriteLine("[DEBUG] ArticleList attached to visual tree");
                 if (this.DataContext == null || !(this.DataContext is EditorStateViewModel))
                 {
                     var root = this.VisualRoot as Window;
@@ -26,10 +28,12 @@ namespace IndexEditor.Views
 
                 if (this.DataContext is EditorStateViewModel vmModel)
                 {
+                    // Console.WriteLine($"[DEBUG] ArticleList VM articles count: {vmModel.Articles?.Count ?? 0}");
                     foreach (var art in vmModel.Articles)
                     {
                         try { art.PropertyChanged -= Article_PropertyChanged; } catch { }
                         art.PropertyChanged += Article_PropertyChanged;
+                        // Console.WriteLine($"[DEBUG] Article: '{art.DisplayTitle}' Segments: {art.Segments?.Count ?? 0}");
                     }
 
                     if (vmModel.Articles is INotifyCollectionChanged incc)
@@ -44,6 +48,7 @@ namespace IndexEditor.Views
                                     {
                                         try { newArt.PropertyChanged -= Article_PropertyChanged; } catch { }
                                         newArt.PropertyChanged += Article_PropertyChanged;
+                                        // Console.WriteLine($"[DEBUG] New Article added: '{newArt.DisplayTitle}' Segments: {newArt.Segments?.Count ?? 0}");
                                     }
                                 }
                             }
@@ -82,6 +87,22 @@ namespace IndexEditor.Views
                         {
                             list.SelectedItem = IndexEditor.Shared.EditorState.ActiveArticle;
                         }
+
+                        // Clear highlighting on all segments, then set only the active one
+                        try
+                        {
+                            foreach (var a in IndexEditor.Shared.EditorState.Articles ?? new System.Collections.Generic.List<Common.Shared.ArticleLine>())
+                            {
+                                if (a.Segments != null)
+                                {
+                                    foreach (var s in a.Segments)
+                                        s.IsHighlighted = false;
+                                }
+                            }
+                            if (activeSeg != null)
+                                activeSeg.IsHighlighted = true;
+                        }
+                        catch { }
                     });
                 };
 
@@ -105,6 +126,8 @@ namespace IndexEditor.Views
                         {
                             foreach (var a in (this.DataContext as EditorStateViewModel)?.Articles ?? new System.Collections.ObjectModel.ObservableCollection<Common.Shared.ArticleLine>())
                                 a.IsSelected = false;
+                            // Mark the selected as selected so converters update border brush
+                            selected.IsSelected = true;
                         }
                         catch { }
                     }
@@ -266,6 +289,19 @@ namespace IndexEditor.Views
                     catch { }
                     owner.IsSelected = true;
                     IndexEditor.Shared.EditorState.ActiveArticle = owner;
+
+                    // Ensure the clicked segment becomes active (End == null) so IsActive becomes true
+                    try
+                    {
+                        if (seg.End.HasValue)
+                        {
+                            // Opening a previously closed segment: remember the original end to allow cancel to restore it
+                            seg.OriginalEnd = seg.End;
+                            seg.WasNew = false;
+                            seg.End = null;
+                        }
+                    }
+                    catch { }
 
                     // Set global active segment (if it's not already)
                     IndexEditor.Shared.EditorState.ActiveSegment = seg;

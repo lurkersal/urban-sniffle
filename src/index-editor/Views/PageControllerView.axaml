@@ -11,14 +11,11 @@
                     <Button Name="PrevPageBtn" Content="◀" Width="36" Height="36" Background="White" Foreground="Black"/>
                     <TextBox Name="PageInput" Text="8" Width="80" HorizontalContentAlignment="Center" FontWeight="Bold" FontSize="18" VerticalAlignment="Center" Background="White" Foreground="Black"/>
                     <Button Name="NextPageBtn" Content="▶" Width="36" Height="36" Background="White" Foreground="Black"/>
-                    <!-- Explicit sync: when pressed, select the article for which CurrentPage is the first page -->
-                    <Button Name="SyncToArticleBtn" Content="Sync" Width="64" Height="32" Background="#EEEEEE" Foreground="Black" HorizontalAlignment="Center" VerticalAlignment="Center" ToolTip.Tip="Select article whose first page is the current page" />
+                    <!-- Sync button removed per request -->
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Name="NewArticleBtn" Content="New Article" Background="White" Foreground="Black" />
-                    <Button Name="AddSegmentBtn" Content="Add Segment" Background="White" Foreground="Black" />
+                    <!-- Add Segment button removed in favor of Ctrl+A shortcut; End Segment remains -->
                     <Button Name="EndSegmentBtn" Content="End Segment" Background="White" Foreground="Black" />
-                    <Button Name="CancelSegmentBtn" Content="Cancel Segment" Background="White" Foreground="Black" />
                 </StackPanel>
 
                 <!-- Transient toast for short messages (fades out) -->
