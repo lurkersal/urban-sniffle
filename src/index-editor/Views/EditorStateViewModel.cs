@@ -10,12 +10,16 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia.Threading;
 using System.Windows.Input;
+using System.Collections.Specialized;
 
 namespace IndexEditor.Views
 {
     public class EditorStateViewModel : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
+        // Whether categories have been populated from DB. When true, ignore non-DB updates.
+        // Make static so multiple VM instances don't overwrite each other's DB result.
+        private static bool _categoriesLoadedFromDb = false;
         public SelectArticleCommand SelectArticleCommand { get; }
         
         // Public helper: find the first page number for the given article that has an image file in the provided folder.
@@ -160,6 +164,14 @@ namespace IndexEditor.Views
                  var newVal = value!;
                  if (SelectedArticle.Category != newVal)
                  {
+                     // Only accept category values that come from the DB-backed Categories list
+                     if (!Categories.Contains(newVal))
+                     {
+                         try { IndexEditor.Shared.ToastService.Show("Category must be chosen from the predefined list"); } catch { }
+                         // Re-notify so the UI reverts selection
+                         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
+                         return;
+                     }
                      SelectedArticle.Category = newVal;
                      // Forward notify so bindings update
                      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
@@ -191,10 +203,39 @@ namespace IndexEditor.Views
              foreach (var article in EditorState.Articles)
                  Articles.Add(article);
 
-             // Populate categories from articles (unique, sorted) as a fallback
-             var cats = new HashSet<string>(Articles.Select(a => a.Category).Where(c => !string.IsNullOrWhiteSpace(c)));
-             foreach (var c in cats.OrderBy(s => s))
-                 Categories.Add(c);
+             // IMPORTANT: Categories must come only from the database. Do not populate from Articles.
+             // Leave Categories empty until DB load completes. The ComboBox will show DB-provided values only.
+
+            // Initialize the shared CategoryService once and mirror its collection into our VM's Categories
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await IndexEditor.Shared.CategoryService.InitializeAsync();
+                    // Mirror the service collection to our VM on UI thread
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        Categories.Clear();
+                        foreach (var c in IndexEditor.Shared.CategoryService.Categories) Categories.Add(c);
+                        // Mark that categories came from DB
+                        try { _categoriesLoadedFromDb = IndexEditor.Shared.CategoryService.Categories.Count > 0; } catch { }
+                        // Subscribe to future changes so we mirror updates
+                        try
+                        {
+                            IndexEditor.Shared.CategoryService.Categories.CollectionChanged += (s, e) =>
+                            {
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                {
+                                    Categories.Clear();
+                                    foreach (var cc in IndexEditor.Shared.CategoryService.Categories) Categories.Add(cc);
+                                });
+                            };
+                        }
+                        catch { }
+                     });
+                 }
+                 catch { }
+             });
 
              // Asynchronously try to load categories from DB (do not block UI thread)
              IsLoadingCategories = true;
@@ -202,12 +243,13 @@ namespace IndexEditor.Views
              {
                  try
                  {
-                     var dbCats = await LoadCategoriesFromDatabaseAsync();
-                     if (dbCats != null && dbCats.Count > 0)
+                     // The CategoryService already loads categories; we just mirror from it above. Keep IsLoadingCategories for compatibility.
+                     await IndexEditor.Shared.CategoryService.InitializeAsync();
+                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                      {
-                         // Update the observable collection on the UI thread
-                         Dispatcher.UIThread.Post(() => UpdateCategories(dbCats.OrderBy(s => s).ToList()));
-                     }
+                         Categories.Clear();
+                         foreach (var c in IndexEditor.Shared.CategoryService.Categories) Categories.Add(c);
+                     });
                  }
                  catch { }
                  finally
@@ -259,11 +301,38 @@ namespace IndexEditor.Views
          {
             try
             {
-                // Read appsettings.json from the app folder
-                var appsettingsPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
-                if (!File.Exists(appsettingsPath))
+                // Try multiple likely locations for appsettings.json to avoid issues when working directory differs from app folder.
+                var candidates = new List<string>();
+                try { candidates.Add(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json")); } catch { }
+                try { candidates.Add(Path.Combine(AppContext.BaseDirectory ?? string.Empty, "appsettings.json")); } catch { }
+                // Also try the application's assembly folder as a fallback
+                try
+                {
+                    var asmFolder = Path.GetDirectoryName(typeof(EditorStateViewModel).Assembly.Location);
+                    if (!string.IsNullOrWhiteSpace(asmFolder)) candidates.Add(Path.Combine(asmFolder, "appsettings.json"));
+                }
+                catch { }
+
+                string? foundPath = null;
+                foreach (var cand in candidates.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct())
+                {
+                    try
+                    {
+                        if (File.Exists(cand))
+                        {
+                            foundPath = cand;
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+
+                try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"LoadCategories: candidates={string.Join(";", candidates)} found={foundPath}\n"); } catch { }
+
+                if (string.IsNullOrWhiteSpace(foundPath))
                     return null;
-                using var fs = File.OpenRead(appsettingsPath);
+
+                using var fs = File.OpenRead(foundPath);
                 using var doc = await JsonDocument.ParseAsync(fs);
                 if (!doc.RootElement.TryGetProperty("ConnectionStrings", out var connSection))
                     return null;
@@ -273,43 +342,93 @@ namespace IndexEditor.Views
                 if (string.IsNullOrWhiteSpace(connString))
                     return null;
 
-                var cats = await IndexEditor.Shared.CategoryRepository.GetCategoriesAsync(connString);
-                if (cats != null && cats.Count > 0)
+                try
                 {
-                    return cats;
+                    var cats = await IndexEditor.Shared.CategoryRepository.GetCategoriesAsync(connString);
+                    try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"DB returned {cats?.Count ?? 0} categories\n"); } catch { }
+                    if (cats != null && cats.Count > 0)
+                    {
+                        return cats;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"DB error: {ex}\n"); } catch { }
                 }
                 return null;
-            }
-            catch { return null; }
-        }
+             }
+             catch { return null; }
+         }
 
-        private void UpdateCategories(List<string> newCats)
-        {
-            // Ensure selected category is preserved
-            var selectedCat = SelectedArticle?.Category;
-            // UpdateCategories called
+        private void UpdateCategories(List<string> newCats, bool fromDatabase = false)
+         {
+             // Ensure selected category is preserved
+             var selectedCat = SelectedArticle?.Category;
+            // If categories are already loaded from DB, ignore any non-DB updates
+            if (!fromDatabase && _categoriesLoadedFromDb)
+            {
+                try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", "UpdateCategories: skipped non-DB update because DB list already loaded\n"); } catch { }
+                return;
+            }
+
+            // If this update comes from the database, prefer showing DB categories exactly (preserve selectedCategory if missing)
+            if (fromDatabase && newCats != null && newCats.Count > 0)
+            {
+                var sorted = newCats.OrderBy(s => s).ToList();
+                if (!string.IsNullOrWhiteSpace(selectedCat) && !sorted.Contains(selectedCat))
+                    sorted.Add(selectedCat);
+
+                // If we already have DB-loaded categories, avoid downgrading to a smaller set.
+                if (_categoriesLoadedFromDb)
+                {
+                    var currentSet = new HashSet<string>(Categories);
+                    var newSet = new HashSet<string>(sorted);
+                    if (newSet.SetEquals(currentSet))
+                    {
+                        try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", "UpdateCategories: DB update identical to current set - ignored\n"); } catch { }
+                        return;
+                    }
+                    // Accept only if new set is a superset or strictly larger (new categories added)
+                    if (newSet.IsSupersetOf(currentSet) && newSet.Count >= currentSet.Count)
+                    {
+                        Categories.Clear();
+                        foreach (var c in sorted)
+                            Categories.Add(c);
+                        try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"Updated Categories (DB superset applied): {string.Join(",", sorted)}\n"); } catch { }
+                        return;
+                    }
+                    else
+                    {
+                        try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"UpdateCategories: DB update skipped (would shrink/replace smaller set): {string.Join(",", sorted)}\n"); } catch { }
+                        return;
+                    }
+                }
+
+                // First DB load: accept unconditionally
+                Categories.Clear();
+                foreach (var c in sorted)
+                    Categories.Add(c);
+                _categoriesLoadedFromDb = true;
+                try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"Updated Categories (DB preferred first load): {string.Join(",", sorted)}\n"); } catch { }
+                return;
+            }
+
+            // Fallback: merge categories discovered from articles (existing behavior)
             if (!string.IsNullOrWhiteSpace(selectedCat) && !newCats.Contains(selectedCat))
             {
                 newCats.Add(selectedCat);
-                // Added selected category to preserve selection
             }
-
-            // Add any new categories, but do NOT remove existing ones. Removing can change ComboBox indices
-            // and cause SelectedItem to shift and write back incorrect values into Article.Category.
             var union = new HashSet<string>(Categories);
             foreach (var c in newCats)
                 union.Add(c);
-            // Preserve insertion order by sorting the union; we only append missing items to the existing collection
-            var sorted = union.OrderBy(s => s).ToList();
-            foreach (var c in sorted)
+            var merged = union.OrderBy(s => s).ToList();
+            foreach (var c in merged)
             {
                 if (!Categories.Contains(c))
-                {
-                    // Adding category to Categories (union)
                     Categories.Add(c);
-                }
             }
-        }
+            try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"Updated Categories (merged): {string.Join(",", merged)}\n"); } catch { }
+         }
 
         private void SyncArticles()
         {
@@ -349,9 +468,7 @@ namespace IndexEditor.Views
                 article.PropertyChanged += OnArticlePropertyChanged;
             }
 
-            // Recompute categories from current articles and update the category list
-            var cats = new HashSet<string>(Articles.Select(a => a.Category).Where(c => !string.IsNullOrWhiteSpace(c)));
-            UpdateCategories(cats.OrderBy(s => s).ToList());
+            // Categories are exclusively DB-sourced; do not recompute or update Categories from articles here.
             // SyncArticles completed
             _suppressCategorySet = false;
         }
@@ -404,9 +521,7 @@ namespace IndexEditor.Views
                 }
             }
 
-            // Update categories set based on new ordering without re-syncing all article subscriptions
-            var cats = new HashSet<string>(EditorState.Articles.Select(a => a.Category).Where(c => !string.IsNullOrWhiteSpace(c)));
-            UpdateCategories(cats.OrderBy(s => s).ToList());
+            // Categories are exclusively DB-sourced; do not recompute or update Categories from articles here.
             // ReorderArticlesByPage completed
             _suppressCategorySet = false;
         }

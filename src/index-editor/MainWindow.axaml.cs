@@ -578,8 +578,8 @@ public partial class MainWindow : Window
                 return;
             }
         }
-        // Toggle index overlay with 'I' (no modifiers)
-        else if (e.Key == Key.I && !e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt) && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        // Toggle index overlay with Ctrl+I
+        else if (e.Key == Key.I && e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt) && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
             try
             {
@@ -624,6 +624,8 @@ public partial class MainWindow : Window
             // Navigation: Left/Right change page, Up/Down change selected article
             if (e.Key == Key.Left)
             {
+                // If the Article Editor has focus, let the editor handle the arrow key (do not change page)
+                if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) return;
                 try
                 {
                     var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
@@ -635,6 +637,8 @@ public partial class MainWindow : Window
             }
             else if (e.Key == Key.Right)
             {
+                // If the Article Editor has focus, let the editor handle the arrow key (do not change page)
+                if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) return;
                 try
                 {
                     var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
@@ -709,6 +713,10 @@ public partial class MainWindow : Window
         // This should update IndexEditor.Shared.EditorState.Articles and notify the UI
     }
 }
+
+
+
+
 
 
 

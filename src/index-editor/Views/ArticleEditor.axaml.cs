@@ -10,6 +10,10 @@ namespace IndexEditor.Views
             // When the global EditorState changes, if the ActiveArticle matches our DataContext, focus the category combobox.
             IndexEditor.Shared.EditorState.StateChanged += OnEditorStateChanged;
             this.DetachedFromVisualTree += (s, e) => { IndexEditor.Shared.EditorState.StateChanged -= OnEditorStateChanged; };
+
+            // Track focus within the article editor so global key handlers can avoid intercepting arrow keys
+            this.GotFocus += (s, e) => { try { IndexEditor.Shared.EditorState.IsArticleEditorFocused = true; } catch { } };
+            this.LostFocus += (s, e) => { try { IndexEditor.Shared.EditorState.IsArticleEditorFocused = false; } catch { } };
         }
 
         // Public helper to focus the category combobox in the editor

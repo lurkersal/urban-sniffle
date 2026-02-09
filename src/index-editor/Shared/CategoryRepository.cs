@@ -14,7 +14,13 @@ namespace IndexEditor.Shared
             await using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
-                categories.Add(reader.GetString(0));
+                try
+                {
+                    var val = reader.IsDBNull(0) ? null : reader.GetString(0);
+                    if (!string.IsNullOrWhiteSpace(val))
+                        categories.Add(val.Trim());
+                }
+                catch { }
             }
             return categories;
         }
