@@ -9,6 +9,7 @@ namespace Common.Shared
         private bool _isHighlighted;
         private int? _originalEnd;
         private bool _wasNew;
+        private int? _currentPreviewEnd;
 
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -43,8 +44,19 @@ namespace Common.Shared
 
         public bool IsActive => !End.HasValue;
 
-        // Friendly display used by list UI (e.g. "13" or "110-114" or "13 →" when active)
-        public string Display => End.HasValue ? (Start == End.Value ? Start.ToString() : $"{Start}-{End.Value}") : $"{Start} →";
+        // Friendly display used by list UI (e.g. "13" or "110-114" or "13 → 20" when active and previewing)
+        public string Display
+        {
+            get
+            {
+                if (End.HasValue)
+                    return (Start == End.Value) ? Start.ToString() : $"{Start}-{End.Value}";
+                // Active segment: show a preview end if provided (e.g. "13 → 20"), otherwise simple arrow
+                if (CurrentPreviewEnd.HasValue)
+                    return $"{Start} → {CurrentPreviewEnd.Value}";
+                return $"{Start} →";
+            }
+        }
 
         // UI-only highlight flag controlled by the editor (not persisted)
         public bool IsHighlighted
@@ -70,6 +82,22 @@ namespace Common.Shared
                 {
                     _originalEnd = value;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(OriginalEnd)));
+                }
+            }
+        }
+
+        // When the segment is active, the editor can supply a temporary preview end (current page) so the UI shows "Start → current".
+        public int? CurrentPreviewEnd
+        {
+            get => _currentPreviewEnd;
+            set
+            {
+                if (_currentPreviewEnd != value)
+                {
+                    _currentPreviewEnd = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentPreviewEnd)));
+                    // Changing the preview end affects the friendly Display string
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Display)));
                 }
             }
         }

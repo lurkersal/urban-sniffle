@@ -32,6 +32,7 @@ namespace IndexEditor.Shared
                     seg.End = seg.Start;
                 }
                 seg.WasNew = false;
+                try { seg.CurrentPreviewEnd = null; } catch { }
                 EditorState.ActiveSegment = null;
                 EditorState.NotifyStateChanged();
             }
@@ -39,4 +40,3 @@ namespace IndexEditor.Shared
         }
     }
 }
-

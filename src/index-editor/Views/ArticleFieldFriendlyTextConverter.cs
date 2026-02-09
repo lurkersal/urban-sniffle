@@ -18,7 +18,7 @@ namespace IndexEditor.Views
 
 
             if (value is IList<int?> intList)
-                return string.Join(", ", intList.Where(x => x.HasValue).Select(x => x.Value));
+                return string.Join(", ", intList.Where(x => x.HasValue).Select(x => x.GetValueOrDefault().ToString()));
 
             if (value is IList<int> intList2)
                 return string.Join(", ", intList2);

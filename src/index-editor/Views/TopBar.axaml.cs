@@ -117,25 +117,19 @@ namespace IndexEditor.Views
                 {
                     try
                     {
-                        var dlg = new Avalonia.Controls.OpenFolderDialog();
-                        // If a folder is already open, prefer opening the dialog there
+                        // Use custom folder browser window that lists only folders and selects a folder when it has no subfolders on double-click
+                        var wnd = this.VisualRoot as Window;
+                        var start = IndexEditor.Shared.EditorState.CurrentFolder;
+                        string? path = null;
                         try
                         {
-                            var cur = IndexEditor.Shared.EditorState.CurrentFolder;
-                            if (!string.IsNullOrWhiteSpace(cur))
-                            {
-                                var t = dlg.GetType();
-                                var prop = t.GetProperty("Directory") ?? t.GetProperty("InitialDirectory") ?? t.GetProperty("DefaultDirectory");
-                                if (prop != null && prop.CanWrite)
-                                {
-                                    try { prop.SetValue(dlg, cur); } catch { }
-                                }
-                            }
+                            path = await IndexEditor.Shared.FolderPicker.PickFolderAsync(wnd, start);
                         }
-                        catch { }
-
-                        var wnd = this.VisualRoot as Window;
-                        var path = await dlg.ShowAsync(wnd);
+                        catch (Exception ex)
+                        {
+                            try { IndexEditor.Shared.ToastService.Show("Open folder dialog failed: " + ex.Message); } catch { }
+                            return;
+                        }
                         if (string.IsNullOrWhiteSpace(path))
                             return;
 
@@ -148,138 +142,64 @@ namespace IndexEditor.Views
                         }
 
                         IndexEditor.Shared.EditorState.CurrentFolder = path;
-                        // Parse folder name metadata as a fallback (format: "Magazine name Volume-Number, Year")
-                        var folderName = System.IO.Path.GetFileName(path.TrimEnd(System.IO.Path.DirectorySeparatorChar));
-                        try { Debug.WriteLine("[DEBUG] TopBar.Open: folderName='" + folderName + "'"); } catch { }
-                        var parsedFolder = IndexEditor.Shared.FolderMetadataParser.ParseFolderMetadata(folderName);
-                        var mag = parsedFolder.mag;
-                        var vol = parsedFolder.vol;
-                        var num = parsedFolder.num;
-                        try { Debug.WriteLine("[DEBUG] TopBar.Open: parsed from folder -> mag='" + mag + "', vol='" + vol + "', num='" + num + "'"); } catch { }
-
-                        // If _index.txt exists in the folder, parse header metadata and article lines
-                        var indexPath = System.IO.Path.Combine(path, "_index.txt");
-                        if (System.IO.File.Exists(indexPath))
+                        // Reuse existing MainWindow-loading logic by delegating to MainWindow.LoadArticlesFromFolder if available.
+                        try
                         {
-                            var lines = System.IO.File.ReadAllLines(indexPath).ToList();
-                            // Determine metadata: prefer an uncommented CSV metadata line as the first non-comment line.
-                            int firstNonEmptyIndex = -1;
-                            for (int i = 0; i < lines.Count; i++)
+                            var main = this.VisualRoot as MainWindow;
+                            if (main != null)
                             {
-                                if (!string.IsNullOrWhiteSpace(lines[i])) { firstNonEmptyIndex = i; break; }
-                            }
-
-                            bool metadataSet = false;
-                            if (firstNonEmptyIndex >= 0)
-                            {
-                                var candidate = lines[firstNonEmptyIndex].Trim();
-                                if (!candidate.StartsWith("#"))
+                                // Use reflection to call LoadArticlesFromFolder in case its protection level changes
+                                var mi = typeof(MainWindow).GetMethod("LoadArticlesFromFolder", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                                if (mi != null)
                                 {
-                                    // Try to parse as CSV metadata: Magazine,Volume,Number (supports escaped commas with backslash)
-                                    List<string> SplitRespectingEscapedCommas(string line)
-                                    {
-                                        var parts = new List<string>();
-                                        var cur = new System.Text.StringBuilder();
-                                        bool esc = false;
-                                        foreach (var ch in line)
-                                        {
-                                            if (esc) { cur.Append(ch); esc = false; }
-                                            else if (ch == '\\') { esc = true; }
-                                            else if (ch == ',') { parts.Add(cur.ToString().Trim()); cur.Clear(); }
-                                            else cur.Append(ch);
-                                        }
-                                        parts.Add(cur.ToString().Trim());
-                                        return parts;
-                                    }
-
-                                    var parts = SplitRespectingEscapedCommas(candidate);
-                                    if (parts.Count >= 3)
-                                    {
-                                        string Unescape(string s) => s.Replace("\\,", ",");
-                                        mag = Unescape(parts[0]);
-                                        vol = Unescape(parts[1]);
-                                        num = Unescape(parts[2]);
-                                        metadataSet = true;
-                                        // Remove this metadata line so it is not parsed as an article line below
-                                        lines[firstNonEmptyIndex] = "";
-                                    }
-                                }
-
-                                // If metadata wasn't set by a CSV line, fall back to reading leading commented headers
-                                if (!metadataSet)
-                                {
-                                    foreach (var raw in lines)
-                                    {
-                                        var line = raw.Trim();
-                                        if (!line.StartsWith("#")) break;
-                                        var content = line.TrimStart('#').Trim();
-                                        if (content.StartsWith("Magazine:", StringComparison.OrdinalIgnoreCase))
-                                            mag = content.Substring("Magazine:".Length).Trim();
-                                        else if (content.StartsWith("Volume:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("Vol:", StringComparison.OrdinalIgnoreCase))
-                                        {
-                                            var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
-                                            vol = val.Replace("Volume:", string.Empty).Replace("Vol:", string.Empty).Trim();
-                                        }
-                                        else if (content.StartsWith("Number:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("No:", StringComparison.OrdinalIgnoreCase))
-                                        {
-                                            var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
-                                            num = val.Replace("Number:", string.Empty).Replace("No:", string.Empty).Trim();
-                                        }
-                                    }
-                                }
-
-                                var articles = new List<Common.Shared.ArticleLine>();
-                                foreach (var line in lines)
-                                {
-                                    if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#")) continue;
-                                    var parsed = IndexEditor.Shared.IndexFileParser.ParseArticleLine(line);
-                                    if (parsed != null) articles.Add(parsed);
-                                }
-
-                                IndexEditor.Shared.EditorState.Articles = articles;
-                                if (vm != null)
-                                {
-                                    try { vm.Articles.Clear(); foreach (var a in articles) vm.Articles.Add(a); } catch { }
+                                    mi.Invoke(main, new object[] { path });
+                                    return;
                                 }
                             }
-
-                            IndexEditor.Shared.EditorState.CurrentMagazine = mag;
-                            IndexEditor.Shared.EditorState.CurrentVolume = vol;
-                            IndexEditor.Shared.EditorState.CurrentNumber = num;
-
-                            // Choose the first available image page in the folder (prefer page 1).
-                            try
-                            {
-                                int? firstImage = IndexEditor.Shared.ImageHelper.FindFirstImageInFolder(path, 1, 2000);
-                                if (!firstImage.HasValue)
-                                {
-                                    // Fallback: if articles have page lists, find the first page among them that has an image
-                                    var allPages = IndexEditor.Shared.EditorState.Articles?.Where(a => a.Pages != null).SelectMany(a => a.Pages).Distinct().OrderBy(p => p).ToList();
-                                    if (allPages != null && allPages.Count > 0)
-                                    {
-                                        foreach (var p in allPages)
-                                        {
-                                            try { if (IndexEditor.Shared.ImageHelper.ImageExists(path, p)) { firstImage = p; break; } } catch { }
-                                        }
-                                    }
-                                }
-                                if (firstImage.HasValue)
-                                    IndexEditor.Shared.EditorState.CurrentPage = firstImage.Value;
-                                else
-                                    IndexEditor.Shared.EditorState.CurrentPage = 1;
-
-                            }
-                            catch { }
-
                         }
+                        catch { }
 
-                        // MainWindow constructor continued: notify UI of new state
-                        IndexEditor.Shared.EditorState.NotifyStateChanged();
-
+                        // As an absolute fallback, set the CurrentFolder and notify state so the MainWindow may react elsewhere
+                        IndexEditor.Shared.EditorState.CurrentFolder = path;
+                        try { IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch { }
                     }
                     catch { }
                 };
             }
+            // DebugFlash button (manual trigger for the overlay)
+            try
+            {
+                var debugBtn = this.FindControl<Button>("DebugFlashBtn");
+                if (debugBtn != null)
+                {
+                    debugBtn.Click += (s, e) =>
+                    {
+                        try
+                        {
+                            var wnd = this.VisualRoot as MainWindow;
+                            // Try to find the ArticleEditor instance and call its TriggerOverlayFlash
+                            var ae = wnd?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl") ?? wnd?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
+                            if (ae != null)
+                            {
+                                System.Console.WriteLine("[DEBUG] TopBar.DebugFlashBtn: triggering persistent overlay on ArticleEditor");
+                                ae.TriggerOverlayFlash(true);
+                                try { ae.FocusEditor(); } catch { }
+                                return;
+                            }
+                            // As fallback, find any ArticleEditor in visual tree
+                            try
+                            {
+                                var any = this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
+                                if (any != null) { any.TriggerOverlayFlash(true); try { any.FocusEditor(); } catch { } return; }
+                            }
+                            catch { }
+                            System.Console.WriteLine("[DEBUG] TopBar.DebugFlashBtn: ArticleEditor instance not found to trigger overlay");
+                        }
+                        catch (Exception ex) { System.Console.WriteLine("[DEBUG] TopBar.DebugFlashBtn: exception on click: " + ex.Message); }
+                    };
+                }
+            }
+            catch { }
         }
     }
 }

@@ -387,7 +387,7 @@ public partial class MainWindow : Window
     // Main window event handlers
     private void OnMainWindowKeyDown(object? sender, KeyEventArgs e)
     {
-        try { Console.WriteLine($"[KEY] KeyDown received: Key={e.Key} Mods={e.KeyModifiers}"); } catch { }
+        // KeyDown received
         // Handle global key down events here
         // For example, toggle fullscreen on F11
         // Ctrl+A: add segment at current page (if possible)
@@ -401,7 +401,7 @@ public partial class MainWindow : Window
                     if (pc != null)
                     {
                         var ok = pc.AddSegmentAtCurrentPage();
-                        if (ok) { try { Console.WriteLine("[DEBUG] Ctrl+A: added segment"); } catch { } }
+                        if (ok) {  }
                     }
                 }
                 catch { }
@@ -414,12 +414,126 @@ public partial class MainWindow : Window
                 try
                 {
                     try { IndexEditor.Shared.ToastService.Show("Ctrl+N pressed: creating new article"); } catch { }
-                    Console.WriteLine("[DEBUG] KeyDown: Ctrl+N received");
+                    // Ctrl+N received
                     var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
                     if (pc != null)
                     {
                         pc.CreateNewArticle();
-                        try { Console.WriteLine("[DEBUG] Ctrl+N: CreateNewArticle invoked"); } catch { }
+                        // created new article
+                    }
+                }
+                catch { }
+                e.Handled = true;
+                return;
+            }
+            // Ctrl+O: open folder (start at current folder); block if active segment exists
+            if (e.Key == Key.O && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            {
+                try
+                {
+                    var active = IndexEditor.Shared.EditorState.ActiveSegment;
+                    if (active != null && active.IsActive)
+                    {
+                        IndexEditor.Shared.ToastService.Show("End or cancel the active segment before opening a new folder");
+                    }
+                    else
+                    {
+                        var wnd = this.VisualRoot as Window ?? this;
+                        var start = IndexEditor.Shared.EditorState.CurrentFolder;
+                        // Dispatch an async folder picker so we don't block the UI thread
+                        Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+                        {
+                            try
+                            {
+                                // Open the native folder picker via FolderPicker helper (StorageProvider preferred)
+                                string? path = null;
+                                try
+                                {
+                                    path = await IndexEditor.Shared.FolderPicker.PickFolderAsync(wnd, start);
+                                }
+                                catch (Exception ex)
+                                {
+                                    try { IndexEditor.Shared.ToastService.Show("Open folder dialog failed: " + ex.Message); } catch { }
+                                    return;
+                                }
+                                if (string.IsNullOrWhiteSpace(path))
+                                    return;
+                                IndexEditor.Shared.EditorState.CurrentFolder = path;
+                                LoadArticlesFromFolder(path);
+                            }
+                            catch (Exception exOuter)
+                            {
+                                try { IndexEditor.Shared.ToastService.Show("Failed to open folder: " + exOuter.Message); } catch { }
+                            }
+                        });
+                    }
+                }
+                catch { }
+                e.Handled = true;
+                return;
+            }
+            // Ctrl+S: save index file
+            if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            {
+                try
+                {
+                    var active = IndexEditor.Shared.EditorState.ActiveSegment;
+                    if (active != null && active.IsActive)
+                    {
+                        IndexEditor.Shared.ToastService.Show("End or cancel the active segment before saving");
+                        e.Handled = true;
+                        return;
+                    }
+
+                    var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                    if (string.IsNullOrWhiteSpace(folder))
+                    {
+                        IndexEditor.Shared.ToastService.Show("No folder open; cannot save _index.txt");
+                        e.Handled = true;
+                        return;
+                    }
+
+                    // Perform atomic save similar to TopBar
+                    try
+                    {
+                        var indexPath = System.IO.Path.Combine(folder, "_index.txt");
+                        string Escape(string s) => s?.Replace(",", "\\,") ?? string.Empty;
+                        var lines = new List<string>();
+                        foreach (var a in IndexEditor.Shared.EditorState.Articles)
+                        {
+                            var pagesText = a.PagesText ?? string.Empty;
+                            var modelNames = (a.ModelNames != null && a.ModelNames.Count > 0) ? string.Join('|', a.ModelNames) : string.Empty;
+                            var ages = (a.Ages != null && a.Ages.Count > 0) ? string.Join('|', a.Ages.Select(v => v.HasValue ? v.Value.ToString() : string.Empty)) : string.Empty;
+                            var photographers = (a.Photographers != null && a.Photographers.Count > 0) ? string.Join('|', a.Photographers) : string.Empty;
+                            var authors = (a.Authors != null && a.Authors.Count > 0) ? string.Join('|', a.Authors) : string.Empty;
+                            var measurements = (a.Measurements != null && a.Measurements.Count > 0) ? string.Join('|', a.Measurements) : string.Empty;
+                            var parts = new List<string> { pagesText, Escape(a.Category), Escape(a.Title), Escape(modelNames), Escape(ages), Escape(photographers), Escape(authors), Escape(measurements) };
+                            var line = string.Join(",", parts);
+                            lines.Add(line);
+                        }
+
+                        var outLinesList = new List<string>();
+                        if (!string.IsNullOrWhiteSpace(IndexEditor.Shared.EditorState.CurrentMagazine) || !string.IsNullOrWhiteSpace(IndexEditor.Shared.EditorState.CurrentVolume) || !string.IsNullOrWhiteSpace(IndexEditor.Shared.EditorState.CurrentNumber))
+                        {
+                            var metaParts = new[] { Escape(IndexEditor.Shared.EditorState.CurrentMagazine ?? string.Empty), Escape(IndexEditor.Shared.EditorState.CurrentVolume ?? string.Empty), Escape(IndexEditor.Shared.EditorState.CurrentNumber ?? string.Empty) };
+                            outLinesList.Add(string.Join(",", metaParts));
+                        }
+                        outLinesList.AddRange(lines);
+                        var outLines = outLinesList.ToArray();
+
+                        var tempPath = indexPath + ".tmp";
+                        System.IO.File.WriteAllLines(tempPath, outLines);
+                        if (System.IO.File.Exists(indexPath)) System.IO.File.Replace(tempPath, indexPath, null);
+                        else System.IO.File.Move(tempPath, indexPath);
+
+                        IndexEditor.Shared.ToastService.Show("_index.txt saved");
+                        // Reload articles to ensure UI reflects canonical file (optional)
+                        LoadArticlesFromFolder(folder);
+                    }
+                    catch (Exception ex)
+                    {
+                        IndexEditor.Shared.ToastService.Show("Failed to save _index.txt");
+                        Console.WriteLine("[ERROR] saving _index.txt via Ctrl+S: " + ex);
                     }
                 }
                 catch { }
@@ -436,11 +550,30 @@ public partial class MainWindow : Window
         }
         else if (e.Key == Key.Escape)
         {
+            // If the index overlay is visible, close it first (Esc should dismiss the overlay)
+            try
+            {
+                var overlay = this.FindControl<Border>("IndexOverlay");
+                if (overlay != null && overlay.IsVisible)
+                {
+                    overlay.IsVisible = false;
+                    e.Handled = true;
+                    return;
+                }
+            }
+            catch { }
+
             // Use shared helper to cancel active segment if present, otherwise preserve existing fullscreen behavior
             var hadActive = IndexEditor.Shared.EditorState.ActiveSegment != null && IndexEditor.Shared.EditorState.ActiveSegment.IsActive;
             if (hadActive)
             {
-                IndexEditor.Shared.EditorActions.CancelActiveSegment();
+                try
+                {
+                    IndexEditor.Shared.EditorActions.CancelActiveSegment();
+                    try { IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch { }
+                    try { IndexEditor.Shared.ToastService.Show("Segment cancelled"); } catch { }
+                }
+                catch { }
                 e.Handled = true;
             }
             else
@@ -460,6 +593,11 @@ public partial class MainWindow : Window
             {
                 try
                 {
+                    // Capture start and intended end for user feedback
+                    var start = seg.Start;
+                    var end = IndexEditor.Shared.EditorState.CurrentPage;
+                    if (end < start) (start, end) = (end, start);
+
                     var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
                     if (pc != null)
                         pc.EndActiveSegment();
@@ -468,32 +606,57 @@ public partial class MainWindow : Window
                         // Fallback: set seg.End to current page and clear active segment
                         seg.End = IndexEditor.Shared.EditorState.CurrentPage;
                         seg.WasNew = false;
+                        try { seg.CurrentPreviewEnd = null; } catch { }
                         IndexEditor.Shared.EditorState.ActiveSegment = null;
                         IndexEditor.Shared.EditorState.NotifyStateChanged();
                     }
-                    try { Console.WriteLine("[DEBUG] Enter pressed: ended active segment"); } catch { }
+
+                    // User feedback
+                    try { IndexEditor.Shared.ToastService.Show($"Segment ended ({start}-{end})"); } catch { }
                 }
                 catch { }
                 e.Handled = true;
                 return;
             }
-        }
-        // Toggle index overlay with Ctrl+I
-        else if (e.Key == Key.I && e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt) && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
-        {
+
+            // No active segment: focus the first editable field in the article editor (Title textbox)
             try
             {
-                var overlay = this.FindControl<Border>("IndexOverlay");
-                var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
-                if (overlay != null && tb != null)
+                var ae = this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl") ?? this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
+                if (ae != null)
                 {
+                    ae.FocusTitle();
+                    e.Handled = true;
+                    return;
+                }
+
+                // As a final fallback, trigger the EditorState.StateChanged hook which ArticleEditor listens to
+                try
+                {
+                    IndexEditor.Shared.EditorState.NotifyStateChanged();
+                    e.Handled = true;
+                    return;
+                }
+                catch { }
+            }
+            catch { }
+        }
+        // Toggle index overlay with Ctrl+I (or Cmd+I on mac via Meta)
+        else if (e.Key == Key.I && (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta)) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt) && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+         {
+             try
+             {
+                 var overlay = this.FindControl<Border>("IndexOverlay");
+                 var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
+                 if (overlay != null && tb != null)
+                 {
                     if (overlay.IsVisible)
                     {
                         overlay.IsVisible = false;
                     }
                     else
                     {
-                        // Load _index.txt from current folder
+                        // Load _index.txt from current folder into the editable overlay
                         var folder = IndexEditor.Shared.EditorState.CurrentFolder;
                         if (string.IsNullOrWhiteSpace(folder))
                         {
@@ -513,12 +676,12 @@ public partial class MainWindow : Window
                         }
                         overlay.IsVisible = true;
                     }
-                }
-            }
-            catch { }
-            e.Handled = true;
-            return;
-        }
+                 }
+             }
+             catch { }
+             e.Handled = true;
+             return;
+         }
         else if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt))
         {
             // Navigation: Left/Right change page, Up/Down change selected article
@@ -585,26 +748,29 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnOpenButtonClick(object sender, RoutedEventArgs e)
+    private async void OnOpenButtonClick(object sender, RoutedEventArgs e)
     {
-        // Open folder using OpenFolderDialog and update EditorState on UI thread
-        var dlg = new Avalonia.Controls.OpenFolderDialog();
-        var wnd = this.VisualRoot as Window ?? this;
-        // Suppress obsolete and nullable warnings for ShowAsync in this compatibility wrapper
-#pragma warning disable CS0618, CS8604
-        _ = dlg.ShowAsync(wnd).ContinueWith(t =>
-#pragma warning restore CS0618, CS8604
-         {
-             var path = t.Result;
-             if (!string.IsNullOrWhiteSpace(path))
-             {
-                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                 {
-                     IndexEditor.Shared.EditorState.CurrentFolder = path;
-                     LoadArticlesFromFolder(path);
-                 });
-             }
-         });
+        // Open folder using FolderBrowserWindow.ShowDialogAsync and update EditorState on UI thread
+        try
+        {
+            var wnd = this.VisualRoot as Window ?? this;
+            var start = IndexEditor.Shared.EditorState.CurrentFolder;
+            string? path = null;
+            try
+            {
+                path = await IndexEditor.Shared.FolderPicker.PickFolderAsync(wnd, start);
+            }
+            catch { }
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    IndexEditor.Shared.EditorState.CurrentFolder = path;
+                    LoadArticlesFromFolder(path);
+                });
+            }
+        }
+        catch { }
     }
 
     private void LoadArticlesFromFolder(string folder)

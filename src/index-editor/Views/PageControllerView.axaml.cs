@@ -41,6 +41,16 @@ namespace IndexEditor.Views
                 var pageInput = this.FindControl<TextBox>("PageInput");
                 if (pageInput != null)
                     pageInput.Text = EditorState.CurrentPage.ToString();
+                // If an active segment exists, update its preview end so UI displays Start → CurrentPage
+                try
+                {
+                    var seg = EditorState.ActiveSegment;
+                    if (seg != null && seg.IsActive)
+                    {
+                        seg.CurrentPreviewEnd = EditorState.CurrentPage;
+                    }
+                }
+                catch { }
                 // Do NOT update EditorState.ActiveSegment.End here; changing pages should not close the active segment.
                 // Notify UI/state but do NOT auto-select an article when the current page changes.
                 // Selection should only occur when the user explicitly presses the Sync button.
@@ -183,7 +193,11 @@ namespace IndexEditor.Views
                 }
 
                 // Close and clear the active segment
-                EditorState.ActiveSegment.End = EditorState.CurrentPage;
+                if (EditorState.ActiveSegment != null)
+                {
+                    EditorState.ActiveSegment.End = EditorState.CurrentPage;
+                    EditorState.ActiveSegment.CurrentPreviewEnd = null;
+                }
                 EditorState.ActiveSegment = null;
                 EditorState.NotifyStateChanged();
             }
@@ -307,7 +321,7 @@ namespace IndexEditor.Views
             {
                 if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
                 {
-                    IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first");
+                    IndexEditor.Shared.ToastService.Show("End or cancel the active segment before adding a new article");
                     return;
                 }
 
@@ -368,6 +382,10 @@ namespace IndexEditor.Views
                 // Ensure the article pages include the page (article.Pages was already initialized to this page),
                 // then notify so view-models and UI update.
                 EditorState.NotifyStateChanged();
+                try { IndexEditor.Shared.EditorState.RequestArticleEditorFocus(); Console.WriteLine("[DEBUG] PageController.CreateNewArticle: requested ArticleEditor focus"); } catch { }
+
+                // Notify user of success
+                try { IndexEditor.Shared.ToastService.Show("New article created"); } catch { }
 
                 // Try to select and focus the new article in the VM and editor
                 try
@@ -421,93 +439,145 @@ namespace IndexEditor.Views
                                 }
                                 catch { }
 
-                                // Short retry loop that attempts to focus the editor controls when they become available
+                                // Also request ArticleEditor focus explicitly so any ArticleEditor instance can react
+                                try { IndexEditor.Shared.EditorState.RequestArticleEditorFocus(); Console.WriteLine("[DEBUG] PageController.CreateNewArticle: RequestArticleEditorFocus called after scheduling"); } catch { }
+
+                                // Forceful focus: directly find the ArticleEditor control on the window and repeatedly call its focus helpers
                                 try
                                 {
-                                    var main = this.VisualRoot as Window;
-                                    _ = System.Threading.Tasks.Task.Run(async () =>
+                                    var mainWindow = this.VisualRoot as Window;
+                                    if (mainWindow != null)
                                     {
-                                        const int attempts = 12;
-                                        const int delayMs = 120;
-                                        for (int i = 0; i < attempts; i++)
+                                        var ae = mainWindow.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl")
+                                                 ?? mainWindow.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
+                                        if (ae != null)
                                         {
-                                            try
+                                            System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: performing forced focus retries on ArticleEditor instance");
+                                            // Run short retry attempts on a background thread to avoid blocking the UI thread
+                                            _ = System.Threading.Tasks.Task.Run(async () =>
                                             {
-                                                await System.Threading.Tasks.Task.Delay(delayMs).ConfigureAwait(false);
-                                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                                const int attempts = 10;
+                                                const int delayMs = 80;
+                                                for (int i = 0; i < attempts; i++)
                                                 {
                                                     try
                                                     {
-                                                        // 1) Try to find TitleTextBox or CategoryComboBox within the EditorContentHost's Content
-                                                        var host = main?.FindControl<ContentControl>("EditorContentHost");
-                                                        if (host?.Content is Avalonia.Controls.Control hostContent)
+                                                        await System.Threading.Tasks.Task.Delay(delayMs).ConfigureAwait(false);
+                                                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                                                         {
                                                             try
                                                             {
-                                                                var tb = hostContent.FindControl<TextBox>("TitleTextBox");
-                                                                if (tb != null)
-                                                                {
-                                                                    System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox inside host.Content");
-                                                                    tb.Focus();
-                                                                    return;
-                                                                }
-                                                                var cb = hostContent.FindControl<ComboBox>("CategoryComboBox");
-                                                                if (cb != null)
-                                                                {
-                                                                    System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox inside host.Content");
-                                                                    cb.Focus();
-                                                                    return;
-                                                                }
-                                                            }
-                                                            catch { }
-                                                        }
-
-                                                        // 2) Try to find ArticleEditor control on the Window and call its helpers
-                                                        try
-                                                        {
-                                                            var ae = main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl")
-                                                                     ?? main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
-                                                            if (ae != null)
-                                                            {
-                                                                System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: calling ae.FocusTitle()/FocusEditor()");
+                                                                System.Console.WriteLine($"[DEBUG] PageController.CreateNewArticle: forced focus attempt {i}");
                                                                 try { ae.FocusTitle(); } catch { }
                                                                 try { ae.FocusEditor(); } catch { }
-                                                                return;
                                                             }
-                                                        }
-                                                        catch { }
-
-                                                        // 3) Directly search the Window for TitleTextBox or CategoryComboBox
-                                                        try
-                                                        {
-                                                            var tbDirect = main?.FindControl<TextBox>("TitleTextBox");
-                                                            if (tbDirect != null)
-                                                            {
-                                                                System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox directly on Window");
-                                                                try { tbDirect.Focus(); } catch { }
-                                                                return;
-                                                            }
-                                                            var cbDirect = main?.FindControl<ComboBox>("CategoryComboBox");
-                                                            if (cbDirect != null)
-                                                            {
-                                                                System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox directly on Window");
-                                                                try { cbDirect.Focus(); } catch { }
-                                                                return;
-                                                            }
-                                                        }
-                                                        catch { }
-
+                                                            catch { }
+                                                        });
                                                     }
                                                     catch { }
-                                                });
-                                            }
-                                            catch { }
+                                                }
+                                                System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: forced focus retry loop finished");
+                                            });
                                         }
-                                        // If we exit the loop without focusing, log that attempt ended
-                                        System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focus attempts completed");
-                                    });
+                                        else
+                                        {
+                                            System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: ArticleEditor instance not found on Window for forced focus");
+                                        }
+                                    }
                                 }
                                 catch { }
+
+                                 // Short retry loop that attempts to focus the editor controls when they become available
+                                 try
+                                 {
+                                     var main = this.VisualRoot as Window;
+                                     _ = System.Threading.Tasks.Task.Run(async () =>
+                                     {
+                                         const int attempts = 12;
+                                         const int delayMs = 120;
+                                         for (int i = 0; i < attempts; i++)
+                                         {
+                                             try
+                                             {
+                                                 await System.Threading.Tasks.Task.Delay(delayMs).ConfigureAwait(false);
+                                                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                                 {
+                                                     try
+                                                     {
+                                                         // 1) Try to find TitleTextBox or CategoryComboBox within the EditorContentHost's Content
+                                                         var host = main?.FindControl<ContentControl>("EditorContentHost") ?? main?.FindControl<ContentControl>("EditorContent");
+                                                         if (host != null)
+                                                         {
+                                                             System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: found host ContentControl: " + host.Name);
+                                                         }
+                                                         if (host?.Content is Avalonia.Controls.Control hostContent)
+                                                         {
+                                                             try
+                                                             {
+                                                                 var tb = hostContent.FindControl<TextBox>("TitleTextBox");
+                                                                 if (tb != null)
+                                                                 {
+                                                                     System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox inside host.Content");
+                                                                     tb.Focus();
+                                                                     return;
+                                                                 }
+                                                                 var cb = hostContent.FindControl<ComboBox>("CategoryComboBox");
+                                                                 if (cb != null)
+                                                                 {
+                                                                     System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox inside host.Content");
+                                                                     cb.Focus();
+                                                                     return;
+                                                                 }
+                                                             }
+                                                             catch { }
+                                                         }
+
+                                                         // 2) Try to find ArticleEditor control on the Window and call its helpers
+                                                         try
+                                                         {
+                                                             var ae = main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl")
+                                                                      ?? main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
+                                                             if (ae != null)
+                                                             {
+                                                                 System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: calling ae.FocusTitle()/FocusEditor()");
+                                                                 try { ae.FocusTitle(); } catch { }
+                                                                 try { ae.FocusEditor(); } catch { }
+                                                                 return;
+                                                             }
+                                                         }
+                                                         catch { }
+
+                                                         // 3) Directly search the Window for TitleTextBox or CategoryComboBox
+                                                         try
+                                                         {
+                                                             var tbDirect = main?.FindControl<TextBox>("TitleTextBox");
+                                                             if (tbDirect != null)
+                                                             {
+                                                                 System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox directly on Window");
+                                                                 try { tbDirect.Focus(); } catch { }
+                                                                 return;
+                                                             }
+                                                             var cbDirect = main?.FindControl<ComboBox>("CategoryComboBox");
+                                                             if (cbDirect != null)
+                                                             {
+                                                                 System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox directly on Window");
+                                                                 try { cbDirect.Focus(); } catch { }
+                                                                 return;
+                                                             }
+                                                         }
+                                                         catch { }
+
+                                                     }
+                                                     catch { }
+                                                 });
+                                             }
+                                             catch { }
+                                         }
+                                         // If we exit the loop without focusing, log that attempt ended
+                                         System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focus attempts completed");
+                                     });
+                                 }
+                                 catch { }
 
                             }
                             catch { }
@@ -560,6 +630,8 @@ namespace IndexEditor.Views
                 else if (!art.Pages.Contains(page)) { art.Pages.Add(page); art.Pages.Sort(); }
 
                 EditorState.ActiveSegment = seg;
+                // New active segment: ensure no preview end is set yet (it will be updated when the Page setter runs)
+                try { seg.CurrentPreviewEnd = EditorState.CurrentPage; } catch { }
                 EditorState.NotifyStateChanged();
                 try { Console.WriteLine($"[DEBUG] AddSegmentAtCurrentPage: created new active segment start={page}"); } catch { }
                 return true;

@@ -30,6 +30,7 @@
 
     <ItemGroup>
       <AvaloniaXamlInclude Include="Views/SegmentEditorPopover.axaml" />
+      <!-- FolderBrowserWindow removed: use native OpenFolderDialog or StorageProvider APIs -->
     </ItemGroup>
 
   <ItemGroup>

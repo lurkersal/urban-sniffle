@@ -13,83 +13,93 @@
         <local:ActiveSegmentToTextConverter x:Key="ActiveSegmentToTextConverter" />
         <local:ArticleActiveSegmentBrushConverter x:Key="ActiveSegmentBrushConverter" />
     </UserControl.Resources>
-    <StackPanel Margin="8">
-        <TextBlock Text="Article Editor" FontWeight="Bold" FontSize="16" Margin="8,8,8,4"/>
-        <!-- Show editor only when an article is selected -->
-        <ContentControl x:Name="EditorContent" Content="{Binding SelectedArticle}">
-            <ContentControl.ContentTemplate>
-                <DataTemplate>
-                    <Border Background="{Binding Category, Converter={StaticResource ArticleCategoryToColorConverter}}" CornerRadius="6" Padding="12" Margin="0,8">
-                        <StackPanel Orientation="Vertical" Spacing="4">
-                            <!-- Title row (now first) -->
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                <TextBlock Text="Title:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                <TextBox Name="TitleTextBox" Text="{Binding Title, Mode=TwoWay}" Width="360" />
-                            </StackPanel>
-
-                            <!-- Category row -->
-                            <StackPanel Orientation="Horizontal" Margin="0,4">
-                                <TextBlock Text="Category:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                <StackPanel Orientation="Vertical">
-                                    <ComboBox Name="CategoryComboBox" SelectedItem="{Binding DataContext.SelectedCategory, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay}"
-                                              ItemsSource="{Binding DataContext.Categories, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                              Width="260" HorizontalContentAlignment="Left"
-                                              BorderBrush="{Binding HasCategoryError, Converter={StaticResource FieldErrorToBrushConverter}}"/>
-                                    <TextBlock Text="Loading categories..." Foreground="Gray" FontSize="12" Margin="4,4,0,0"
-                                               IsVisible="{Binding DataContext.IsLoadingCategories, RelativeSource={RelativeSource AncestorType=UserControl}}" />
-                                    <TextBlock Text="{Binding CategoryDisplay}" Foreground="Red" FontSize="12" Margin="4,2,0,0" IsVisible="{Binding HasCategoryError}" />
+    <Grid Margin="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <!-- Title header -->
+        <TextBlock Text="Article Editor" FontWeight="Bold" FontSize="16" Margin="8,8,8,4" Grid.Row="0" />
+        <!-- Main content (article editor + lozenge) -->
+        <StackPanel Grid.Row="1">
+            <!-- ContentControl holds the actual editor DataTemplate -->
+            <ContentControl x:Name="EditorContent" Content="{Binding SelectedArticle}">
+                <ContentControl.ContentTemplate>
+                    <DataTemplate>
+                        <Border Background="{Binding Category, Converter={StaticResource ArticleCategoryToColorConverter}}" CornerRadius="6" Padding="12" Margin="0,8">
+                            <StackPanel Orientation="Vertical" Spacing="4">
+                                <!-- Title row (now first) -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <TextBlock Text="Title:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
+                                    <TextBox Name="TitleTextBox" Text="{Binding Title, Mode=TwoWay}" Width="360" />
                                 </StackPanel>
+
+                                <!-- Category row -->
+                                <StackPanel Orientation="Horizontal" Margin="0,4">
+                                    <TextBlock Text="Category:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
+                                    <StackPanel Orientation="Vertical">
+                                        <ComboBox Name="CategoryComboBox" SelectedItem="{Binding DataContext.SelectedCategory, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay}"
+                                                  ItemsSource="{Binding DataContext.Categories, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                  Width="260" HorizontalContentAlignment="Left"
+                                                  BorderBrush="{Binding HasCategoryError, Converter={StaticResource FieldErrorToBrushConverter}}"/>
+                                        <TextBlock Text="Loading categories..." Foreground="Gray" FontSize="12" Margin="4,4,0,0"
+                                                   IsVisible="{Binding DataContext.IsLoadingCategories, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                        <TextBlock Text="{Binding CategoryDisplay}" Foreground="Red" FontSize="12" Margin="4,2,0,0" IsVisible="{Binding HasCategoryError}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Model/Cover rows -->
+                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter=&quot;2&quot;}">
+                                    <TextBlock Text="Model:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding ModelName0, Mode=TwoWay}" Width="360" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter=&quot;2&quot;}">
+                                    <TextBlock Text="Age:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding Age0, Mode=TwoWay}" Width="120" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter=&quot;2&quot;}">
+                                    <TextBlock Text="Measurements:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding Measurements0, Mode=TwoWay}" Width="240" />
+                                </StackPanel>
+                                <!-- Measurements validation message -->
+                                <TextBlock Text="{Binding MeasurementsErrorMessage}" Foreground="Red" FontSize="12" Margin="124,2,0,0" IsVisible="{Binding HasMeasurementsError}" />
+                                <TextBlock Text="Format: bust(+cup)-waist-hip — e.g. '36B-28-38' (separator must be '-')" Foreground="Gray" FontSize="11" Margin="124,2,0,0" IsVisible="{Binding HasMeasurementsError}" />
+
+                                <!-- Photographer row -->
+                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowPhotographer}}">
+                                    <TextBlock Text="{Binding Category, Converter={StaticResource FieldLabelConverter}, ConverterParameter=Photographer}" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding Photographer0, Mode=TwoWay}" Width="360" />
+                                </StackPanel>
+
+                                <!-- Author row (visible for Humour, Feature, Fiction, etc.) -->
+                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowAuthor}}">
+                                    <TextBlock Text="Author:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding Author0, Mode=TwoWay}" Width="360" />
+                                </StackPanel>
+
+                                <!-- Pages row -->
+                                <StackPanel Orientation="Horizontal" Margin="0,4">
+                                    <TextBlock Text="Pages:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding PagesText, Mode=TwoWay}" Width="240" BorderBrush="{Binding HasPagesError, Converter={StaticResource FieldErrorToBrushConverter}}" />
+                                </StackPanel>
+
+                                <!-- Removed inline active segment; lozenge will be shown below the editor content -->
                             </StackPanel>
-
-                            <!-- Model/Cover rows -->
-                            <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter=&quot;2&quot;}">
-                                <TextBlock Text="Model:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                <TextBox Text="{Binding ModelName0, Mode=TwoWay}" Width="360" />
-                            </StackPanel>
-
-                            <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter=&quot;2&quot;}">
-                                <TextBlock Text="Age:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                <TextBox Text="{Binding Age0, Mode=TwoWay}" Width="120" />
-                            </StackPanel>
-
-                            <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter=&quot;2&quot;}">
-                                <TextBlock Text="Measurements:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                <TextBox Text="{Binding Measurements0, Mode=TwoWay}" Width="240" />
-                            </StackPanel>
-                            <!-- Measurements validation message -->
-                            <TextBlock Text="{Binding MeasurementsErrorMessage}" Foreground="Red" FontSize="12" Margin="124,2,0,0" IsVisible="{Binding HasMeasurementsError}" />
-                            <TextBlock Text="Format: bust(+cup)-waist-hip — e.g. '36B-28-38' (separator must be '-')" Foreground="Gray" FontSize="11" Margin="124,2,0,0" IsVisible="{Binding HasMeasurementsError}" />
-
-                            <!-- Photographer row -->
-                            <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowPhotographer}}">
-                                <TextBlock Text="{Binding Category, Converter={StaticResource FieldLabelConverter}, ConverterParameter=Photographer}" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                <TextBox Text="{Binding Photographer0, Mode=TwoWay}" Width="360" />
-                            </StackPanel>
-
-                            <!-- Author row (visible for Humour, Feature, Fiction, etc.) -->
-                            <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowAuthor}}">
-                                <TextBlock Text="Author:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                <TextBox Text="{Binding Author0, Mode=TwoWay}" Width="360" />
-                            </StackPanel>
-
-                            <!-- Pages row -->
-                            <StackPanel Orientation="Horizontal" Margin="0,4">
-                                <TextBlock Text="Pages:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                <TextBox Text="{Binding PagesText, Mode=TwoWay}" Width="240" BorderBrush="{Binding HasPagesError, Converter={StaticResource FieldErrorToBrushConverter}}" />
-                            </StackPanel>
-
-                            <!-- Removed inline active segment; lozenge will be shown below the editor content -->
-                        </StackPanel>
-                    </Border>
-                </DataTemplate>
-            </ContentControl.ContentTemplate>
-        </ContentControl>
-
+                        </Border>
+                    </DataTemplate>
+                </ContentControl.ContentTemplate>
+            </ContentControl>
+        </StackPanel>
         <!-- Bottom lozenge showing active segment for the selected article -->
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="12,12,0,0">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="12,12,0,0" Grid.Row="2">
             <Border CornerRadius="14" Padding="8,6" MinWidth="120" MinHeight="28" Background="{Binding DataContext.CurrentShownArticle, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource ActiveSegmentBrushConverter}}" BorderBrush="#000" BorderThickness="1">
                 <TextBlock Text="{Binding DataContext.ActiveSegmentDisplay, RelativeSource={RelativeSource AncestorType=UserControl}}" Foreground="Black" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
         </StackPanel>
-    </StackPanel>
+        <!-- Debug overlay: solid magenta so it's obvious during testing -->
+        <Border x:Name="FocusFlashOverlay" Background="#CCFF00FF" IsVisible="False" IsHitTestVisible="False" CornerRadius="6" Margin="0" Grid.Row="0" Grid.RowSpan="3" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+    </Grid>
 </UserControl>

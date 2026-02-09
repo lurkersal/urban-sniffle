@@ -22,6 +22,16 @@ namespace IndexEditor.Shared
         // Flag to disable loading/showing images (can be set via --no-images command-line argument)
         public static bool ShowImages { get; set; } = true;
         public static event Action? StateChanged;
+        // Incrementing counter that can be used to request focus in the ArticleEditor.
+        // ArticleEditor instances monitor this counter and will attempt to focus the Title textbox
+        // when the counter increases.
+        private static int _articleEditorFocusRequest = 0;
+        public static int ArticleEditorFocusRequest => _articleEditorFocusRequest;
+        public static void RequestArticleEditorFocus()
+        {
+            try { _articleEditorFocusRequest++; NotifyStateChanged(); } catch { }
+            Console.WriteLine("Focus requested. Current request count: " + _articleEditorFocusRequest);
+        }
         public static void NotifyStateChanged() => StateChanged?.Invoke();
     }
 }
