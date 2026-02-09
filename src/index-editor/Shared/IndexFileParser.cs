@@ -98,7 +98,7 @@ namespace IndexEditor.Shared
             {
                 var pages = article.Pages;
                 // Ensure the Segments collection exists and update it in-place so UI bindings receive collection change notifications
-                try { if (article.Segments == null) article.Segments = new System.Collections.Generic.List<Common.Shared.Segment>() as dynamic; } catch { }
+                try { if (article.Segments == null) article.Segments = new System.Collections.ObjectModel.ObservableCollection<Common.Shared.Segment>(); } catch { }
                 // Clear existing collection if possible
                 try { article.Segments.Clear(); } catch { }
                 if (pages != null && pages.Count > 0)
@@ -119,8 +119,6 @@ namespace IndexEditor.Shared
                         try { article.Segments.Add(new Common.Shared.Segment(start, end)); } catch { }
                     }
                 }
-                // Debug: print the original pages text and created segments so we can confirm what the parser produced
-                // parser debug suppressed
             }
             catch { }
 
@@ -160,15 +158,29 @@ namespace IndexEditor.Shared
             }
 
             if (article.ModelNames == null || article.ModelNames.Count == 0)
-                 article.ModelNames = new List<string> { string.Empty };
+                article.ModelNames = new List<string> { string.Empty };
             if (article.Photographers == null || article.Photographers.Count == 0)
                 article.Photographers = new List<string> { string.Empty };
             if (article.Authors == null || article.Authors.Count == 0)
                 article.Authors = new List<string> { string.Empty };
-             if (article.Measurements == null || article.Measurements.Count == 0)
-                 article.Measurements = new List<string> { string.Empty };
-             if (article.Ages == null || article.Ages.Count == 0)
-                 article.Ages = new List<int?> { null };
+            if (article.Measurements == null || article.Measurements.Count == 0)
+                article.Measurements = new List<string> { string.Empty };
+            if (article.Ages == null || article.Ages.Count == 0)
+                article.Ages = new List<int?> { null };
+
+            // Fallback: some older index files place the author in the photographers column for Humour entries.
+            try
+            {
+                var cat = (article.Category ?? string.Empty).Trim().ToLowerInvariant();
+                bool authorsEmpty = article.Authors == null || article.Authors.All(a => string.IsNullOrWhiteSpace(a));
+                bool photographersHave = article.Photographers != null && article.Photographers.Any(p => !string.IsNullOrWhiteSpace(p));
+                if (cat == "humour" && authorsEmpty && photographersHave)
+                {
+                    // Copy photographers to authors so the editor's Author field is populated
+                    article.Authors = article.Photographers.Select(p => p).ToList();
+                }
+            }
+            catch { }
 
             return article;
         }

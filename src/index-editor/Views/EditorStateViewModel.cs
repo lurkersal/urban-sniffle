@@ -111,15 +111,15 @@ namespace IndexEditor.Views
                 if (_selectedArticle != incoming)
                 {
                     _selectedArticle = incoming;
-                    // Update IsSelected flags on all articles so UI bindings reflect selection
-                    try
-                    {
-                        foreach (var a in Articles)
-                        {
-                            try { a.IsSelected = object.ReferenceEquals(a, _selectedArticle); } catch { }
-                        }
-                    }
-                    catch { }
+                     // Update IsSelected flags on all articles so UI bindings reflect selection
+                     try
+                     {
+                         foreach (var a in Articles)
+                         {
+                             try { a.IsSelected = object.ReferenceEquals(a, _selectedArticle); } catch { }
+                         }
+                     }
+                     catch { }
                      // Ensure the global EditorState reflects the current selected article so
                      // other views (PageController, etc.) can read the active article details.
                      try

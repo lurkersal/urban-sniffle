@@ -4,23 +4,23 @@ using Avalonia.Data.Converters;
 
 namespace IndexEditor.Views
 {
-    // Returns true when the photographer field should be shown for the given category.
-    public class ShowPhotographerCategoryConverter : IValueConverter
+    // Returns true when the author field should be shown for the given category.
+    public class ShowAuthorCategoryConverter : IValueConverter
     {
-        private static readonly string[] CategoriesShowingPhotographer = new[]
+        private static readonly string[] CategoriesShowingAuthor = new[]
         {
-            "cartoons",
-            "model",
-            "cover",
-            "photographer",
-            "motoring"
+            "humour",
+            "feature",
+            "fiction",
+            "editorial",
+            "interview"
         };
 
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
             var cat = (value as string)?.Trim().ToLowerInvariant() ?? string.Empty;
             if (string.IsNullOrEmpty(cat)) return false;
-            foreach (var c in CategoriesShowingPhotographer)
+            foreach (var c in CategoriesShowingAuthor)
                 if (cat.Equals(c, StringComparison.OrdinalIgnoreCase))
                     return true;
             return false;
@@ -30,3 +30,4 @@ namespace IndexEditor.Views
             => throw new NotSupportedException();
     }
 }
+

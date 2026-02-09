@@ -301,6 +301,22 @@ namespace Common.Shared
             }
         }
 
+        public string Author0
+        {
+            get => Authors.Count > 0 ? Authors[0] : string.Empty;
+            set
+            {
+                if (Authors.Count == 0) Authors.Add(string.Empty);
+                if (Authors[0] != value)
+                {
+                    Authors[0] = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Authors)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Author0)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
+                }
+            }
+        }
+
         public int? Age0
         {
             get => Ages.Count > 0 ? Ages[0] : null;

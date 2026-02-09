@@ -46,10 +46,11 @@
             <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Border Width="800" Height="600" Background="White" CornerRadius="6" Padding="12">
                     <Grid RowDefinitions="Auto,*,Auto">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                            <Button x:Name="IndexOverlaySaveBtn" Content="Save" />
                             <Button x:Name="IndexOverlayCloseBtn" Content="Close" />
                         </StackPanel>
-                        <TextBox x:Name="IndexOverlayTextBox" Grid.Row="1" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="True" />
+                        <TextBox x:Name="IndexOverlayTextBox" Grid.Row="1" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="False" />
                         <TextBlock Grid.Row="2" Text="Press 'i' to close" HorizontalAlignment="Right" FontSize="12" Foreground="#666" />
                     </Grid>
                 </Border>

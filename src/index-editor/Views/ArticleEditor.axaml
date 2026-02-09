@@ -9,6 +9,7 @@
         <local:CategoryDisplayModeMatchesConverter x:Key="CategoryModeMatches" />
         <local:FieldLabelConverter x:Key="FieldLabelConverter" />
         <local:ShowPhotographerCategoryConverter x:Key="ShowPhotographer" />
+        <local:ShowAuthorCategoryConverter x:Key="ShowAuthor" />
         <local:ActiveSegmentToTextConverter x:Key="ActiveSegmentToTextConverter" />
         <local:ArticleActiveSegmentBrushConverter x:Key="ActiveSegmentBrushConverter" />
     </UserControl.Resources>
@@ -63,6 +64,12 @@
                             <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowPhotographer}}">
                                 <TextBlock Text="{Binding Category, Converter={StaticResource FieldLabelConverter}, ConverterParameter=Photographer}" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
                                 <TextBox Text="{Binding Photographer0, Mode=TwoWay}" Width="360" />
+                            </StackPanel>
+
+                            <!-- Author row (visible for Humour, Feature, Fiction, etc.) -->
+                            <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowAuthor}}">
+                                <TextBlock Text="Author:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
+                                <TextBox Text="{Binding Author0, Mode=TwoWay}" Width="360" />
                             </StackPanel>
 
                             <!-- Pages row -->
