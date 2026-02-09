@@ -134,6 +134,83 @@ namespace Common.Shared
         public List<string?> CupSizes { get; set; } = new();
         public List<string> ValidationErrors { get; set; } = new();
         public System.Collections.ObjectModel.ObservableCollection<Segment> Segments { get; set; } = new System.Collections.ObjectModel.ObservableCollection<Segment>();
+        // The segment that was most recently modified (added/ended/reopened) on this article. Not persisted.
+        private Segment? _lastModifiedSegment;
+        public Segment? LastModifiedSegment
+        {
+            get => _lastModifiedSegment;
+            set
+            {
+                if (_lastModifiedSegment != value)
+                {
+                    _lastModifiedSegment = value;
+                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LastModifiedSegment))); } catch { }
+                }
+            }
+        }
+
+        public ArticleLine()
+        {
+            // Ensure we observe collection changes so ActiveSegment updates when segments are added/removed
+            try
+            {
+                Segments.CollectionChanged += Segments_CollectionChanged;
+            }
+            catch { }
+        }
+
+        private void Segments_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            try
+            {
+                if (e.NewItems != null)
+                {
+                    foreach (var ni in e.NewItems)
+                    {
+                        if (ni is Segment s)
+                        {
+                            s.PropertyChanged += Segment_PropertyChanged;
+                            // If the new segment is active or was created as part of an add-operation (WasNew),
+                            // consider it as the last-modified so ActiveSegmentDisplay can show it.
+                            if (s.IsActive || s.WasNew)
+                            {
+                                LastModifiedSegment = s;
+                            }
+                        }
+                    }
+                }
+                if (e.OldItems != null)
+                {
+                    foreach (var oi in e.OldItems)
+                    {
+                        if (oi is Segment s)
+                        {
+                            try { s.PropertyChanged -= Segment_PropertyChanged; } catch { }
+                        }
+                    }
+                }
+            }
+            catch { }
+            // Notify that ActiveSegment and Segments/FormattedCardText may have changed
+            try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegment))); } catch { }
+            try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText))); } catch { }
+        }
+
+        private void Segment_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            try
+            {
+                if (e.PropertyName == nameof(Segment.IsActive) || e.PropertyName == nameof(Segment.End) || e.PropertyName == nameof(Segment.Start))
+                {
+                    // Mark this segment as last-modified when its End or IsActive changes
+                    try { LastModifiedSegment = sender as Segment; } catch { }
+                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegment))); } catch { }
+                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText))); } catch { }
+                }
+            }
+            catch { }
+        }
+
         public Segment? ActiveSegment => Segments.FirstOrDefault(s => s.IsActive);
         public bool HasValidationError { get; private set; }
         public bool HasMeasurementsError { get; private set; }
@@ -334,7 +411,7 @@ namespace Common.Shared
 
             // Model and Cover: show photographer, model, age, measurements
             if (cat == "model" || cat == "cover")
-                return $"{categoryText}\n{pagesText}\nModel: {string.Join(", ", ModelNames)}\nAge: {string.Join(", ", Ages.Where(a => a.HasValue).Select(a => a.Value.ToString()))}\nPhotographer: {string.Join(", ", Photographers)}\nMeasurements: {string.Join(", ", Measurements)}";
+                return $"{categoryText}\n{pagesText}\nModel: {string.Join(", ", ModelNames)}\nAge: {string.Join(", ", Ages.Where(a => a.HasValue).Select(a => a.GetValueOrDefault().ToString()))}\nPhotographer: {string.Join(", ", Photographers)}\nMeasurements: {string.Join(", ", Measurements)}";
 
             // Feature, Fiction, Review, Humour: rename photographer as author
             if (cat == "feature" || cat == "fiction" || cat == "review" || cat == "humour" || cat == "humor")
@@ -362,20 +439,15 @@ namespace Common.Shared
                 errors.Add("Pages");
             if (string.IsNullOrWhiteSpace(Category))
                 errors.Add("Category");
-            // Category-specific validation: Model/Cover require measurements
+            // Category-specific validation: Model/Cover measurements are optional; if provided, validate format
             HasMeasurementsError = false;
             var cat = (Category ?? string.Empty).Trim().ToLowerInvariant();
             if (cat == "model" || cat == "cover")
             {
                 // Use Measurements0 as the user-editable input (first measurement string)
-                if (string.IsNullOrWhiteSpace(Measurements0))
+                if (!string.IsNullOrWhiteSpace(Measurements0))
                 {
-                    errors.Add("Measurements");
-                    HasMeasurementsError = true;
-                    MeasurementsErrorMessage = "Measurements are required for Model/Cover";
-                }
-                else
-                {
+                    // If the user provided a measurements string, validate its format
                     if (!Common.Shared.MeasurementsValidator.TryParseMeasurements(Measurements0, out var b, out var cup, out var w, out var h, out var mErr))
                     {
                         errors.Add("Measurements");
@@ -386,6 +458,12 @@ namespace Common.Shared
                     {
                         MeasurementsErrorMessage = null;
                     }
+                }
+                else
+                {
+                    // Measurements left empty: optional -> clear any previous message
+                    MeasurementsErrorMessage = null;
+                    HasMeasurementsError = false;
                 }
             }
             // You can add more category-specific rules here later.

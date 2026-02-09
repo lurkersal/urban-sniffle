@@ -16,7 +16,28 @@ namespace IndexEditor.Views
             get => EditorState.CurrentPage;
             set
             {
-                EditorState.CurrentPage = value;
+                var desired = value;
+                // If images are enabled, prefer an existing image page; if desired page has no image, find nearest existing one.
+                try
+                {
+                    if (IndexEditor.Shared.EditorState.ShowImages)
+                    {
+                        var folder = EditorState.CurrentFolder;
+                        if (!string.IsNullOrWhiteSpace(folder))
+                        {
+                            var candidate = IndexEditor.Shared.ImageHelper.FindImagePath(folder, desired);
+                            if (candidate == null)
+                            {
+                                var nearest = IndexEditor.Shared.ImageHelper.FindNearestExistingPageBothDirections(folder, desired);
+                                if (nearest.HasValue)
+                                    desired = nearest.Value;
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                EditorState.CurrentPage = desired;
                 var pageInput = this.FindControl<TextBox>("PageInput");
                 if (pageInput != null)
                     pageInput.Text = EditorState.CurrentPage.ToString();
@@ -24,6 +45,8 @@ namespace IndexEditor.Views
                 // Notify UI/state but do NOT auto-select an article when the current page changes.
                 // Selection should only occur when the user explicitly presses the Sync button.
                 EditorState.NotifyStateChanged();
+                // Also load the current page image immediately when Page is set
+                try { LoadCurrentPageImage(); } catch { }
             }
         }
 
@@ -34,10 +57,7 @@ namespace IndexEditor.Views
 
             var prevBtn = this.FindControl<Button>("PrevPageBtn");
             var nextBtn = this.FindControl<Button>("NextPageBtn");
-            var endSegmentBtn = this.FindControl<Button>("EndSegmentBtn");
             var pageInput = this.FindControl<TextBox>("PageInput");
-            var activeArticleTitle = this.FindControl<TextBlock>("ActiveArticleTitle");
-            var activeSegmentText = this.FindControl<TextBlock>("ActiveSegmentText");
             var toastBorder = this.FindControl<Border>("ToastBorder");
             var toastText = this.FindControl<TextBlock>("ToastText");
 
@@ -94,34 +114,8 @@ namespace IndexEditor.Views
 
             void UpdateUi()
             {
-                // Buttons enablement
-                // AddSegment: enabled only when an ActiveArticle exists and the current page is NOT already part of its Pages
-                if (endSegmentBtn != null) endSegmentBtn.IsEnabled = EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive;
-
-                // Active article display: use DisplayTitle and CategoryDisplay to match Article card behaviour
-                if (activeArticleTitle != null)
-                    activeArticleTitle.Text = EditorState.ActiveArticle != null ? EditorState.ActiveArticle.DisplayTitle : "— none —";
-                var activeCategoryBlock = this.FindControl<TextBlock>("ActiveArticleCategory");
-                if (activeCategoryBlock != null)
-                    activeCategoryBlock.Text = EditorState.ActiveArticle != null ? EditorState.ActiveArticle.CategoryDisplay : string.Empty;
-
-                // Active segment display
-                if (activeSegmentText != null)
-                {
-                    if (EditorState.ActiveSegment != null)
-                    {
-                        var seg = EditorState.ActiveSegment;
-                        // When active (End == null) display 'start → currentPage' so the user sees live range preview
-                        var segText = seg.End.HasValue ? $"{seg.Start} → {seg.End.Value}" : $"{seg.Start} → {EditorState.CurrentPage}";
-                        activeSegmentText.Text = segText;
-                    }
-                    else
-                    {
-                        activeSegmentText.Text = "— none —";
-                    }
-                }
-
-                // status area removed
+                // Buttons enablement - no EndSegment button present
+                // Active article/segment are displayed in the ArticleEditor now
             }
 
             // Subscribe to state changes to refresh UI
@@ -129,10 +123,13 @@ namespace IndexEditor.Views
             {
                 if (pageInput != null) pageInput.Text = EditorState.CurrentPage.ToString();
                 UpdateUi();
+                try { LoadCurrentPageImage(); } catch { }
             });
 
             // Initial sync
             UpdateUi();
+            // Load initial page image
+            try { LoadCurrentPageImage(); } catch { }
 
             // Debug helper: if INDEXEDITOR_DEBUG_AUTOCREATE=1 is set, auto-trigger creating a new article
             try
@@ -145,8 +142,7 @@ namespace IndexEditor.Views
             }
             catch { }
 
-            if (endSegmentBtn != null)
-                endSegmentBtn.Click += (s, e) => { /* call class-level EndActiveSegment */ EndActiveSegment(); };
+            // EndSegment button removed; keep EndActiveSegment method available for programmatic use
         }
 
         // Ends the current active segment (if any) by setting its End to CurrentPage, updating the article pages,
@@ -218,7 +214,7 @@ namespace IndexEditor.Views
                 return;
             }
             var page = EditorState.CurrentPage;
-            var path = FindImagePath(folder, page);
+            var path = IndexEditor.Shared.ImageHelper.FindImagePath(folder, page);
             if (path != null)
             {
                 try
@@ -228,7 +224,7 @@ namespace IndexEditor.Views
                     if (missing != null) missing.IsVisible = false;
                     if (pageInput != null) pageInput.Foreground = Brushes.Black;
                 }
-                catch (Exception ex)
+                catch
                 {
                     // Failed to load image (suppressed)
                     if (missing != null) { missing.Text = $"Failed to load image: {Path.GetFileName(path)}"; missing.IsVisible = true; }
@@ -270,10 +266,36 @@ namespace IndexEditor.Views
             // search up to 2000 pages to avoid infinite loops
             while (attempts < 2000 && page > 0)
             {
-                var path = FindImagePath(folder, page);
+                var path = IndexEditor.Shared.ImageHelper.FindImagePath(folder, page);
                 if (path != null) return page;
                 page += direction;
                 attempts++;
+            }
+            return null;
+        }
+
+        // Find nearest existing page by searching both directions outward from the start page.
+        private int? FindNearestExistingPageBothDirections(string folder, int startPage)
+        {
+            // quick check for exact match
+            try
+            {
+                if (FindImagePath(folder, startPage) != null) return startPage;
+            }
+            catch { }
+            int maxRadius = 2000;
+            for (int r = 1; r <= maxRadius; r++)
+            {
+                var forward = startPage + r;
+                if (forward > 0)
+                {
+                    try { if (IndexEditor.Shared.ImageHelper.FindImagePath(folder, forward) != null) return forward; } catch { }
+                }
+                var backward = startPage - r;
+                if (backward > 0)
+                {
+                    try { if (IndexEditor.Shared.ImageHelper.FindImagePath(folder, backward) != null) return backward; } catch { }
+                }
             }
             return null;
         }
@@ -543,6 +565,45 @@ namespace IndexEditor.Views
                 return true;
             }
             catch { return false; }
+        }
+
+        // Public helpers so external callers (e.g., MainWindow key handlers) can move to the previous/next existing page
+        public void MoveLeft()
+        {
+            try
+            {
+                var folder = EditorState.CurrentFolder;
+                if (!string.IsNullOrWhiteSpace(folder) && IndexEditor.Shared.EditorState.ShowImages)
+                {
+                    var found = FindNearestExistingPage(folder, EditorState.CurrentPage - 1, -1);
+                    if (found.HasValue) Page = found.Value;
+                }
+                else
+                {
+                    // No folder or images disabled: just decrement
+                    Page = Math.Max(1, EditorState.CurrentPage - 1);
+                }
+            }
+            catch { }
+        }
+
+        public void MoveRight()
+        {
+            try
+            {
+                var folder = EditorState.CurrentFolder;
+                if (!string.IsNullOrWhiteSpace(folder) && IndexEditor.Shared.EditorState.ShowImages)
+                {
+                    var found = FindNearestExistingPage(folder, EditorState.CurrentPage + 1, 1);
+                    if (found.HasValue) Page = found.Value;
+                }
+                else
+                {
+                    // No folder or images disabled: just increment
+                    Page = IndexEditor.Shared.EditorState.CurrentPage + 1;
+                }
+            }
+            catch { }
         }
     }
 }

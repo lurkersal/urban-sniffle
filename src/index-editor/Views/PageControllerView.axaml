@@ -5,7 +5,8 @@
              VerticalAlignment="Stretch">
     <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
         <!-- Allow the controller to scroll if the window is small -->
-        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+        <!-- Disable horizontal scrolling so the image is always scaled to fit the pane width -->
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="12" Spacing="12" VerticalAlignment="Stretch">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
                     <Button Name="PrevPageBtn" Content="◀" Width="36" Height="36" Background="White" Foreground="Black"/>
@@ -14,8 +15,7 @@
                     <!-- Sync button removed per request -->
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <!-- Add Segment button removed in favor of Ctrl+A shortcut; End Segment remains -->
-                    <Button Name="EndSegmentBtn" Content="End Segment" Background="White" Foreground="Black" />
+                    <!-- Add Segment button removed in favor of Ctrl+A shortcut; End Segment removed -->
                 </StackPanel>
 
                 <!-- Transient toast for short messages (fades out) -->
@@ -23,36 +23,15 @@
                     <TextBlock Name="ToastText" Foreground="White" FontWeight="Bold" FontSize="12" />
                 </Border>
 
-                <!-- Active Article and Active Segment panes -->
-                <StackPanel Orientation="Vertical" Spacing="8">
-                    <Border Background="#F7F7F7" CornerRadius="4" Padding="8">
-                        <StackPanel>
-                            <TextBlock Text="Active Article" FontWeight="Bold" Foreground="Black" />
-                            <!-- Match the article card typography: left = DisplayTitle (bold, 18), right = Category (bold, 14) -->
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock x:Name="ActiveArticleTitle" Grid.Column="0" Text="— none —" FontWeight="Bold" FontSize="18" Foreground="Black" VerticalAlignment="Top" />
-                                <TextBlock x:Name="ActiveArticleCategory" Grid.Column="1" Text="" FontWeight="Bold" FontSize="14" Foreground="Black" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="8,0,0,0" />
-                            </Grid>
-                        </StackPanel>
-                    </Border>
+                <!-- Active Article and Active Segment panes removed from PageController; ActiveSegment will be shown in ArticleEditor -->
 
-                    <Border Background="#F7F7F7" CornerRadius="4" Padding="8">
-                        <StackPanel>
-                            <TextBlock Text="Active Segment" FontWeight="Bold" Foreground="Black" />
-                            <TextBlock Name="ActiveSegmentText" Text="— none —" FontSize="14" Foreground="Black" />
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
-
-                <!-- Status / Feedback Area removed -->
                  <!-- Page image (full width) with overlay message when missing -->
-                <Border Background="#FFFFFF" CornerRadius="4" Padding="4">
+                <Border Background="#FFFFFF" CornerRadius="4" Padding="4" Name="PageImageBorder">
                     <Grid>
-                        <Image Name="PageImage" Stretch="Uniform" HorizontalAlignment="Stretch" />
+                        <!-- Bind MaxWidth to the Border's bounds so the image will never exceed the pane width; Stretch="Uniform" preserves aspect ratio.
+                             StretchDirection="DownOnly" avoids upscaling so the image is only reduced to fit the width. Center horizontally. -->
+                        <Image Name="PageImage" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center"
+                               MaxWidth="{Binding Path=Bounds.Width, ElementName=PageImageBorder}" />
                         <TextBlock Name="ImageMissingText" Text="Page image not found" Foreground="Red" Background="#80FFFFFF" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False" Padding="8"/>
                     </Grid>
                 </Border>

@@ -13,15 +13,24 @@ namespace IndexEditor.Tests
         [Fact]
         public void StartSegment_PreventsSelection_ThenAllowsAfterEnd()
         {
-            // Setup VM and two articles
-            var vm = new EditorStateViewModel();
+            // Reset shared EditorState to avoid interference from other tests
+            IndexEditor.Shared.EditorState.ActiveArticle = null;
+            IndexEditor.Shared.EditorState.ActiveSegment = null;
+            IndexEditor.Shared.EditorState.Articles = new System.Collections.Generic.List<ArticleLine>();
+
+            // Setup two articles
             var a1 = new ArticleLine { Title = "A1" };
             a1.Pages = new System.Collections.Generic.List<int> { 1 };
             var a2 = new ArticleLine { Title = "A2" };
             a2.Pages = new System.Collections.Generic.List<int> { 10 };
 
-            // Seed shared state and vm collections
+            // Seed shared state BEFORE creating the ViewModel to avoid background sync races
             IndexEditor.Shared.EditorState.Articles = new System.Collections.Generic.List<ArticleLine> { a1, a2 };
+
+            // Create VM and ensure it copies the shared articles
+            var vm = new EditorStateViewModel();
+
+            // Ensure VM collection mirrors shared state
             vm.Articles.Clear();
             vm.Articles.Add(a1);
             vm.Articles.Add(a2);

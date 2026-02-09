@@ -9,6 +9,8 @@
         <local:CategoryDisplayModeMatchesConverter x:Key="CategoryModeMatches" />
         <local:FieldLabelConverter x:Key="FieldLabelConverter" />
         <local:ShowPhotographerCategoryConverter x:Key="ShowPhotographer" />
+        <local:ActiveSegmentToTextConverter x:Key="ActiveSegmentToTextConverter" />
+        <local:ArticleActiveSegmentBrushConverter x:Key="ActiveSegmentBrushConverter" />
     </UserControl.Resources>
     <StackPanel Margin="8">
         <TextBlock Text="Article Editor" FontWeight="Bold" FontSize="16" Margin="8,8,8,4"/>
@@ -68,12 +70,19 @@
                                 <TextBlock Text="Pages:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
                                 <TextBox Text="{Binding PagesText, Mode=TwoWay}" Width="240" BorderBrush="{Binding HasPagesError, Converter={StaticResource FieldErrorToBrushConverter}}" />
                             </StackPanel>
+
+                            <!-- Removed inline active segment; lozenge will be shown below the editor content -->
                         </StackPanel>
                     </Border>
                 </DataTemplate>
             </ContentControl.ContentTemplate>
         </ContentControl>
 
-        <!-- Page Segments and Notes removed - simplified editor -->
+        <!-- Bottom lozenge showing active segment for the selected article -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="12,12,0,0">
+            <Border CornerRadius="14" Padding="8,6" MinWidth="120" MinHeight="28" Background="{Binding DataContext.CurrentShownArticle, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource ActiveSegmentBrushConverter}}" BorderBrush="#000" BorderThickness="1">
+                <TextBlock Text="{Binding DataContext.ActiveSegmentDisplay, RelativeSource={RelativeSource AncestorType=UserControl}}" Foreground="Black" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+        </StackPanel>
     </StackPanel>
 </UserControl>

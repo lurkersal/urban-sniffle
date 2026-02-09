@@ -40,5 +40,20 @@
         <Border Grid.Row="1" Grid.Column="2" Padding="8" MinWidth="200">
             <views:PageControllerView x:Name="PageControllerControl"/>
         </Border>
+
+        <!-- Index file overlay (hidden by default) -->
+        <Border x:Name="IndexOverlay" Grid.Row="0" Grid.ColumnSpan="3" Grid.RowSpan="2" Background="#80000000" IsVisible="False">
+            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Border Width="800" Height="600" Background="White" CornerRadius="6" Padding="12">
+                    <Grid RowDefinitions="Auto,*,Auto">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button x:Name="IndexOverlayCloseBtn" Content="Close" />
+                        </StackPanel>
+                        <TextBox x:Name="IndexOverlayTextBox" Grid.Row="1" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="True" />
+                        <TextBlock Grid.Row="2" Text="Press 'i' to close" HorizontalAlignment="Right" FontSize="12" Foreground="#666" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

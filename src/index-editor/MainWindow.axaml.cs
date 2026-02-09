@@ -85,55 +85,105 @@ public partial class MainWindow : Window
         }
         catch { }
 
+        // Wire up overlay close button if present
+        try
+        {
+            var closeBtn = this.FindControl<Button>("IndexOverlayCloseBtn");
+            var overlay = this.FindControl<Border>("IndexOverlay");
+            var textBox = this.FindControl<TextBox>("IndexOverlayTextBox");
+            if (closeBtn != null && overlay != null)
+            {
+                closeBtn.Click += (s, e) => { try { overlay.IsVisible = false; } catch { } };
+            }
+            // Allow pressing 'i' again to close overlay; handled in OnMainWindowKeyDown
+        }
+        catch { }
+
         // Load articles from folder if provided
         if (!string.IsNullOrWhiteSpace(FolderToOpen))
         {
+            // First: parse folder basename to extract magazine metadata as a sensible default even before reading _index.txt
+            try
+            {
+                var folderName = System.IO.Path.GetFileName(FolderToOpen.TrimEnd(System.IO.Path.DirectorySeparatorChar));
+                try { Console.WriteLine($"[DEBUG] MainWindow: FolderToOpen basename='{folderName}'"); } catch { }
+                var (mag, vol, num) = IndexEditor.Shared.FolderMetadataParser.ParseFolderMetadata(folderName);
+                IndexEditor.Shared.EditorState.CurrentMagazine = mag;
+                IndexEditor.Shared.EditorState.CurrentVolume = vol;
+                IndexEditor.Shared.EditorState.CurrentNumber = num;
+                try { Console.WriteLine($"[DEBUG] MainWindow: parsed metadata from folder -> mag='{mag}', vol='{vol}', num='{num}'"); } catch { }
+            }
+            catch { }
+
             var indexPath = System.IO.Path.Combine(FolderToOpen, "_index.txt");
             if (System.IO.File.Exists(indexPath))
             {
                 try
                 {
                     var lines = System.IO.File.ReadAllLines(indexPath);
-                    // First pass: parse optional header metadata lines starting with '#'
-                    foreach (var raw in lines)
-                    {
-                        var line = raw.Trim();
-                        if (!line.StartsWith("#")) break; // headers are expected at the top
-                        var content = line.TrimStart('#').Trim();
-                        if (content.StartsWith("Magazine:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            IndexEditor.Shared.EditorState.CurrentMagazine = content.Substring("Magazine:".Length).Trim();
-                        }
-                        else if (content.StartsWith("Volume:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("Vol:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
-                            IndexEditor.Shared.EditorState.CurrentVolume = val.Replace("Volume:", string.Empty).Replace("Vol:", string.Empty).Trim();
-                        }
-                        else if (content.StartsWith("Number:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("No:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
-                            IndexEditor.Shared.EditorState.CurrentNumber = val.Replace("Number:", string.Empty).Replace("No:", string.Empty).Trim();
-                        }
-                        // continue reading header lines; article parsing happens below
-                    }
                     var articles = new List<Common.Shared.ArticleLine>();
-                    foreach (var line in lines)
+                    // Determine metadata: prefer first non-comment CSV "Magazine,Volume,Number" (with escaped commas), otherwise read '#' header lines
+                    int articleStartIndex = 0;
+                    string fileMag = IndexEditor.Shared.EditorState.CurrentMagazine ?? string.Empty;
+                    string fileVol = IndexEditor.Shared.EditorState.CurrentVolume ?? string.Empty;
+                    string fileNum = IndexEditor.Shared.EditorState.CurrentNumber ?? string.Empty;
+                    for (int i = 0; i < lines.Length; i++)
                     {
+                        var raw = lines[i];
+                        if (string.IsNullOrWhiteSpace(raw)) { articleStartIndex = i + 1; continue; }
+                        var trimmed = raw.Trim();
+                        if (trimmed.StartsWith("#"))
+                        {
+                            var content = trimmed.TrimStart('#').Trim();
+                            if (content.StartsWith("Magazine:", StringComparison.OrdinalIgnoreCase))
+                                fileMag = content.Substring("Magazine:".Length).Trim();
+                            else if (content.StartsWith("Volume:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("Vol:", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
+                                fileVol = val.Replace("Volume:", string.Empty).Replace("Vol:", string.Empty).Trim();
+                            }
+                            else if (content.StartsWith("Number:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("No:", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
+                                fileNum = val.Replace("Number:", string.Empty).Replace("No:", string.Empty).Trim();
+                            }
+                            articleStartIndex = i + 1;
+                            continue;
+                        }
+                        // First non-comment line: try CSV metadata
+                        var parts = SplitRespectingEscapedCommas(trimmed);
+                        if (parts.Count >= 3)
+                        {
+                            string Unescape(string s) => s.Replace("\\,", ",");
+                            fileMag = Unescape(parts[0]);
+                            fileVol = Unescape(parts[1]);
+                            fileNum = Unescape(parts[2]);
+                            articleStartIndex = i + 1;
+                        }
+                        else
+                        {
+                            articleStartIndex = i;
+                        }
+                        break;
+                    }
+
+                    // parse article lines starting at articleStartIndex
+                    for (int i = articleStartIndex; i < lines.Length; i++)
+                    {
+                        var line = lines[i];
                         if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#"))
                             continue;
                         var parsed = ParseArticleLine(line);
                         if (parsed != null)
-                        {
                             articles.Add(parsed);
-                            var segs = parsed.Segments != null ? string.Join(",", parsed.Segments.Select(s => s.Display)) : string.Empty;
-                            // parsed article
-                        }
-                        else
-                        {
-                            // skipped line
-                        }
                     }
-                    // total articles parsed
+
+                    // set metadata into EditorState (overrides folder-derived)
+                    IndexEditor.Shared.EditorState.CurrentMagazine = fileMag;
+                    IndexEditor.Shared.EditorState.CurrentVolume = fileVol;
+                    IndexEditor.Shared.EditorState.CurrentNumber = fileNum;
+                     
+                     // total articles parsed
 
                     // Order by first page
                     articles = articles.Where(a => a.Pages != null && a.Pages.Count > 0)
@@ -161,69 +211,60 @@ public partial class MainWindow : Window
                     // Store the opened folder so controllers can load page images
                     IndexEditor.Shared.EditorState.CurrentFolder = FolderToOpen;
 
-                    // On startup, set CurrentPage to the lowest page number that has an image in the opened folder
+                    // On startup, pick the first existing image in the folder, preferring page 1 and otherwise searching article pages
                     try
                     {
                         if (!string.IsNullOrWhiteSpace(FolderToOpen))
                         {
-                            var allPages = articles.Where(a => a.Pages != null).SelectMany(a => a.Pages).Distinct().OrderBy(p => p);
-                            int? firstWithImage = null;
-                            foreach (var p in allPages)
+                            // Prefer page 1 if it exists; otherwise try to find the first image in folder
+                            int? firstImage = IndexEditor.Shared.ImageHelper.FindFirstImageInFolder(FolderToOpen, 1, 2000);
+                            // If no images found via direct scan and we have article page list, try article pages
+                            if (!firstImage.HasValue && articles != null && articles.Count > 0)
                             {
-                                if (ImageExistsInFolder(FolderToOpen, p))
+                                var allPages = articles.Where(a => a.Pages != null).SelectMany(a => a.Pages).Distinct().OrderBy(p => p);
+                                foreach (var p in allPages)
                                 {
-                                    firstWithImage = p;
-                                    break;
+                                    if (IndexEditor.Shared.ImageHelper.ImageExists(FolderToOpen, p)) { firstImage = p; break; }
                                 }
                             }
-                            if (firstWithImage.HasValue)
-                                IndexEditor.Shared.EditorState.CurrentPage = firstWithImage.Value;
+
+                            if (firstImage.HasValue)
+                                IndexEditor.Shared.EditorState.CurrentPage = firstImage.Value;
 
                             // Also select the article that starts at that page so it opens in the editor
                             var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-                            if (vm != null && firstWithImage.HasValue)
+                            if (vm != null && firstImage.HasValue)
                             {
-                                var match = IndexEditor.Shared.EditorState.Articles.FirstOrDefault(a => a.Pages != null && a.Pages.Count > 0 && a.Pages.Min() == firstWithImage.Value);
+                                var match = IndexEditor.Shared.EditorState.Articles.FirstOrDefault(a => a.Pages != null && a.Pages.Count > 0 && a.Pages.Min() == firstImage.Value);
                                 if (match != null)
                                 {
                                     try
                                     {
                                         if (vm.SelectArticleCommand.CanExecute(match))
                                             vm.SelectArticleCommand.Execute(match);
-                                        // Scroll the ArticleList to show the selected item (if the control is available)
-                                        try
-                                        {
-                                            if (this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl") is IndexEditor.Views.ArticleList articleList)
-                                            {
-                                                articleList.ScrollToArticle(match);
-                                                // Set highlight on UI thread
-                                                Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { match.WasAutoHighlighted = true; } catch { } });
-                                                // Clear highlight after a short delay (clear on UI thread)
-                                                _ = System.Threading.Tasks.Task.Run(async () => { await System.Threading.Tasks.Task.Delay(800); Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { match.WasAutoHighlighted = false; } catch { } }); });
-                                                // Focus the ListBox so keyboard navigation is immediate (on UI thread)
-                                                try { var lb = articleList.FindControl<ListBox>("ArticlesListBox"); if (lb != null) Avalonia.Threading.Dispatcher.UIThread.Post(() => lb.Focus()); } catch { }
-                                            }
-                                            else
-                                            {
-                                                // Try to find via visual tree: the ArticleList is in the first column Border
-                                                var articleListControl = this.FindControl<IndexEditor.Views.ArticleList>("ArticlesListBox");
-                                                if (articleListControl != null)
-                                                {
-                                                    articleListControl.ScrollToArticle(match);
-                                                    Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { match.WasAutoHighlighted = true; } catch { } });
-                                                    _ = System.Threading.Tasks.Task.Run(async () => { await System.Threading.Tasks.Task.Delay(800); Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { match.WasAutoHighlighted = false; } catch { } }); });
-                                                    try { var lb = articleListControl.FindControl<ListBox>("ArticlesListBox"); if (lb != null) Avalonia.Threading.Dispatcher.UIThread.Post(() => lb.Focus()); } catch { }
-                                                }
-                                            }
-                                        }
-                                        catch { }
-                                    }
-                                    catch { }
-                                }
-                            }
-                        }
-                    }
-                    catch { }
+                                     
+                                         // Scroll the ArticleList to show the selected item (if the control is available)
+                                         try
+                                         {
+                                             if (this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl") is IndexEditor.Views.ArticleList articleList)
+                                             {
+                                                 articleList.ScrollToArticle(match);
+                                                 // Set highlight on UI thread
+                                                 Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { match.WasAutoHighlighted = true; } catch { } });
+                                                 // Clear highlight after a short delay (clear on UI thread)
+                                                 _ = System.Threading.Tasks.Task.Run(async () => { await System.Threading.Tasks.Task.Delay(800); Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { match.WasAutoHighlighted = false; } catch { } }); });
+                                                 // Focus the ListBox so keyboard navigation is immediate (on UI thread)
+                                                 try { var lb = articleList.FindControl<ListBox>("ArticlesListBox"); if (lb != null) Avalonia.Threading.Dispatcher.UIThread.Post(() => lb.Focus()); } catch { }
+                                             }
+                                         }
+                                         catch { }
+                                     }
+                                     catch { }
+                                 }
+                             }
+                         }
+                     }
+                     catch { }
 
                     IndexEditor.Shared.EditorState.NotifyStateChanged();
 
@@ -234,6 +275,8 @@ public partial class MainWindow : Window
             else
             {
                 // Index file not found
+                // Ensure folder is still recorded so other parts of the app can find images
+                IndexEditor.Shared.EditorState.CurrentFolder = FolderToOpen;
             }
         }
 
@@ -260,7 +303,7 @@ public partial class MainWindow : Window
             try
             {
                 // Delay focus to allow the window to finish opening
-                Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
                     try
                     {
@@ -398,6 +441,7 @@ public partial class MainWindow : Window
             hasError = true;
             return pages;
         }
+
         var parts = pageStr.Split('|');
         foreach (var part in parts)
         {
@@ -441,7 +485,7 @@ public partial class MainWindow : Window
     }
 
     // Main window event handlers
-    private void OnMainWindowKeyDown(object sender, KeyEventArgs e)
+    private void OnMainWindowKeyDown(object? sender, KeyEventArgs e)
     {
         try { Console.WriteLine($"[KEY] KeyDown received: Key={e.Key} Mods={e.KeyModifiers}"); } catch { }
         // Handle global key down events here
@@ -492,11 +536,20 @@ public partial class MainWindow : Window
         }
         else if (e.Key == Key.Escape)
         {
-            // Exit fullscreen on Escape
-            if (this.WindowState == WindowState.FullScreen)
+            // Use shared helper to cancel active segment if present, otherwise preserve existing fullscreen behavior
+            var hadActive = IndexEditor.Shared.EditorState.ActiveSegment != null && IndexEditor.Shared.EditorState.ActiveSegment.IsActive;
+            if (hadActive)
             {
-                this.WindowState = WindowState.Normal;
+                IndexEditor.Shared.EditorActions.CancelActiveSegment();
                 e.Handled = true;
+            }
+            else
+            {
+                if (this.WindowState == WindowState.FullScreen)
+                {
+                    this.WindowState = WindowState.Normal;
+                    e.Handled = true;
+                }
             }
         }
         else if (e.Key == Key.Enter && !e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt))
@@ -525,17 +578,70 @@ public partial class MainWindow : Window
                 return;
             }
         }
+        // Toggle index overlay with 'I' (no modifiers)
+        else if (e.Key == Key.I && !e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt) && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+        {
+            try
+            {
+                var overlay = this.FindControl<Border>("IndexOverlay");
+                var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
+                if (overlay != null && tb != null)
+                {
+                    if (overlay.IsVisible)
+                    {
+                        overlay.IsVisible = false;
+                    }
+                    else
+                    {
+                        // Load _index.txt from current folder
+                        var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                        if (string.IsNullOrWhiteSpace(folder))
+                        {
+                            tb.Text = "No folder open.";
+                        }
+                        else
+                        {
+                            var path = System.IO.Path.Combine(folder, "_index.txt");
+                            if (System.IO.File.Exists(path))
+                            {
+                                try { tb.Text = System.IO.File.ReadAllText(path); } catch (Exception ex) { tb.Text = $"Error reading file: {ex.Message}"; }
+                            }
+                            else
+                            {
+                                tb.Text = $"_index.txt not found in folder: {folder}";
+                            }
+                        }
+                        overlay.IsVisible = true;
+                    }
+                }
+            }
+            catch { }
+            e.Handled = true;
+            return;
+        }
         else if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt))
         {
             // Navigation: Left/Right change page, Up/Down change selected article
             if (e.Key == Key.Left)
             {
-                try { IndexEditor.Shared.EditorState.CurrentPage = Math.Max(1, IndexEditor.Shared.EditorState.CurrentPage - 1); IndexEditor.Shared.EditorState.NotifyStateChanged(); e.Handled = true; }
+                try
+                {
+                    var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
+                    if (pc != null) pc.MoveLeft();
+                    else { IndexEditor.Shared.EditorState.CurrentPage = Math.Max(1, IndexEditor.Shared.EditorState.CurrentPage - 1); IndexEditor.Shared.EditorState.NotifyStateChanged(); }
+                    e.Handled = true;
+                }
                 catch { }
             }
             else if (e.Key == Key.Right)
             {
-                try { IndexEditor.Shared.EditorState.CurrentPage = IndexEditor.Shared.EditorState.CurrentPage + 1; IndexEditor.Shared.EditorState.NotifyStateChanged(); e.Handled = true; }
+                try
+                {
+                    var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
+                    if (pc != null) pc.MoveRight();
+                    else { IndexEditor.Shared.EditorState.CurrentPage = IndexEditor.Shared.EditorState.CurrentPage + 1; IndexEditor.Shared.EditorState.NotifyStateChanged(); }
+                    e.Handled = true;
+                }
                 catch { }
             }
             else if (e.Key == Key.Up || e.Key == Key.Down)
@@ -580,18 +686,21 @@ public partial class MainWindow : Window
         // Open folder using OpenFolderDialog and update EditorState on UI thread
         var dlg = new Avalonia.Controls.OpenFolderDialog();
         var wnd = this.VisualRoot as Window ?? this;
+        // Suppress obsolete and nullable warnings for ShowAsync in this compatibility wrapper
+#pragma warning disable CS0618, CS8604
         _ = dlg.ShowAsync(wnd).ContinueWith(t =>
-        {
-            var path = t.Result;
-            if (!string.IsNullOrWhiteSpace(path))
-            {
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                {
-                    IndexEditor.Shared.EditorState.CurrentFolder = path;
-                    LoadArticlesFromFolder(path);
-                });
-            }
-        });
+#pragma warning restore CS0618, CS8604
+         {
+             var path = t.Result;
+             if (!string.IsNullOrWhiteSpace(path))
+             {
+                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                 {
+                     IndexEditor.Shared.EditorState.CurrentFolder = path;
+                     LoadArticlesFromFolder(path);
+                 });
+             }
+         });
     }
 
     private void LoadArticlesFromFolder(string folder)
@@ -600,4 +709,20 @@ public partial class MainWindow : Window
         // This should update IndexEditor.Shared.EditorState.Articles and notify the UI
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

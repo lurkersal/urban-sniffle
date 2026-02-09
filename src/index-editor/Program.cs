@@ -13,9 +13,9 @@ class Program
     public static void Main(string[] args)
     {
         // If invoked with --demo, run the console demo runner and exit
-        if (args != null && args.Length > 0 && args.Contains("--demo"))
+        if (args.Length > 0 && args.Contains("--demo"))
         {
-            IndexEditor.Tools.DemoRunner.Run();
+            Tools.DemoRunner.Run();
             return;
         }
 

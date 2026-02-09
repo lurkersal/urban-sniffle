@@ -127,6 +127,8 @@ namespace IndexEditor.Views
                      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
                      // Notify SelectedCategory so the editor ComboBox updates to the new article's category
                      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
+                     // Also notify CurrentShownArticle which may change when SelectedArticle changes
+                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentShownArticle)));
                      // Run validation after UI bindings have a chance to populate the editor fields.
                      // Schedule validation at Background priority so two-way bindings and initial control
                      // population complete first; this avoids a false-negative when the editor first shows an article.
@@ -138,93 +140,123 @@ namespace IndexEditor.Views
                          await Task.Delay(150).ConfigureAwait(false);
                          Dispatcher.UIThread.Post(() => _selectedArticle?.Validate(), Avalonia.Threading.DispatcherPriority.Background);
                      });
-                }
-            }
-        }
+                 }
+             }
+         }
 
-        private bool _suppressCategorySet = false;
-        public string? SelectedCategory
+         private bool _suppressCategorySet = false;
+         public string? SelectedCategory
+         {
+             get => SelectedArticle?.Category;
+             set
+             {
+                 if (_suppressCategorySet) return;
+                 if (SelectedArticle == null) return;
+                 if (string.IsNullOrWhiteSpace(value))
+                 {
+                     // Ignore transient clears from the UI (ItemsSource changes) to avoid wiping the model
+                     return;
+                 }
+                 var newVal = value!;
+                 if (SelectedArticle.Category != newVal)
+                 {
+                     SelectedArticle.Category = newVal;
+                     // Forward notify so bindings update
+                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
+                 }
+             }
+         }
+
+         public ObservableCollection<Common.Shared.ArticleLine> Articles { get; } = new();
+         public ObservableCollection<string> Categories { get; } = new();
+
+         private bool _isLoadingCategories = false;
+         public bool IsLoadingCategories
+         {
+             get => _isLoadingCategories;
+             private set
+             {
+                 if (_isLoadingCategories != value)
+                 {
+                     _isLoadingCategories = value;
+                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLoadingCategories)));
+                 }
+             }
+         }
+
+         public EditorStateViewModel()
+         {
+             SelectArticleCommand = new SelectArticleCommand(this);
+             // Initialize from static EditorState
+             foreach (var article in EditorState.Articles)
+                 Articles.Add(article);
+
+             // Populate categories from articles (unique, sorted) as a fallback
+             var cats = new HashSet<string>(Articles.Select(a => a.Category).Where(c => !string.IsNullOrWhiteSpace(c)));
+             foreach (var c in cats.OrderBy(s => s))
+                 Categories.Add(c);
+
+             // Asynchronously try to load categories from DB (do not block UI thread)
+             IsLoadingCategories = true;
+             Task.Run(async () =>
+             {
+                 try
+                 {
+                     var dbCats = await LoadCategoriesFromDatabaseAsync();
+                     if (dbCats != null && dbCats.Count > 0)
+                     {
+                         // Update the observable collection on the UI thread
+                         Dispatcher.UIThread.Post(() => UpdateCategories(dbCats.OrderBy(s => s).ToList()));
+                     }
+                 }
+                 catch { }
+                 finally
+                 {
+                     Dispatcher.UIThread.Post(() => IsLoadingCategories = false);
+                 }
+             });
+
+             // Debug: Print type of every item
+             // Skip debug printing of article types
+              // Listen for changes
+              EditorState.StateChanged += SyncArticles;
+              // Also raise SelectedArticle when the global EditorState changes (e.g., CurrentPage) so bindings like SelectedArticle.ActiveSegment re-evaluate
+              EditorState.StateChanged += OnEditorStateChanged;
+          }
+
+        // Returns the article that should be shown for active-segment display: prefer the selected article, otherwise the global active article
+        public ArticleLine? CurrentShownArticle => SelectedArticle ?? IndexEditor.Shared.EditorState.ActiveArticle;
+
+        // A computed display string for the active segment (mirrors ActiveSegmentToTextConverter logic), convenient for binding
+        public string ActiveSegmentDisplay
         {
-            get => SelectedArticle?.Category;
-            set
-            {
-                if (_suppressCategorySet) return;
-                if (SelectedArticle == null) return;
-                if (string.IsNullOrWhiteSpace(value))
-                {
-                    // Ignore transient clears from the UI (ItemsSource changes) to avoid wiping the model
-                    return;
-                }
-                var newVal = value!;
-                if (SelectedArticle.Category != newVal)
-                {
-                    SelectedArticle.Category = newVal;
-                    // Forward notify so bindings update
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
-                }
-            }
-        }
-
-        public ObservableCollection<Common.Shared.ArticleLine> Articles { get; } = new();
-        public ObservableCollection<string> Categories { get; } = new();
-
-        private bool _isLoadingCategories = false;
-        public bool IsLoadingCategories
-        {
-            get => _isLoadingCategories;
-            private set
-            {
-                if (_isLoadingCategories != value)
-                {
-                    _isLoadingCategories = value;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLoadingCategories)));
-                }
-            }
-        }
-
-        public EditorStateViewModel()
-        {
-            SelectArticleCommand = new SelectArticleCommand(this);
-            // Initialize from static EditorState
-            foreach (var article in EditorState.Articles)
-                Articles.Add(article);
-
-            // Populate categories from articles (unique, sorted) as a fallback
-            var cats = new HashSet<string>(Articles.Select(a => a.Category).Where(c => !string.IsNullOrWhiteSpace(c)));
-            foreach (var c in cats.OrderBy(s => s))
-                Categories.Add(c);
-
-            // Asynchronously try to load categories from DB (do not block UI thread)
-            IsLoadingCategories = true;
-            Task.Run(async () =>
+            get
             {
                 try
                 {
-                    var dbCats = await LoadCategoriesFromDatabaseAsync();
-                    if (dbCats != null && dbCats.Count > 0)
+                    var art = CurrentShownArticle;
+                    var seg = art?.ActiveSegment;
+                    // If there's no active segment, fall back to LastModifiedSegment only when it's relevant
+                    if (seg == null)
                     {
-                        // Update the observable collection on the UI thread
-                        Dispatcher.UIThread.Post(() => UpdateCategories(dbCats.OrderBy(s => s).ToList()));
+                        var lm = art?.LastModifiedSegment;
+                        if (lm != null && (lm.IsActive || lm.WasNew || lm.OriginalEnd.HasValue))
+                            seg = lm;
                     }
-                }
-                catch { }
-                finally
-                {
-                    Dispatcher.UIThread.Post(() => IsLoadingCategories = false);
-                }
-            });
-
-            // Debug: Print type of every item
-            // Skip debug printing of article types
-             // Listen for changes
-             EditorState.StateChanged += SyncArticles;
-
-             // Debug: Print formatted text for each article
-            // Skip debug formatted output for cards
+                     if (seg == null) return "— none —";
+                     if (seg.IsActive)
+                     {
+                         var current = IndexEditor.Shared.EditorState.CurrentPage;
+                         return $"{seg.Start} → {current}";
+                     }
+                     return seg.Display ?? "— none —";
+                 }
+                 catch { return "— none —"; }
+             }
          }
 
-        private async Task<List<string>?> LoadCategoriesFromDatabaseAsync()
-        {
+         private async Task<List<string>?> LoadCategoriesFromDatabaseAsync()
+         {
             try
             {
                 // Read appsettings.json from the app folder
@@ -331,11 +363,16 @@ namespace IndexEditor.Views
                 // OnArticlePropertyChanged
                 // If pages or category changed, we may need to reorder
                 if (e.PropertyName == nameof(ArticleLine.Pages) || e.PropertyName == nameof(ArticleLine.PagesText) || e.PropertyName == nameof(ArticleLine.Category))
+                 {
+                     ReorderArticlesByPage();
+                 }
+                // If the article's active segment or last-modified segment changed, notify ActiveSegmentDisplay
+                if (e.PropertyName == nameof(ArticleLine.ActiveSegment) || e.PropertyName == nameof(ArticleLine.LastModifiedSegment))
                 {
-                    ReorderArticlesByPage();
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegmentDisplay)));
                 }
-            }
-        }
+             }
+         }
 
         private void ReorderArticlesByPage()
         {
@@ -372,6 +409,20 @@ namespace IndexEditor.Views
             UpdateCategories(cats.OrderBy(s => s).ToList());
             // ReorderArticlesByPage completed
             _suppressCategorySet = false;
+        }
+
+        private void OnEditorStateChanged()
+        {
+            try
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle))); } catch { }
+                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentShownArticle))); } catch { }
+                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegmentDisplay))); } catch { }
+                });
+            }
+            catch { }
         }
     }
 }
