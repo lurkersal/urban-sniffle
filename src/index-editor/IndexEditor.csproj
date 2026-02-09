@@ -39,5 +39,8 @@
   <ItemGroup>
     <Compile Remove="Tests\**\*.cs" />
     <None Remove="Tests\**" />
+    <!-- Exclude only the MeasureProbe tool from main project so demo runner remains compiled -->
+    <Compile Remove="Tools\MeasureProbe\**\*.cs" />
+    <None Remove="Tools\MeasureProbe\**" />
   </ItemGroup>
 </Project>

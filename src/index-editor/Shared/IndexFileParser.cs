@@ -139,12 +139,25 @@ namespace IndexEditor.Shared
                 var ageParts = parts[4].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 article.Ages = ageParts.Select(ap => int.TryParse(ap, out var iv) ? (int?)iv : null).ToList();
             }
+            // Common formats vary: some index files have 7 columns (pages,category,title,models,ages,photographers,measurements)
+            // while others use 8 columns with an authors column before measurements.
             if (parts.Count > 5 && !string.IsNullOrWhiteSpace(parts[5]))
                 article.Photographers = parts[5].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-            if (parts.Count > 6 && !string.IsNullOrWhiteSpace(parts[6]))
-                article.Authors = parts[6].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-            if (parts.Count > 7 && !string.IsNullOrWhiteSpace(parts[7]))
-                article.Measurements = parts[7].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+            if (parts.Count == 7)
+            {
+                // 7-column format: treat parts[6] as Measurements
+                if (!string.IsNullOrWhiteSpace(parts[6]))
+                    article.Measurements = parts[6].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            }
+            else
+            {
+                // 8+ column format: parts[6]=Authors, parts[7]=Measurements
+                if (parts.Count > 6 && !string.IsNullOrWhiteSpace(parts[6]))
+                    article.Authors = parts[6].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                if (parts.Count > 7 && !string.IsNullOrWhiteSpace(parts[7]))
+                    article.Measurements = parts[7].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            }
 
             if (article.ModelNames == null || article.ModelNames.Count == 0)
                  article.ModelNames = new List<string> { string.Empty };

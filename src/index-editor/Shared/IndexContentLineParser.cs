@@ -18,6 +18,7 @@ namespace IndexEditor.Shared
             var models = parts.Length > 3 ? parts[3].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList() : new List<string>();
             var photographers = parts.Length > 4 ? parts[4].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList() : new List<string>();
             var authors = parts.Length > 5 ? parts[5].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList() : new List<string>();
+            var measurements = parts.Length > 7 ? parts[7].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList() : new List<string>();
             return new Common.Shared.ArticleLine
             {
                 Pages = pages,
@@ -25,7 +26,8 @@ namespace IndexEditor.Shared
                 Title = title,
                 ModelNames = models,
                 Photographers = photographers,
-                Authors = authors
+                Authors = authors,
+                Measurements = measurements
             };
         }
 

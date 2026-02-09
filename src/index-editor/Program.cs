@@ -1,6 +1,7 @@
 ﻿using Avalonia;
 using System;
 using System.Linq;
+using IndexEditor.Tools;
 
 namespace IndexEditor;
 
@@ -15,7 +16,7 @@ class Program
         // If invoked with --demo, run the console demo runner and exit
         if (args.Length > 0 && args.Contains("--demo"))
         {
-            Tools.DemoRunner.Run();
+            DemoRunner.Run();
             return;
         }
 

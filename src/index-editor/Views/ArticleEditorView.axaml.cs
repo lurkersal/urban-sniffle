@@ -42,9 +42,12 @@ namespace IndexEditor.Views
                 // Optionally update UI, e.g., refresh segment list, highlight active segment, etc.
                 if (titleBox != null && EditorState.ActiveArticle != null)
                     titleBox.Text = EditorState.ActiveArticle.Title;
+                // Also refresh the view-model from EditorState in case articles were loaded before DataContext was set
+                RefreshFromEditorState();
             };
 
-            // Clicks are handled by the OnSegmentLozengePressed method wired in XAML.
+            // Ensure we refresh from initial EditorState in case articles were preloaded
+            RefreshFromEditorState();
         }
 
         // Public helper: focus the editor's primary input (Title textbox)
@@ -137,26 +140,89 @@ namespace IndexEditor.Views
             var articles = new List<Common.Shared.ArticleLine>();
             foreach (var line in lines)
             {
-                var parsed = IndexEditor.Shared.IndexContentLineParser.Parse(line);
+                var parsed = IndexEditor.Shared.IndexFileParser.ParseArticleLine(line);
                 if (parsed != null)
                 {
-                    // Convert IndexContentLine to Common.Shared.ContentLine
-                    var contentLine = new Common.Shared.ArticleLine
-                    {
-                        Pages = parsed.Pages,
-                        Category = parsed.Category,
-                        Title = parsed.Title,
-                        ModelNames = parsed.ModelNames,
-                        Photographers = parsed.Photographers,
-                        Authors = parsed.Authors
-                    };
-                    articles.Add(contentLine);
+                    // ParseArticleLine returns a fully-populated Common.Shared.ArticleLine
+                    articles.Add(parsed);
                 }
             }
             IndexEditor.Shared.EditorState.Articles = articles;
+            // Debug: append first article measurements to a temp log so tests can inspect it when console is unavailable
+            try
+            {
+                if (articles.Count > 0)
+                {
+                    var m = string.Join(";", articles[0].Measurements ?? new List<string>());
+                    var log = $"Loaded folder '{_currentFolder ?? "?"}' first article measurements: {m}\n";
+                    try { System.IO.File.AppendAllText("/tmp/index_editor_measurements_debug.txt", log); } catch { }
+                }
+            }
+            catch { }
+            // Update the view-model's observable collection so UI bindings (SelectedArticle, Articles) refresh.
+            var vm = this.DataContext as EditorStateViewModel;
+            if (vm != null)
+            {
+                try
+                {
+                    vm.Articles.Clear();
+                    foreach (var a in articles)
+                    {
+                        // Ensure Measurements list exists and normalize the first value via Validate
+                        try
+                        {
+                            if (a.Measurements == null || a.Measurements.Count == 0)
+                                a.Measurements = new System.Collections.Generic.List<string> { string.Empty };
+                            // Trigger normalization/validation so Measurements0 becomes canonical
+                            try { a.Validate(); } catch { }
+                            // Raise PropertyChanged for Measurements and Measurements0 so UI bindings see the values
+                            try { a.NotifyPropertyChanged(nameof(a.Measurements)); } catch { }
+                            try { a.NotifyPropertyChanged(nameof(a.Measurements0)); } catch { }
+                        }
+                        catch { }
+                        vm.Articles.Add(a);
+                    }
+                }
+                catch { }
+                if (articles.Count > 0)
+                {
+                    try { vm.SelectedArticle = articles[0]; } catch { }
+                }
+            }
+            // Also maintain the global EditorState for other components
             if (articles.Count > 0)
                 IndexEditor.Shared.EditorState.ActiveArticle = articles[0];
             IndexEditor.Shared.EditorState.NotifyStateChanged();
+        }
+
+        // Helper: refresh the bound ViewModel (if present) from the static EditorState.Articles.
+        private void RefreshFromEditorState()
+        {
+            try
+            {
+                var vm = this.DataContext as EditorStateViewModel;
+                var articles = IndexEditor.Shared.EditorState.Articles ?? new List<Common.Shared.ArticleLine>();
+                if (vm != null)
+                {
+                    try { vm.Articles.Clear(); } catch { }
+                    foreach (var a in articles)
+                    {
+                        try
+                        {
+                            if (a.Measurements == null || a.Measurements.Count == 0)
+                                a.Measurements = new System.Collections.Generic.List<string> { string.Empty };
+                            try { a.Validate(); } catch { }
+                            try { a.NotifyPropertyChanged(nameof(a.Measurements)); } catch { }
+                            try { a.NotifyPropertyChanged(nameof(a.Measurements0)); } catch { }
+                        }
+                        catch { }
+                        try { vm.Articles.Add(a); } catch { }
+                    }
+                    if (vm.SelectedArticle == null && vm.Articles.Count > 0)
+                        vm.SelectedArticle = vm.Articles[0];
+                }
+            }
+            catch { }
         }
     }
 }

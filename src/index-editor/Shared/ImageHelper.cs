@@ -26,6 +26,26 @@ namespace IndexEditor.Shared
             {
                 foreach (var p in CandidatePaths(folder, page))
                     if (File.Exists(p)) return p;
+
+                // If candidates didn't match, scan the folder for numeric basenames (e.g., "094.jpg")
+                try
+                {
+                    var dir = new DirectoryInfo(folder);
+                    if (dir.Exists)
+                    {
+                        var files = dir.GetFiles();
+                        foreach (var f in files)
+                        {
+                            var name = Path.GetFileNameWithoutExtension(f.Name);
+                            // Trim leading zeros then try parse as int; also try raw parse
+                            if (int.TryParse(name.TrimStart('0'), out int parsed) && parsed == page)
+                                return f.FullName;
+                            if (int.TryParse(name, out parsed) && parsed == page)
+                                return f.FullName;
+                        }
+                    }
+                }
+                catch { }
             }
             catch { }
             return null;
@@ -66,4 +86,3 @@ namespace IndexEditor.Shared
         }
     }
 }
-

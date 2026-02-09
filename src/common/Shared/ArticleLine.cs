@@ -159,6 +159,13 @@ namespace Common.Shared
             catch { }
         }
 
+        // Provide a safe way for external code to request a property change notification
+        // (can't invoke the event from outside the declaring class).
+        public void NotifyPropertyChanged(string propertyName)
+        {
+            try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName)); } catch { }
+        }
+
         private void Segments_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
             try
