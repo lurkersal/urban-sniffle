@@ -11,6 +11,13 @@ namespace IndexEditor.Views
 {
     public partial class PageControllerView : UserControl
     {
+        private IPageControllerBridge? _assignedBridge;
+
+        public void SetBridge(IPageControllerBridge bridge)
+        {
+            _assignedBridge = bridge;
+        }
+
         public int Page
         {
             get => EditorState.CurrentPage;
@@ -163,7 +170,13 @@ namespace IndexEditor.Views
                 var auto = Environment.GetEnvironmentVariable("INDEXEDITOR_DEBUG_AUTOCREATE");
                 if (!string.IsNullOrEmpty(auto) && auto == "1")
                 {
-                    _ = System.Threading.Tasks.Task.Run(async () => { await System.Threading.Tasks.Task.Delay(600).ConfigureAwait(false); Dispatcher.UIThread.Post(() => { try { CreateNewArticle(); } catch (Exception ex) { DebugLogger.LogException("PageControllerView.DebugAutoCreate", ex); } }); });
+                    // Use a local async void helper to avoid ambiguous Task.Run overload resolution
+                    async void AutoCreateAsync()
+                    {
+                        await System.Threading.Tasks.Task.Delay(600).ConfigureAwait(false);
+                        Dispatcher.UIThread.Post(() => { try { CreateNewArticle(); } catch (Exception ex) { DebugLogger.LogException("PageControllerView.DebugAutoCreate", ex); } });
+                    }
+                    AutoCreateAsync();
                 }
             }
             catch (Exception ex) { DebugLogger.LogException("PageControllerView.DebugAutoCreate outer", ex); }
@@ -450,7 +463,7 @@ namespace IndexEditor.Views
                                 // Re-notify after a short delay to help DataTemplate creation (ArticleEditor) react
                                 try
                                 {
-                                    _ = System.Threading.Tasks.Task.Run(async () =>
+                                    async void ReNotifyAsync()
                                     {
                                         try
                                         {
@@ -461,7 +474,8 @@ namespace IndexEditor.Views
                                             });
                                         }
                                         catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: re-notify background", ex); }
-                                    });
+                                    }
+                                    ReNotifyAsync();
                                 }
                                 catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: re-notify scheduling", ex); }
 
@@ -480,7 +494,7 @@ namespace IndexEditor.Views
                                         {
                                             System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: performing forced focus retries on ArticleEditor instance");
                                             // Run short retry attempts on a background thread to avoid blocking the UI thread
-                                            _ = System.Threading.Tasks.Task.Run(async () =>
+                                            async void ForcedFocusLoopAsync()
                                             {
                                                 try
                                                 {
@@ -507,7 +521,8 @@ namespace IndexEditor.Views
                                                     System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: forced focus retry loop finished");
                                                 }
                                                 catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: forced focus outer", ex); }
-                                            });
+                                            }
+                                            ForcedFocusLoopAsync();
                                         }
                                         else
                                         {
@@ -516,100 +531,101 @@ namespace IndexEditor.Views
                                     }
                                 }
                                 catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: forced focus outer", ex); }
-
-                                 // Short retry loop that attempts to focus the editor controls when they become available
+                            
+                                // Short retry loop that attempts to focus the editor controls when they become available
                                  try
                                  {
-                                     var main = this.VisualRoot as Window;
-                                     _ = System.Threading.Tasks.Task.Run(async () =>
-                                     {
-                                         try
-                                         {
-                                             const int attempts = 12;
-                                             const int delayMs = 120;
-                                             for (int i = 0; i < attempts; i++)
-                                             {
-                                                 try
-                                                 {
-                                                     await System.Threading.Tasks.Task.Delay(delayMs).ConfigureAwait(false);
-                                                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                                     {
-                                                         try
-                                                         {
-                                                             // 1) Try to find TitleTextBox or CategoryComboBox within the EditorContentHost's Content
-                                                             var host = main?.FindControl<ContentControl>("EditorContentHost") ?? main?.FindControl<ContentControl>("EditorContent");
-                                                             if (host != null)
-                                                             {
-                                                                 System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: found host ContentControl: " + host.Name);
-                                                             }
-                                                             if (host?.Content is Avalonia.Controls.Control hostContent)
-                                                             {
-                                                                 try
-                                                                 {
-                                                                     var tb = hostContent.FindControl<TextBox>("TitleTextBox");
-                                                                     if (tb != null)
-                                                                     {
-                                                                         System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox inside host.Content");
-                                                                         tb.Focus();
-                                                                         return;
-                                                                     }
-                                                                     var cb = hostContent.FindControl<ComboBox>("CategoryComboBox");
-                                                                     if (cb != null)
-                                                                     {
-                                                                         System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox inside host.Content");
-                                                                         cb.Focus();
-                                                                         return;
-                                                                     }
-                                                                 }
-                                                                 catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: focus inside host", ex); }
-                                                             }
+                                    async void FocusRetryAsync()
+                                    {
+                                        try
+                                        {
+                                            var main = this.VisualRoot as Window;
+                                            const int attempts = 12;
+                                            const int delayMs = 120;
+                                            for (int i = 0; i < attempts; i++)
+                                            {
+                                                try
+                                                {
+                                                    await System.Threading.Tasks.Task.Delay(delayMs).ConfigureAwait(false);
+                                                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                                    {
+                                                        try
+                                                        {
+                                                            // 1) Try to find TitleTextBox or CategoryComboBox within the EditorContentHost's Content
+                                                            var host = main?.FindControl<ContentControl>("EditorContentHost") ?? main?.FindControl<ContentControl>("EditorContent");
+                                                            if (host != null)
+                                                            {
+                                                                System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: found host ContentControl: " + host.Name);
+                                                            }
+                                                            if (host?.Content is Avalonia.Controls.Control hostContent)
+                                                            {
+                                                                try
+                                                                {
+                                                                    var tb = hostContent.FindControl<TextBox>("TitleTextBox");
+                                                                    if (tb != null)
+                                                                    {
+                                                                        System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox inside host.Content");
+                                                                        tb.Focus();
+                                                                        return;
+                                                                    }
+                                                                    var cb = hostContent.FindControl<ComboBox>("CategoryComboBox");
+                                                                    if (cb != null)
+                                                                    {
+                                                                        System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox inside host.Content");
+                                                                        cb.Focus();
+                                                                        return;
+                                                                    }
+                                                                }
+                                                                catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: focus inside host", ex); }
+                                                            }
 
-                                                             // 2) Try to find ArticleEditor control on the Window and call its helpers
-                                                             try
-                                                             {
-                                                                 var ae = main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl")
-                                                                          ?? main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
-                                                                 if (ae != null)
-                                                                 {
-                                                                     System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: calling ae.FocusTitle()/FocusEditor()");
-                                                                     try { ae.FocusTitle(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: ae.FocusTitle 2", ex); }
-                                                                     try { ae.FocusEditor(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: ae.FocusEditor 2", ex); }
-                                                                     return;
-                                                                 }
-                                                             }
-                                                             catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: find ae", ex); }
+                                                            // 2) Try to find ArticleEditor control on the Window and call its helpers
+                                                            try
+                                                            {
+                                                                var ae = main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl")
+                                                                         ?? main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
+                                                                if (ae != null)
+                                                                {
+                                                                    System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: calling ae.FocusTitle()/FocusEditor()");
+                                                                    try { ae.FocusTitle(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: ae.FocusTitle 2", ex); }
+                                                                    try { ae.FocusEditor(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: ae.FocusEditor 2", ex); }
+                                                                    return;
+                                                                }
+                                                            }
+                                                            catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: find ae", ex); }
 
-                                                             // 3) Directly search the Window for TitleTextBox or CategoryComboBox
-                                                             try
-                                                             {
-                                                                 var tbDirect = main?.FindControl<TextBox>("TitleTextBox");
-                                                                 if (tbDirect != null)
-                                                                 {
-                                                                     System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox directly on Window");
-                                                                     try { tbDirect.Focus(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: tbDirect.Focus", ex); }
-                                                                     return;
-                                                                 }
-                                                                 var cbDirect = main?.FindControl<ComboBox>("CategoryComboBox");
-                                                                 if (cbDirect != null)
-                                                                 {
-                                                                     System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox directly on Window");
-                                                                     try { cbDirect.Focus(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: cbDirect.Focus", ex); }
-                                                                     return;
-                                                                 }
-                                                             }
-                                                             catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: direct search", ex); }
+                                                            // 3) Directly search the Window for TitleTextBox or CategoryComboBox
+                                                            try
+                                                            {
+                                                                var tbDirect = main?.FindControl<TextBox>("TitleTextBox");
+                                                                if (tbDirect != null)
+                                                                {
+                                                                    System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox directly on Window");
+                                                                    try { tbDirect.Focus(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: tbDirect.Focus", ex); }
+                                                                    return;
+                                                                }
+                                                                var cbDirect = main?.FindControl<ComboBox>("CategoryComboBox");
+                                                                if (cbDirect != null)
+                                                                {
+                                                                    System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox directly on Window");
+                                                                    try { cbDirect.Focus(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: cbDirect.Focus", ex); }
+                                                                    return;
+                                                                }
+                                                            }
+                                                            catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: direct search", ex); }
 
-                                                         }
-                                                         catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: retry UI post", ex); }
-                                                     });
-                                                 }
-                                                 catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: retry delay", ex); }
-                                             }
-                                             // If we exit the loop without focusing, log that attempt ended
-                                             System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focus attempts completed");
-                                         }
-                                         catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: retry loop outer", ex); }
-                                     });
+                                                        }
+                                                        catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: retry UI post", ex); }
+                                                    });
+                                                }
+                                                catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: retry delay", ex); }
+                                            }
+                                            // If we exit the loop without focusing, log that attempt ended
+                                            System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focus attempts completed");
+                                        }
+                                        catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: retry loop outer", ex); }
+                                    }
+                                    FocusRetryAsync();
                                  }
                                  catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: short retry loop", ex); }
 
@@ -710,5 +726,7 @@ namespace IndexEditor.Views
             }
             catch (Exception ex) { DebugLogger.LogException("MoveRight", ex); }
         }
+
+        // Bridge will call the public methods defined on this view (AddSegmentAtCurrentPage, CreateNewArticle, EndActiveSegment, MoveLeft, MoveRight).
     }
 }
