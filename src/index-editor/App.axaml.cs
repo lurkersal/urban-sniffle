@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using System.Linq;
+using Microsoft.Extensions.Logging;
+using IndexEditor.Shared;
 
 namespace IndexEditor;
 
@@ -14,6 +16,23 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // Configure logging for application
+        try
+        {
+            var factory = LoggerFactory.Create(builder =>
+            {
+                builder.AddSimpleConsole(options =>
+                {
+                    options.SingleLine = true;
+                    options.TimestampFormat = "HH:mm:ss ";
+                });
+                builder.SetMinimumLevel(LogLevel.Debug);
+            });
+            DebugLogger.Initialize(factory);
+            DebugLogger.Log("Logging initialized");
+        }
+        catch { }
+
         // App initialization completed
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {

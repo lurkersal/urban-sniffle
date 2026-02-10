@@ -21,22 +21,22 @@ namespace IndexEditor.Shared
             try
             {
                 var candidates = new List<string>();
-                try { candidates.Add(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json")); } catch { }
-                try { candidates.Add(Path.Combine(AppContext.BaseDirectory ?? string.Empty, "appsettings.json")); } catch { }
+                try { candidates.Add(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json")); } catch (Exception ex) { DebugLogger.LogException("CategoryService.Initialize: cwd candidate", ex); }
+                try { candidates.Add(Path.Combine(AppContext.BaseDirectory ?? string.Empty, "appsettings.json")); } catch (Exception ex) { DebugLogger.LogException("CategoryService.Initialize: base dir candidate", ex); }
                 try
                 {
                     var asmFolder = Path.GetDirectoryName(typeof(CategoryService).Assembly.Location);
                     if (!string.IsNullOrWhiteSpace(asmFolder)) candidates.Add(Path.Combine(asmFolder, "appsettings.json"));
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("CategoryService.Initialize: asm folder candidate", ex); }
 
                 string? foundPath = null;
                 foreach (var cand in candidates.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct())
                 {
-                    try { if (File.Exists(cand)) { foundPath = cand; break; } } catch { }
+                    try { if (File.Exists(cand)) { foundPath = cand; break; } } catch (Exception ex) { DebugLogger.LogException("CategoryService.Initialize: file exists check", ex); }
                 }
 
-                try { File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"CategoryService.Initialize: candidates={string.Join(";", candidates)} found={foundPath}\n"); } catch { }
+                try { File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"CategoryService.Initialize: candidates={string.Join(";", candidates)} found={foundPath}\n"); } catch (Exception ex) { DebugLogger.LogException("CategoryService.Initialize: write debug file", ex); }
 
                 if (string.IsNullOrWhiteSpace(foundPath)) return;
 
@@ -50,7 +50,7 @@ namespace IndexEditor.Shared
                 try
                 {
                     var cats = await IndexEditor.Shared.CategoryRepository.GetCategoriesAsync(connString);
-                    try { File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"CategoryService: DB returned {cats?.Count ?? 0} categories\n"); } catch { }
+                    try { File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"CategoryService: DB returned {cats?.Count ?? 0} categories\n"); } catch (Exception ex) { DebugLogger.LogException("CategoryService.Initialize: write db debug", ex); }
                     if (cats != null && cats.Count > 0)
                     {
                         // Replace collection contents on caller thread; callers should marshal to UI thread.
@@ -60,14 +60,13 @@ namespace IndexEditor.Shared
                 }
                 catch (Exception ex)
                 {
-                    try { File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"CategoryService DB error: {ex}\n"); } catch { }
+                    DebugLogger.LogException("CategoryService DB error", ex);
                 }
             }
             catch (Exception ex)
             {
-                try { File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"CategoryService init error: {ex}\n"); } catch { }
+                DebugLogger.LogException("CategoryService init error", ex);
             }
         }
     }
 }
-

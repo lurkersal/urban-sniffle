@@ -1,7 +1,8 @@
 using MagazineParser.Interfaces;
 using MagazineParser.Models;
+using Common.Shared;
 
-namespace MagazineParser.Services;
+namespace magazine_parser.Services;
 
 public class ContentLineParser : IContentParser
 {
@@ -13,14 +14,14 @@ public class ContentLineParser : IContentParser
     }
     public ContentLine? ParseContentLine(string line)
     {
-        var parts = SplitRespectingEscapedCommas(line);
+        var parts = Common.Shared.IndexParserUtilities.SplitRespectingEscapedCommas(line);
         if (parts.Count < 2)
             return null;
 
         var contentLine = new ContentLine();
 
         // Parse page numbers
-        contentLine.Pages = ParsePageNumbers(parts[0], out bool hasError);
+        contentLine.Pages = Common.Shared.IndexParserUtilities.ParsePageNumbers(parts[0], out bool hasError);
         contentLine.HasPageNumberError = hasError;
         if (contentLine.Pages.Count == 0)
             return null;
@@ -51,7 +52,7 @@ public class ContentLineParser : IContentParser
             var ageParts = parts[4].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             foreach (var ap in ageParts)
             {
-                if (int.TryParse(ap, out int a))
+                if (System.Int32.TryParse(ap, out int a))
                     ages.Add(a);
                 else
                     ages.Add(null);
@@ -93,7 +94,7 @@ public class ContentLineParser : IContentParser
                             bustPart = bustPart.Substring(0, bustPart.Length - 1);
                         }
                     }
-                    bustSizes.Add(int.TryParse(bustPart, out var bust) ? bust : null);
+                    bustSizes.Add(System.Int32.TryParse(bustPart, out var bust) ? bust : null);
                     waistSizes.Add(null);
                     hipSizes.Add(null);
                     cupSizes.Add(cupSize);
@@ -116,9 +117,9 @@ public class ContentLineParser : IContentParser
                             bustPart = bustPart.Substring(0, bustPart.Length - 1);
                         }
                     }
-                    bustSizes.Add(int.TryParse(bustPart, out var bust) ? bust : null);
-                    waistSizes.Add(int.TryParse(sizes[1].Trim(), out var waist) ? waist : null);
-                    hipSizes.Add(int.TryParse(sizes[2].Trim(), out var hip) ? hip : null);
+                    bustSizes.Add(System.Int32.TryParse(bustPart, out var bust) ? bust : null);
+                    waistSizes.Add(System.Int32.TryParse(sizes[1].Trim(), out var waist) ? waist : null);
+                    hipSizes.Add(System.Int32.TryParse(sizes[2].Trim(), out var hip) ? hip : null);
                     cupSizes.Add(cupSize);
                 }
                 else
@@ -145,9 +146,9 @@ public class ContentLineParser : IContentParser
             if (string.IsNullOrWhiteSpace(contentLine.Title) && !string.IsNullOrWhiteSpace(contentLine.ModelName))
             {
                 contentLine.Title = contentLine.ModelName;
-                contentLine.ModelName = parts.Count > 4 && !int.TryParse(parts[4], out _) ? parts[4] : "";
+                contentLine.ModelName = parts.Count > 4 && !System.Int32.TryParse(parts[4], out _) ? parts[4] : "";
                 
-                if (parts.Count > 5 && int.TryParse(parts[5], out int newAge))
+                if (parts.Count > 5 && System.Int32.TryParse(parts[5], out int newAge))
                     contentLine.Age = newAge;
                     
                 contentLine.Photographer = parts.Count > 6 ? parts[6] : "";
@@ -170,112 +171,15 @@ public class ContentLineParser : IContentParser
         volume = 0;
         number = 0;
 
-        var parts = SplitRespectingEscapedCommas(line);
+        var parts = Common.Shared.IndexParserUtilities.SplitRespectingEscapedCommas(line);
         
-        if (parts.Count >= 3 && int.TryParse(parts[1], out volume) && int.TryParse(parts[2], out number))
+        if (parts.Count >= 3 && System.Int32.TryParse(parts[1], out volume) && System.Int32.TryParse(parts[2], out number))
         {
             title = parts[0];
             return true;
         }
 
         return false;
-    }
-
-    private List<string> SplitRespectingEscapedCommas(string line)
-    {
-        var parts = new List<string>();
-        var currentPart = new System.Text.StringBuilder();
-        bool escaped = false;
-
-        for (int i = 0; i < line.Length; i++)
-        {
-            char c = line[i];
-
-            if (escaped)
-            {
-                currentPart.Append(c);
-                escaped = false;
-            }
-            else if (c == '\\' && i + 1 < line.Length)
-            {
-                escaped = true;
-            }
-            else if (c == ',')
-            {
-                parts.Add(currentPart.ToString().Trim());
-                currentPart.Clear();
-            }
-            else
-            {
-                currentPart.Append(c);
-            }
-        }
-
-        // Add the last part
-        parts.Add(currentPart.ToString().Trim());
-
-        return parts;
-    }
-
-    private List<int> ParsePageNumbers(string pageStr, out bool hasError)
-    {
-        var pages = new List<int>();
-        hasError = false;
-
-        if (string.IsNullOrWhiteSpace(pageStr))
-        {
-            hasError = true;
-            return pages;
-        }
-
-        // Split by '|' first (AND operator)
-        var parts = pageStr.Split('|');
-        
-        foreach (var part in parts)
-        {
-            var trimmed = part.Trim();
-            
-            if (trimmed.Contains("-"))
-            {
-                // Handle range format (e.g., "5-10")
-                var rangeParts = trimmed.Split('-');
-                
-                if (rangeParts.Length != 2 || 
-                    string.IsNullOrWhiteSpace(rangeParts[0]) || 
-                    string.IsNullOrWhiteSpace(rangeParts[1]))
-                {
-                    hasError = true;
-                }
-                else if (int.TryParse(rangeParts[0].Trim(), out int start) && 
-                         int.TryParse(rangeParts[1].Trim(), out int end))
-                {
-                    if (end >= start)
-                    {
-                        for (int pg = start; pg <= end; pg++)
-                            pages.Add(pg);
-                    }
-                    else
-                    {
-                        hasError = true;
-                    }
-                }
-                else
-                {
-                    hasError = true;
-                }
-            }
-            else if (int.TryParse(trimmed, out int page))
-            {
-                // Handle single page number
-                pages.Add(page);
-            }
-            else if (!string.IsNullOrWhiteSpace(trimmed))
-            {
-                hasError = true;
-            }
-        }
-
-        return pages;
     }
 
     private void ValidateContentLine(ContentLine contentLine)
@@ -328,7 +232,7 @@ public class ContentLineParser : IContentParser
                             bustPart = bustPart.Substring(0, bustPart.Length - 1);
                         }
                     }
-                    if (!int.TryParse(bustPart, out int bustSize) || bustSize < 10 || bustSize > 99)
+                    if (!System.Int32.TryParse(bustPart, out int bustSize) || bustSize < 10 || bustSize > 99)
                     {
                         contentLine.ValidationErrors.Add($"Invalid bust measurement '{sizes[0]}' in set '{set.Trim()}' (must be 10-99)");
                     }
@@ -352,7 +256,7 @@ public class ContentLineParser : IContentParser
                                 measurementPart = measurementPart.Substring(0, measurementPart.Length - 1);
                             }
                         }
-                        if (!int.TryParse(measurementPart, out int size) || size < 10 || size > 99)
+                        if (!System.Int32.TryParse(measurementPart, out int size) || size < 10 || size > 99)
                         {
                             string part = i == 0 ? "bust" : i == 1 ? "waist" : "hip";
                             contentLine.ValidationErrors.Add($"Invalid {part} measurement '{sizes[i]}' in set '{set.Trim()}' (must be 10-99)");
@@ -396,16 +300,16 @@ public class ContentLineParser : IContentParser
                 }
             }
             
-            if (int.TryParse(bustPart, out var bust))
+            if (System.Int32.TryParse(bustPart, out var bust))
             {
                 contentLine.BustSize = bust;
                 if (!string.IsNullOrEmpty(cupSize))
                     contentLine.CupSize = cupSize;
             }
             
-            if (int.TryParse(sizes[1], out var waist))
+            if (System.Int32.TryParse(sizes[1], out var waist))
                 contentLine.WaistSize = waist;
-            if (int.TryParse(sizes[2], out var hip))
+            if (System.Int32.TryParse(sizes[2], out var hip))
                 contentLine.HipSize = hip;
         }
     }

@@ -20,7 +20,7 @@ namespace IndexEditor.Shared
                 var art = EditorState.ActiveArticle;
                 if (seg.WasNew)
                 {
-                    try { art?.Segments?.Remove(seg); } catch { }
+                    try { art?.Segments?.Remove(seg); } catch (Exception ex) { DebugLogger.LogException("EditorActions.CancelActiveSegment: remove seg", ex); }
                 }
                 else if (seg.OriginalEnd.HasValue)
                 {
@@ -32,11 +32,11 @@ namespace IndexEditor.Shared
                     seg.End = seg.Start;
                 }
                 seg.WasNew = false;
-                try { seg.CurrentPreviewEnd = null; } catch { }
+                try { seg.CurrentPreviewEnd = null; } catch (Exception ex) { DebugLogger.LogException("EditorActions.CancelActiveSegment: clear preview", ex); }
                 EditorState.ActiveSegment = null;
                 EditorState.NotifyStateChanged();
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("EditorActions.CancelActiveSegment: outer", ex); }
         }
     }
 }

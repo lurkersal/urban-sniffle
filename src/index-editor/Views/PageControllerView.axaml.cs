@@ -35,7 +35,7 @@ namespace IndexEditor.Views
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("PageControllerView.Page: image lookup", ex); }
 
                 EditorState.CurrentPage = desired;
                 var pageInput = this.FindControl<TextBox>("PageInput");
@@ -50,13 +50,13 @@ namespace IndexEditor.Views
                         seg.CurrentPreviewEnd = EditorState.CurrentPage;
                     }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("PageControllerView.Page: update preview end", ex); }
                 // Do NOT update EditorState.ActiveSegment.End here; changing pages should not close the active segment.
                 // Notify UI/state but do NOT auto-select an article when the current page changes.
                 // Selection should only occur when the user explicitly presses the Sync button.
                 EditorState.NotifyStateChanged();
                 // Also load the current page image immediately when Page is set
-                try { LoadCurrentPageImage(); } catch { }
+                try { LoadCurrentPageImage(); } catch (Exception ex) { DebugLogger.LogException("PageControllerView.Page: LoadCurrentPageImage", ex); }
             }
         }
 
@@ -81,18 +81,22 @@ namespace IndexEditor.Views
                     Dispatcher.UIThread.Post(() => { toastBorder.IsVisible = true; toastBorder.Opacity = 1.0; });
                     _ = System.Threading.Tasks.Task.Run(async () =>
                     {
-                        await System.Threading.Tasks.Task.Delay(displayMs).ConfigureAwait(false);
-                        const int steps = 8; const int stepMs = 40;
-                        for (int i = 0; i < steps; i++)
+                        try
                         {
-                            var t = i + 1;
-                            Dispatcher.UIThread.Post(() => { try { toastBorder.Opacity = Math.Max(0.0, 1.0 - (double)t / steps); } catch { } });
-                            await System.Threading.Tasks.Task.Delay(stepMs).ConfigureAwait(false);
+                            await System.Threading.Tasks.Task.Delay(displayMs).ConfigureAwait(false);
+                            const int steps = 8; const int stepMs = 40;
+                            for (int i = 0; i < steps; i++)
+                            {
+                                var t = i + 1;
+                                Dispatcher.UIThread.Post(() => { try { toastBorder.Opacity = Math.Max(0.0, 1.0 - (double)t / steps); } catch (Exception ex) { DebugLogger.LogException("PageControllerView.ShowToast: opacity", ex); } });
+                                await System.Threading.Tasks.Task.Delay(stepMs).ConfigureAwait(false);
+                            }
+                            Dispatcher.UIThread.Post(() => { try { toastBorder.IsVisible = false; toastBorder.Opacity = 1.0; } catch (Exception ex) { DebugLogger.LogException("PageControllerView.ShowToast: hide", ex); } });
                         }
-                        Dispatcher.UIThread.Post(() => { try { toastBorder.IsVisible = false; toastBorder.Opacity = 1.0; } catch { } });
+                        catch (Exception ex) { DebugLogger.LogException("PageControllerView.ShowToast: background task", ex); }
                     });
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("PageControllerView.ShowToast: outer", ex); }
             }
 
             Action<string> toastHandler = (msg) => { Dispatcher.UIThread.Post(() => ShowToast(msg)); };
@@ -102,23 +106,31 @@ namespace IndexEditor.Views
             if (prevBtn != null)
                 prevBtn.Click += (s, e) =>
                 {
-                    var folder = EditorState.CurrentFolder;
-                    if (string.IsNullOrWhiteSpace(folder)) { if (Page > 1) Page--; return; }
-                    var found = FindNearestExistingPage(folder, EditorState.CurrentPage - 1, -1);
-                    if (found.HasValue) Page = found.Value;
+                    try
+                    {
+                        var folder = EditorState.CurrentFolder;
+                        if (string.IsNullOrWhiteSpace(folder)) { if (Page > 1) Page--; return; }
+                        var found = FindNearestExistingPage(folder, EditorState.CurrentPage - 1, -1);
+                        if (found.HasValue) Page = found.Value;
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("PageControllerView.PrevBtn.Click", ex); }
                 };
             if (nextBtn != null)
                 nextBtn.Click += (s, e) =>
                 {
-                    var folder = EditorState.CurrentFolder;
-                    if (string.IsNullOrWhiteSpace(folder)) { Page++; return; }
-                    var found = FindNearestExistingPage(folder, EditorState.CurrentPage + 1, 1);
-                    if (found.HasValue) Page = found.Value;
+                    try
+                    {
+                        var folder = EditorState.CurrentFolder;
+                        if (string.IsNullOrWhiteSpace(folder)) { Page++; return; }
+                        var found = FindNearestExistingPage(folder, EditorState.CurrentPage + 1, 1);
+                        if (found.HasValue) Page = found.Value;
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("PageControllerView.NextBtn.Click", ex); }
                 };
 
             if (pageInput != null)
             {
-                pageInput.KeyDown += (s, e) => { if (e.Key == Avalonia.Input.Key.Enter && int.TryParse(pageInput.Text, out var v) && v > 0) Page = v; };
+                pageInput.KeyDown += (s, ke) => { if (ke.Key == Avalonia.Input.Key.Enter && int.TryParse(pageInput.Text, out var v) && v > 0) Page = v; };
                 pageInput.Text = EditorState.CurrentPage.ToString();
             }
 
@@ -131,15 +143,19 @@ namespace IndexEditor.Views
             // Subscribe to state changes to refresh UI
             EditorState.StateChanged += () => Dispatcher.UIThread.Post(() =>
             {
-                if (pageInput != null) pageInput.Text = EditorState.CurrentPage.ToString();
-                UpdateUi();
-                try { LoadCurrentPageImage(); } catch { }
+                try
+                {
+                    if (pageInput != null) pageInput.Text = EditorState.CurrentPage.ToString();
+                    UpdateUi();
+                    LoadCurrentPageImage();
+                }
+                catch (Exception ex) { DebugLogger.LogException("PageControllerView.StateChanged handler", ex); }
             });
 
             // Initial sync
             UpdateUi();
             // Load initial page image
-            try { LoadCurrentPageImage(); } catch { }
+            try { LoadCurrentPageImage(); } catch (Exception ex) { DebugLogger.LogException("PageControllerView ctor: LoadCurrentPageImage", ex); }
 
             // Debug helper: if INDEXEDITOR_DEBUG_AUTOCREATE=1 is set, auto-trigger creating a new article
             try
@@ -147,10 +163,10 @@ namespace IndexEditor.Views
                 var auto = Environment.GetEnvironmentVariable("INDEXEDITOR_DEBUG_AUTOCREATE");
                 if (!string.IsNullOrEmpty(auto) && auto == "1")
                 {
-                    _ = System.Threading.Tasks.Task.Run(async () => { await System.Threading.Tasks.Task.Delay(600).ConfigureAwait(false); Dispatcher.UIThread.Post(() => { try { CreateNewArticle(); } catch { } }); });
+                    _ = System.Threading.Tasks.Task.Run(async () => { await System.Threading.Tasks.Task.Delay(600).ConfigureAwait(false); Dispatcher.UIThread.Post(() => { try { CreateNewArticle(); } catch (Exception ex) { DebugLogger.LogException("PageControllerView.DebugAutoCreate", ex); } }); });
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("PageControllerView.DebugAutoCreate outer", ex); }
 
             // EndSegment button removed; keep EndActiveSegment method available for programmatic use
         }
@@ -161,12 +177,19 @@ namespace IndexEditor.Views
         {
             try
             {
+                DebugLogger.Log("EndActiveSegment: invoked");
+                Console.WriteLine("[DEBUG] EndActiveSegment: invoked");
                 if (EditorState.ActiveSegment == null || !EditorState.ActiveSegment.IsActive)
+                {
+                    DebugLogger.Log("EndActiveSegment: no active segment to end");
                     return;
+                }
 
                 var start = EditorState.ActiveSegment.Start;
                 var end = EditorState.CurrentPage;
                 if (end < start) (start, end) = (end, start);
+                DebugLogger.Log($"EndActiveSegment: start={start} end={end}");
+                Console.WriteLine($"[DEBUG] EndActiveSegment: start={start} end={end}");
 
                 var art = EditorState.ActiveArticle;
                 if (art != null)
@@ -175,6 +198,8 @@ namespace IndexEditor.Views
                     for (int p = start; p <= end; p++) if (!newPages.Contains(p)) newPages.Add(p);
                     newPages.Sort();
                     art.Pages = newPages;
+                    DebugLogger.Log($"EndActiveSegment: article updated with {newPages.Count} pages (first={newPages.FirstOrDefault()})");
+                    Console.WriteLine($"[DEBUG] EndActiveSegment: article updated with {newPages.Count} pages (first={newPages.FirstOrDefault()})");
 
                     try
                     {
@@ -186,10 +211,12 @@ namespace IndexEditor.Views
                             if (vmMatch != null && !object.ReferenceEquals(vmMatch, art))
                             {
                                 vmMatch.Pages = new List<int>(newPages);
+                                DebugLogger.Log("EndActiveSegment: VM article pages updated");
+                                Console.WriteLine("[DEBUG] EndActiveSegment: VM article pages updated");
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { DebugLogger.LogException("EndActiveSegment: updating VM", ex); }
                 }
 
                 // Close and clear the active segment
@@ -197,11 +224,18 @@ namespace IndexEditor.Views
                 {
                     EditorState.ActiveSegment.End = EditorState.CurrentPage;
                     EditorState.ActiveSegment.CurrentPreviewEnd = null;
+                    DebugLogger.Log($"EndActiveSegment: set ActiveSegment.End={EditorState.CurrentPage}");
+                    Console.WriteLine($"[DEBUG] EndActiveSegment: set ActiveSegment.End={EditorState.CurrentPage}");
                 }
                 EditorState.ActiveSegment = null;
                 EditorState.NotifyStateChanged();
+                DebugLogger.Log("EndActiveSegment: completed and cleared ActiveSegment");
+                Console.WriteLine("[DEBUG] EndActiveSegment: completed and cleared ActiveSegment");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("EndActiveSegment", ex);
+            }
         }
 
 
@@ -238,9 +272,10 @@ namespace IndexEditor.Views
                     if (missing != null) missing.IsVisible = false;
                     if (pageInput != null) pageInput.Foreground = Brushes.Black;
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Failed to load image (suppressed)
+                    // Failed to load image (logged)
+                    DebugLogger.LogException("PageControllerView.LoadCurrentPageImage: load failed", ex);
                     if (missing != null) { missing.Text = $"Failed to load image: {Path.GetFileName(path)}"; missing.IsVisible = true; }
                     if (pageInput != null) pageInput.Foreground = Brushes.Red;
                 }
@@ -253,24 +288,8 @@ namespace IndexEditor.Views
             }
         }
 
-        private string? FindImagePath(string folder, int page)
-        {
-            var candidates = new List<string>
-            {
-                Path.Combine(folder, page.ToString() + ".jpg"),
-                Path.Combine(folder, page.ToString() + ".png"),
-                Path.Combine(folder, page.ToString("D2") + ".jpg"),
-                Path.Combine(folder, page.ToString("D2") + ".png"),
-                Path.Combine(folder, page.ToString("D3") + ".jpg"),
-                Path.Combine(folder, page.ToString("D3") + ".png"),
-                Path.Combine(folder, "page-" + page.ToString() + ".jpg"),
-                Path.Combine(folder, "p" + page.ToString() + ".jpg")
-            };
-            foreach (var p in candidates)
-                if (File.Exists(p)) return p;
-            return null;
-        }
 
+        // Find nearest existing page scanning in one direction
         private int? FindNearestExistingPage(string folder, int startPage, int direction)
         {
             // direction: -1 backward, +1 forward
@@ -280,8 +299,11 @@ namespace IndexEditor.Views
             // search up to 2000 pages to avoid infinite loops
             while (attempts < 2000 && page > 0)
             {
-                var path = IndexEditor.Shared.ImageHelper.FindImagePath(folder, page);
-                if (path != null) return page;
+                try
+                {
+                    if (IndexEditor.Shared.ImageHelper.FindImagePath(folder, page) != null) return page;
+                }
+                catch (Exception ex) { DebugLogger.LogException("FindNearestExistingPage: lookup", ex); }
                 page += direction;
                 attempts++;
             }
@@ -294,21 +316,21 @@ namespace IndexEditor.Views
             // quick check for exact match
             try
             {
-                if (FindImagePath(folder, startPage) != null) return startPage;
+                if (IndexEditor.Shared.ImageHelper.FindImagePath(folder, startPage) != null) return startPage;
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("FindNearestExistingPageBothDirections: exact check", ex); }
             int maxRadius = 2000;
             for (int r = 1; r <= maxRadius; r++)
             {
                 var forward = startPage + r;
                 if (forward > 0)
                 {
-                    try { if (IndexEditor.Shared.ImageHelper.FindImagePath(folder, forward) != null) return forward; } catch { }
+                    try { if (IndexEditor.Shared.ImageHelper.FindImagePath(folder, forward) != null) return forward; } catch (Exception ex) { DebugLogger.LogException("FindNearestExistingPageBothDirections: forward", ex); }
                 }
                 var backward = startPage - r;
                 if (backward > 0)
                 {
-                    try { if (IndexEditor.Shared.ImageHelper.FindImagePath(folder, backward) != null) return backward; } catch { }
+                    try { if (IndexEditor.Shared.ImageHelper.FindImagePath(folder, backward) != null) return backward; } catch (Exception ex) { DebugLogger.LogException("FindNearestExistingPageBothDirections: backward", ex); }
                 }
             }
             return null;
@@ -360,11 +382,11 @@ namespace IndexEditor.Views
                                     break;
                                 }
                             }
-                            catch { }
+                            catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: checking existing segments", ex); }
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: outer segment check", ex); }
                 if (!alreadyHas)
                 {
                     var seg = new Common.Shared.Segment(EditorState.CurrentPage);
@@ -382,10 +404,10 @@ namespace IndexEditor.Views
                 // Ensure the article pages include the page (article.Pages was already initialized to this page),
                 // then notify so view-models and UI update.
                 EditorState.NotifyStateChanged();
-                try { IndexEditor.Shared.EditorState.RequestArticleEditorFocus(); Console.WriteLine("[DEBUG] PageController.CreateNewArticle: requested ArticleEditor focus"); } catch { }
+                try { IndexEditor.Shared.EditorState.RequestArticleEditorFocus(); Console.WriteLine("[DEBUG] PageController.CreateNewArticle: requested ArticleEditor focus"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: RequestArticleEditorFocus", ex); }
 
                 // Notify user of success
-                try { IndexEditor.Shared.ToastService.Show("New article created"); } catch { }
+                try { IndexEditor.Shared.ToastService.Show("New article created"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: toast", ex); }
 
                 // Try to select and focus the new article in the VM and editor
                 try
@@ -400,7 +422,7 @@ namespace IndexEditor.Views
                             try
                             {
                                 var inList = vm.Articles.FirstOrDefault(a => object.ReferenceEquals(a, article))
-                                            ?? vm.Articles.FirstOrDefault(a => a.Pages != null && article.Pages != null && a.Pages.SequenceEqual(article.Pages));
+                                              ?? vm.Articles.FirstOrDefault(a => a.Pages != null && article.Pages != null && a.Pages.SequenceEqual(article.Pages));
                                 var toSelect = inList ?? article;
                                 if (vm.SelectArticleCommand.CanExecute(toSelect))
                                     vm.SelectArticleCommand.Execute(toSelect);
@@ -420,27 +442,31 @@ namespace IndexEditor.Views
                                             if (lb != null)
                                                 lb.SelectedItem = toSelect;
                                         }
-                                        catch { }
+                                        catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: set lb.SelectedItem", ex); }
                                     }
                                 }
-                                catch { }
+                                catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: ArticleList selection", ex); }
 
                                 // Re-notify after a short delay to help DataTemplate creation (ArticleEditor) react
                                 try
                                 {
                                     _ = System.Threading.Tasks.Task.Run(async () =>
                                     {
-                                        await System.Threading.Tasks.Task.Delay(120).ConfigureAwait(false);
-                                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                        try
                                         {
-                                            try { IndexEditor.Shared.EditorState.NotifyStateChanged(); System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: re-notified EditorState after selection"); } catch { }
-                                        });
+                                            await System.Threading.Tasks.Task.Delay(120).ConfigureAwait(false);
+                                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                            {
+                                                try { IndexEditor.Shared.EditorState.NotifyStateChanged(); System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: re-notified EditorState after selection"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: re-notify", ex); }
+                                            });
+                                        }
+                                        catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: re-notify background", ex); }
                                     });
                                 }
-                                catch { }
+                                catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: re-notify scheduling", ex); }
 
                                 // Also request ArticleEditor focus explicitly so any ArticleEditor instance can react
-                                try { IndexEditor.Shared.EditorState.RequestArticleEditorFocus(); Console.WriteLine("[DEBUG] PageController.CreateNewArticle: RequestArticleEditorFocus called after scheduling"); } catch { }
+                                try { IndexEditor.Shared.EditorState.RequestArticleEditorFocus(); Console.WriteLine("[DEBUG] PageController.CreateNewArticle: RequestArticleEditorFocus called after scheduling"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: RequestArticleEditorFocus after schedule", ex); }
 
                                 // Forceful focus: directly find the ArticleEditor control on the window and repeatedly call its focus helpers
                                 try
@@ -456,27 +482,31 @@ namespace IndexEditor.Views
                                             // Run short retry attempts on a background thread to avoid blocking the UI thread
                                             _ = System.Threading.Tasks.Task.Run(async () =>
                                             {
-                                                const int attempts = 10;
-                                                const int delayMs = 80;
-                                                for (int i = 0; i < attempts; i++)
+                                                try
                                                 {
-                                                    try
+                                                    const int attempts = 10;
+                                                    const int delayMs = 80;
+                                                    for (int i = 0; i < attempts; i++)
                                                     {
-                                                        await System.Threading.Tasks.Task.Delay(delayMs).ConfigureAwait(false);
-                                                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                                        try
                                                         {
-                                                            try
+                                                            await System.Threading.Tasks.Task.Delay(delayMs).ConfigureAwait(false);
+                                                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                                                             {
-                                                                System.Console.WriteLine($"[DEBUG] PageController.CreateNewArticle: forced focus attempt {i}");
-                                                                try { ae.FocusTitle(); } catch { }
-                                                                try { ae.FocusEditor(); } catch { }
-                                                            }
-                                                            catch { }
-                                                        });
+                                                                try
+                                                                {
+                                                                    System.Console.WriteLine($"[DEBUG] PageController.CreateNewArticle: forced focus attempt {i}");
+                                                                    try { ae.FocusTitle(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: ae.FocusTitle", ex); }
+                                                                    try { ae.FocusEditor(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: ae.FocusEditor", ex); }
+                                                                }
+                                                                catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: forced focus post", ex); }
+                                                            });
+                                                        }
+                                                        catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: forced focus delay", ex); }
                                                     }
-                                                    catch { }
+                                                    System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: forced focus retry loop finished");
                                                 }
-                                                System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: forced focus retry loop finished");
+                                                catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: forced focus outer", ex); }
                                             });
                                         }
                                         else
@@ -485,7 +515,7 @@ namespace IndexEditor.Views
                                         }
                                     }
                                 }
-                                catch { }
+                                catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: forced focus outer", ex); }
 
                                  // Short retry loop that attempts to focus the editor controls when they become available
                                  try
@@ -493,101 +523,104 @@ namespace IndexEditor.Views
                                      var main = this.VisualRoot as Window;
                                      _ = System.Threading.Tasks.Task.Run(async () =>
                                      {
-                                         const int attempts = 12;
-                                         const int delayMs = 120;
-                                         for (int i = 0; i < attempts; i++)
+                                         try
                                          {
-                                             try
+                                             const int attempts = 12;
+                                             const int delayMs = 120;
+                                             for (int i = 0; i < attempts; i++)
                                              {
-                                                 await System.Threading.Tasks.Task.Delay(delayMs).ConfigureAwait(false);
-                                                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                                 try
                                                  {
-                                                     try
+                                                     await System.Threading.Tasks.Task.Delay(delayMs).ConfigureAwait(false);
+                                                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                                                      {
-                                                         // 1) Try to find TitleTextBox or CategoryComboBox within the EditorContentHost's Content
-                                                         var host = main?.FindControl<ContentControl>("EditorContentHost") ?? main?.FindControl<ContentControl>("EditorContent");
-                                                         if (host != null)
+                                                         try
                                                          {
-                                                             System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: found host ContentControl: " + host.Name);
-                                                         }
-                                                         if (host?.Content is Avalonia.Controls.Control hostContent)
-                                                         {
+                                                             // 1) Try to find TitleTextBox or CategoryComboBox within the EditorContentHost's Content
+                                                             var host = main?.FindControl<ContentControl>("EditorContentHost") ?? main?.FindControl<ContentControl>("EditorContent");
+                                                             if (host != null)
+                                                             {
+                                                                 System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: found host ContentControl: " + host.Name);
+                                                             }
+                                                             if (host?.Content is Avalonia.Controls.Control hostContent)
+                                                             {
+                                                                 try
+                                                                 {
+                                                                     var tb = hostContent.FindControl<TextBox>("TitleTextBox");
+                                                                     if (tb != null)
+                                                                     {
+                                                                         System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox inside host.Content");
+                                                                         tb.Focus();
+                                                                         return;
+                                                                     }
+                                                                     var cb = hostContent.FindControl<ComboBox>("CategoryComboBox");
+                                                                     if (cb != null)
+                                                                     {
+                                                                         System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox inside host.Content");
+                                                                         cb.Focus();
+                                                                         return;
+                                                                     }
+                                                                 }
+                                                                 catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: focus inside host", ex); }
+                                                             }
+
+                                                             // 2) Try to find ArticleEditor control on the Window and call its helpers
                                                              try
                                                              {
-                                                                 var tb = hostContent.FindControl<TextBox>("TitleTextBox");
-                                                                 if (tb != null)
+                                                                 var ae = main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl")
+                                                                          ?? main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
+                                                                 if (ae != null)
                                                                  {
-                                                                     System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox inside host.Content");
-                                                                     tb.Focus();
-                                                                     return;
-                                                                 }
-                                                                 var cb = hostContent.FindControl<ComboBox>("CategoryComboBox");
-                                                                 if (cb != null)
-                                                                 {
-                                                                     System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox inside host.Content");
-                                                                     cb.Focus();
+                                                                     System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: calling ae.FocusTitle()/FocusEditor()");
+                                                                     try { ae.FocusTitle(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: ae.FocusTitle 2", ex); }
+                                                                     try { ae.FocusEditor(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: ae.FocusEditor 2", ex); }
                                                                      return;
                                                                  }
                                                              }
-                                                             catch { }
-                                                         }
+                                                             catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: find ae", ex); }
 
-                                                         // 2) Try to find ArticleEditor control on the Window and call its helpers
-                                                         try
-                                                         {
-                                                             var ae = main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl")
-                                                                      ?? main?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
-                                                             if (ae != null)
+                                                             // 3) Directly search the Window for TitleTextBox or CategoryComboBox
+                                                             try
                                                              {
-                                                                 System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: calling ae.FocusTitle()/FocusEditor()");
-                                                                 try { ae.FocusTitle(); } catch { }
-                                                                 try { ae.FocusEditor(); } catch { }
-                                                                 return;
+                                                                 var tbDirect = main?.FindControl<TextBox>("TitleTextBox");
+                                                                 if (tbDirect != null)
+                                                                 {
+                                                                     System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox directly on Window");
+                                                                     try { tbDirect.Focus(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: tbDirect.Focus", ex); }
+                                                                     return;
+                                                                 }
+                                                                 var cbDirect = main?.FindControl<ComboBox>("CategoryComboBox");
+                                                                 if (cbDirect != null)
+                                                                 {
+                                                                     System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox directly on Window");
+                                                                     try { cbDirect.Focus(); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: cbDirect.Focus", ex); }
+                                                                     return;
+                                                                 }
                                                              }
-                                                         }
-                                                         catch { }
+                                                             catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: direct search", ex); }
 
-                                                         // 3) Directly search the Window for TitleTextBox or CategoryComboBox
-                                                         try
-                                                         {
-                                                             var tbDirect = main?.FindControl<TextBox>("TitleTextBox");
-                                                             if (tbDirect != null)
-                                                             {
-                                                                 System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing TitleTextBox directly on Window");
-                                                                 try { tbDirect.Focus(); } catch { }
-                                                                 return;
-                                                             }
-                                                             var cbDirect = main?.FindControl<ComboBox>("CategoryComboBox");
-                                                             if (cbDirect != null)
-                                                             {
-                                                                 System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focusing CategoryComboBox directly on Window");
-                                                                 try { cbDirect.Focus(); } catch { }
-                                                                 return;
-                                                             }
                                                          }
-                                                         catch { }
-
-                                                     }
-                                                     catch { }
-                                                 });
+                                                         catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: retry UI post", ex); }
+                                                     });
+                                                 }
+                                                 catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: retry delay", ex); }
                                              }
-                                             catch { }
+                                             // If we exit the loop without focusing, log that attempt ended
+                                             System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focus attempts completed");
                                          }
-                                         // If we exit the loop without focusing, log that attempt ended
-                                         System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: focus attempts completed");
+                                         catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: retry loop outer", ex); }
                                      });
                                  }
-                                 catch { }
+                                 catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: short retry loop", ex); }
 
                             }
-                            catch { }
+                            catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: scheduling selection+focus", ex); }
                         }, Avalonia.Threading.DispatcherPriority.Background);
                     }
                 }
-                catch { }
-
+                catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: outer", ex); }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("PageController.CreateNewArticle: outermost", ex); }
         }
 
         // Public API to add an active segment at the current page. Returns true if a new active segment was created.
@@ -599,7 +632,7 @@ namespace IndexEditor.Views
                 if (art == null)
                 {
                     ToastService.Show("No active article selected");
-                    try { Console.WriteLine("[DEBUG] AddSegmentAtCurrentPage: no active article"); } catch { }
+                    try { Console.WriteLine("[DEBUG] AddSegmentAtCurrentPage: no active article"); } catch (Exception ex) { DebugLogger.LogException("AddSegmentAtCurrentPage:no active", ex); }
                     return false;
                 }
 
@@ -607,7 +640,7 @@ namespace IndexEditor.Views
                 if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
                 {
                     ToastService.Show("Finish or cancel the open segment first");
-                    try { Console.WriteLine("[DEBUG] AddSegmentAtCurrentPage: active segment already open"); } catch { }
+                    try { Console.WriteLine("[DEBUG] AddSegmentAtCurrentPage: active segment already open"); } catch (Exception ex) { DebugLogger.LogException("AddSegmentAtCurrentPage:active open", ex); }
                     return false;
                 }
 
@@ -616,7 +649,7 @@ namespace IndexEditor.Views
                 if (art.Pages != null && art.Pages.Contains(page))
                 {
                     ToastService.Show($"Page {page} already in article");
-                    try { Console.WriteLine($"[DEBUG] AddSegmentAtCurrentPage: page {page} already in article"); } catch { }
+                    try { Console.WriteLine($"[DEBUG] AddSegmentAtCurrentPage: page {page} already in article"); } catch (Exception ex) { DebugLogger.LogException("AddSegmentAtCurrentPage:page in article", ex); }
                     return false;
                 }
 
@@ -631,12 +664,12 @@ namespace IndexEditor.Views
 
                 EditorState.ActiveSegment = seg;
                 // New active segment: ensure no preview end is set yet (it will be updated when the Page setter runs)
-                try { seg.CurrentPreviewEnd = EditorState.CurrentPage; } catch { }
+                try { seg.CurrentPreviewEnd = EditorState.CurrentPage; } catch (Exception ex) { DebugLogger.LogException("AddSegmentAtCurrentPage:set preview", ex); }
                 EditorState.NotifyStateChanged();
-                try { Console.WriteLine($"[DEBUG] AddSegmentAtCurrentPage: created new active segment start={page}"); } catch { }
+                try { Console.WriteLine($"[DEBUG] AddSegmentAtCurrentPage: created new active segment start={page}"); } catch (Exception ex) { DebugLogger.LogException("AddSegmentAtCurrentPage:created", ex); }
                 return true;
             }
-            catch { return false; }
+            catch (Exception ex) { DebugLogger.LogException("AddSegmentAtCurrentPage: outer", ex); return false; }
         }
 
         // Public helpers so external callers (e.g., MainWindow key handlers) can move to the previous/next existing page
@@ -656,7 +689,7 @@ namespace IndexEditor.Views
                     Page = Math.Max(1, EditorState.CurrentPage - 1);
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("MoveLeft", ex); }
         }
 
         public void MoveRight()
@@ -675,7 +708,7 @@ namespace IndexEditor.Views
                     Page = IndexEditor.Shared.EditorState.CurrentPage + 1;
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("MoveRight", ex); }
         }
     }
 }

@@ -37,7 +37,7 @@ namespace IndexEditor.Shared
                                     else
                                         invokeResult = method.Invoke(storage, new object[] { null });
                                 }
-                                catch { try { invokeResult = method.Invoke(storage, null); } catch { invokeResult = null; } }
+                                catch (Exception ex) { DebugLogger.LogException("FolderPicker: invoke storage method", ex); try { invokeResult = method.Invoke(storage, null); } catch (Exception ex2) { DebugLogger.LogException("FolderPicker: invoke fallback", ex2); invokeResult = null; } }
 
                                 var unwrapped = await UnwrapTaskResult(invokeResult).ConfigureAwait(false);
                                 if (unwrapped is IEnumerable enumerable)
@@ -58,7 +58,7 @@ namespace IndexEditor.Shared
                     }
                 }
             }
-            catch { /* ignore and fallback */ }
+            catch (Exception ex) { DebugLogger.LogException("FolderPicker: storage provider attempt", ex); }
 
             // Fallback: use the native OpenFolderDialog (preferred over custom UI)
             try
@@ -70,8 +70,9 @@ namespace IndexEditor.Shared
 #pragma warning restore CS0618
                 return picked;
             }
-            catch
+            catch (Exception ex)
             {
+                DebugLogger.LogException("FolderPicker: OpenFolderDialog fallback", ex);
                 return null;
             }
         }
@@ -102,7 +103,7 @@ namespace IndexEditor.Shared
                         if (ok && args[0] is string s && !string.IsNullOrWhiteSpace(s)) return s;
                     }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("FolderPicker.ExtractPathFromStorageItem: TryGetFullPath", ex); }
             }
 
             return null;

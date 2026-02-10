@@ -29,7 +29,7 @@ namespace IndexEditor.Shared
         public static int ArticleEditorFocusRequest => _articleEditorFocusRequest;
         public static void RequestArticleEditorFocus()
         {
-            try { _articleEditorFocusRequest++; NotifyStateChanged(); } catch { }
+            try { _articleEditorFocusRequest++; NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("EditorState.RequestArticleEditorFocus", ex); }
             Console.WriteLine("Focus requested. Current request count: " + _articleEditorFocusRequest);
         }
         public static void NotifyStateChanged() => StateChanged?.Invoke();

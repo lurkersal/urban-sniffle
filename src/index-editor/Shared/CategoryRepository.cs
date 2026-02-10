@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Npgsql;
@@ -20,7 +21,7 @@ namespace IndexEditor.Shared
                     if (!string.IsNullOrWhiteSpace(val))
                         categories.Add(val.Trim());
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("CategoryRepository.GetCategoriesAsync: read", ex); }
             }
             return categories;
         }

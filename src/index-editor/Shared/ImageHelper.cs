@@ -45,9 +45,9 @@ namespace IndexEditor.Shared
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("ImageHelper.FindImagePath: scan folder", ex); }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ImageHelper.FindImagePath: outer", ex); }
             return null;
         }
 
@@ -64,7 +64,7 @@ namespace IndexEditor.Shared
                 for (int p = startPage; p <= maxSearch; p++)
                     if (ImageExists(folder, p)) return p;
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ImageHelper.FindFirstImageInFolder", ex); }
             return null;
         }
 
@@ -81,7 +81,7 @@ namespace IndexEditor.Shared
                     if (b > 0 && ImageExists(folder, b)) return b;
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ImageHelper.FindNearestExistingPageBothDirections", ex); }
             return null;
         }
     }

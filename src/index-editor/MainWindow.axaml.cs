@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.Interactivity;
+using IndexEditor.Shared;
 
 namespace IndexEditor;
 
@@ -33,14 +34,14 @@ public partial class MainWindow : Window
         // Global keyboard shortcuts: handle at window level
         this.KeyDown += OnMainWindowKeyDown;
         // Also register a tunneling handler so key events (Enter) are seen before focused controls (like buttons)
-        try { this.AddHandler<KeyEventArgs>(KeyDownEvent, OnMainWindowKeyDown, RoutingStrategies.Tunnel); } catch { }
+        try { this.AddHandler<KeyEventArgs>(KeyDownEvent, OnMainWindowKeyDown, RoutingStrategies.Tunnel); } catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: AddHandler tunnel", ex); }
 
         // Immediate diagnostics (may run before Opened)
         try
         {
             // Skip diagnostic screen logging in normal runs
         }
-        catch { }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: immediate diag", ex); }
 
         this.DataContext = new IndexEditor.Views.EditorStateViewModel();
         // DataContext assigned
@@ -57,24 +58,24 @@ public partial class MainWindow : Window
                     {
                         if (ke.Key == Key.N && ke.KeyModifiers.HasFlag(KeyModifiers.Control))
                         {
-                            try { IndexEditor.Shared.ToastService.Show("Ctrl+N: creating new article"); } catch { }
+                            try { IndexEditor.Shared.ToastService.Show("Ctrl+N: creating new article"); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: toast Ctrl+N", ex); }
                             var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
                             pc?.CreateNewArticle();
                             ke.Handled = true;
                         }
                         else if (ke.Key == Key.A && ke.KeyModifiers.HasFlag(KeyModifiers.Control))
                         {
-                            try { IndexEditor.Shared.ToastService.Show("Ctrl+A: adding segment"); } catch { }
+                            try { IndexEditor.Shared.ToastService.Show("Ctrl+A: adding segment"); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: toast Ctrl+A", ex); }
                             var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
                             pc?.AddSegmentAtCurrentPage();
                             ke.Handled = true;
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: KeyboardFocusHost.KeyDown", ex); }
                 };
             }
         }
-        catch { }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: hook KeyboardFocusHost", ex); }
 
         // Configure startup and Opened handler
         try
@@ -83,7 +84,7 @@ public partial class MainWindow : Window
             this.Opened += OnWindowOpened;
             WriteDiagFile("[TRACE] Opened handler attached");
         }
-        catch { }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: Opened handler", ex); }
 
         // Wire up overlay buttons if present
         try
@@ -94,7 +95,7 @@ public partial class MainWindow : Window
             var textBox = this.FindControl<TextBox>("IndexOverlayTextBox");
             if (closeBtn != null && overlay != null)
             {
-                closeBtn.Click += (s, e) => { try { overlay.IsVisible = false; } catch { } };
+                closeBtn.Click += (s, e) => { try { overlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("IndexOverlayCloseBtn.Click", ex); } };
             }
             if (saveBtn != null && overlay != null && textBox != null)
             {
@@ -127,7 +128,7 @@ public partial class MainWindow : Window
             }
             // Allow pressing 'i' again to close overlay; handled in OnMainWindowKeyDown
         }
-        catch { }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire up overlay buttons", ex); }
 
         // Load articles from folder if provided
         if (!string.IsNullOrWhiteSpace(FolderToOpen))
@@ -152,7 +153,7 @@ public partial class MainWindow : Window
             {
                 // skip diag
             }
-            catch { /* swallow screen exception diag */ }
+            catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: screen diag", ex); /* swallow screen exception diag */ }
 
             // Ensure keyboard focus is on the window or the articles list so global shortcuts work immediately
             try
@@ -164,31 +165,31 @@ public partial class MainWindow : Window
                     {
                         this.Focus();
                         // Also focus the invisible host so it receives keyboard input for shortcuts
-                        try { var host = this.FindControl<Border>("KeyboardFocusHost"); if (host != null) host.Focus(); } catch { }
+                        try { var host = this.FindControl<Border>("KeyboardFocusHost"); if (host != null) host.Focus(); } catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: focus host", ex); }
                         // Try to focus the articles listbox
                         var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
                         if (articleList != null)
                         {
-                            try { var lb = articleList.FindControl<ListBox>("ArticlesListBox"); if (lb != null) lb.Focus(); } catch { }
+                            try { var lb = articleList.FindControl<ListBox>("ArticlesListBox"); if (lb != null) lb.Focus(); } catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: focus ArticlesListBox", ex); }
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: UI post", ex); }
                 });
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: outer focus", ex); }
 
         }
-        catch { WriteDiagFile("[TRACE] Exception raising window"); }
+        catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: outer", ex); WriteDiagFile("[TRACE] Exception raising window"); }
     }
 
     // Parsing helpers
     private Common.Shared.ArticleLine? ParseArticleLine(string line)
     {
-        var parts = SplitRespectingEscapedCommas(line);
+        var parts = IndexFileParser.SplitRespectingEscapedCommas(line);
         if (parts.Count < 2)
             return null;
         var article = new Common.Shared.ArticleLine();
-        article.Pages = ParsePageNumbers(parts[0], out bool hasError);
+        article.Pages = IndexFileParser.ParsePageNumbers(parts[0], out bool hasError);
         article.HasPageNumberError = hasError;
         if (article.Pages.Count == 0)
             return null;
@@ -197,7 +198,7 @@ public partial class MainWindow : Window
         try
         {
             var pages = article.Pages;
-            try { article.Segments.Clear(); } catch { }
+            try { article.Segments.Clear(); } catch (Exception ex) { DebugLogger.LogException("MainWindow.ParseArticleLine: clear segments", ex); }
             if (pages != null && pages.Count > 0)
             {
                 pages.Sort();
@@ -212,11 +213,11 @@ public partial class MainWindow : Window
                         end = pages[i];
                         i++;
                     }
-                    try { article.Segments.Add(new Common.Shared.Segment(start, end)); } catch { }
+                    try { article.Segments.Add(new Common.Shared.Segment(start, end)); } catch (Exception ex) { DebugLogger.LogException("MainWindow.ParseArticleLine: add segment", ex); }
                 }
             }
         }
-        catch { }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow.ParseArticleLine: outer", ex); }
 
         article.Category = parts.Count > 1 ? parts[1] : "";
         if (string.IsNullOrWhiteSpace(article.Category))
@@ -265,7 +266,7 @@ public partial class MainWindow : Window
             article.NotifyPropertyChanged(nameof(Common.Shared.ArticleLine.Author0));
             article.NotifyPropertyChanged(nameof(Common.Shared.ArticleLine.FormattedCardText));
         }
-        catch { }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow.ParseArticleLine: notify bindings", ex); }
 
         if (article.ModelNames == null || article.ModelNames.Count == 0)
             article.ModelNames = new List<string> { string.Empty };
@@ -299,37 +300,6 @@ public partial class MainWindow : Window
         catch { }
 
         return article;
-    }
-
-    private List<string> SplitRespectingEscapedCommas(string line)
-    {
-        var parts = new List<string>();
-        var currentPart = new System.Text.StringBuilder();
-        bool escaped = false;
-        for (int i = 0; i < line.Length; i++)
-        {
-            char c = line[i];
-            if (escaped)
-            {
-                currentPart.Append(c);
-                escaped = false;
-            }
-            else if (c == '\\' && i + 1 < line.Length)
-            {
-                escaped = true;
-            }
-            else if (c == ',')
-            {
-                parts.Add(currentPart.ToString().Trim());
-                currentPart.Clear();
-            }
-            else
-            {
-                currentPart.Append(c);
-            }
-        }
-        parts.Add(currentPart.ToString().Trim());
-        return parts;
     }
 
     private List<int> ParsePageNumbers(string pageStr, out bool hasError)
@@ -404,7 +374,7 @@ public partial class MainWindow : Window
                         if (ok) {  }
                     }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+A handler", ex); }
                 e.Handled = true;
                 return;
             }
@@ -422,7 +392,7 @@ public partial class MainWindow : Window
                         // created new article
                     }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+N handler", ex); }
                 e.Handled = true;
                 return;
             }
@@ -468,7 +438,7 @@ public partial class MainWindow : Window
                         });
                     }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+O handler", ex); }
                 e.Handled = true;
                 return;
             }
@@ -536,12 +506,12 @@ public partial class MainWindow : Window
                         Console.WriteLine("[ERROR] saving _index.txt via Ctrl+S: " + ex);
                     }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+S handler", ex); }
                 e.Handled = true;
                 return;
             }
         }
-        catch { }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow: global key handler", ex); }
 
         if (e.Key == Key.F11)
         {
@@ -561,7 +531,7 @@ public partial class MainWindow : Window
                     return;
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("MainWindow: Esc dismiss overlay", ex); }
 
             // Use shared helper to cancel active segment if present, otherwise preserve existing fullscreen behavior
             var hadActive = IndexEditor.Shared.EditorState.ActiveSegment != null && IndexEditor.Shared.EditorState.ActiveSegment.IsActive;
@@ -570,10 +540,10 @@ public partial class MainWindow : Window
                 try
                 {
                     IndexEditor.Shared.EditorActions.CancelActiveSegment();
-                    try { IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch { }
+                    try { IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: NotifyStateChanged", ex); }
                     try { IndexEditor.Shared.ToastService.Show("Segment cancelled"); } catch { }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: cancel active segment", ex); }
                 e.Handled = true;
             }
             else
@@ -614,7 +584,7 @@ public partial class MainWindow : Window
                     // User feedback
                     try { IndexEditor.Shared.ToastService.Show($"Segment ended ({start}-{end})"); } catch { }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: EndActiveSegment", ex); }
                 e.Handled = true;
                 return;
             }
@@ -637,9 +607,9 @@ public partial class MainWindow : Window
                     e.Handled = true;
                     return;
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: NotifyStateChanged", ex); }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("MainWindow: focus Title", ex); }
         }
         // Toggle index overlay with Ctrl+I (or Cmd+I on mac via Meta)
         else if (e.Key == Key.I && (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta)) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt) && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
@@ -678,7 +648,7 @@ public partial class MainWindow : Window
                     }
                  }
              }
-             catch { }
+             catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+I toggle overlay", ex); }
              e.Handled = true;
              return;
          }
@@ -696,7 +666,7 @@ public partial class MainWindow : Window
                     else { IndexEditor.Shared.EditorState.CurrentPage = Math.Max(1, IndexEditor.Shared.EditorState.CurrentPage - 1); IndexEditor.Shared.EditorState.NotifyStateChanged(); }
                     e.Handled = true;
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: Left arrow", ex); }
             }
             else if (e.Key == Key.Right)
             {
@@ -709,7 +679,7 @@ public partial class MainWindow : Window
                     else { IndexEditor.Shared.EditorState.CurrentPage = IndexEditor.Shared.EditorState.CurrentPage + 1; IndexEditor.Shared.EditorState.NotifyStateChanged(); }
                     e.Handled = true;
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: Right arrow", ex); }
             }
             else if (e.Key == Key.Up || e.Key == Key.Down)
             {
@@ -737,13 +707,13 @@ public partial class MainWindow : Window
                                     if (vm != null && item != null && vm.SelectArticleCommand.CanExecute(item))
                                         vm.SelectArticleCommand.Execute(item);
                                 }
-                                catch { }
+                                catch (Exception ex) { DebugLogger.LogException("MainWindow: article list selection", ex); }
                             }
                             e.Handled = true;
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: Up/Down arrow", ex); }
             }
         }
     }
@@ -760,7 +730,7 @@ public partial class MainWindow : Window
             {
                 path = await IndexEditor.Shared.FolderPicker.PickFolderAsync(wnd, start);
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("MainWindow: folder picker", ex); }
             if (!string.IsNullOrWhiteSpace(path))
             {
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
@@ -770,7 +740,7 @@ public partial class MainWindow : Window
                 });
             }
         }
-        catch { }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow: OnOpenButtonClick", ex); }
     }
 
     private void LoadArticlesFromFolder(string folder)
@@ -787,7 +757,7 @@ public partial class MainWindow : Window
                 IndexEditor.Shared.EditorState.CurrentVolume = vol;
                 IndexEditor.Shared.EditorState.CurrentNumber = num;
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: parse folder metadata", ex); }
 
             var indexPath = System.IO.Path.Combine(folder, "_index.txt");
             var articles = new List<Common.Shared.ArticleLine>();
@@ -823,7 +793,7 @@ public partial class MainWindow : Window
                         continue;
                     }
                     // First non-comment line: try CSV metadata
-                    var parts = SplitRespectingEscapedCommas(trimmed);
+                    var parts = IndexFileParser.SplitRespectingEscapedCommas(trimmed);
                     if (parts.Count >= 3)
                     {
                         string Unescape(string s) => s.Replace("\\,", ",");
@@ -865,11 +835,11 @@ public partial class MainWindow : Window
                     // If nothing is selected yet, select the first article so the editor shows content
                     if (vm.SelectedArticle == null && vm.Articles.Count > 0)
                     {
-                        try { vm.SelectedArticle = vm.Articles[0]; } catch { }
+                        try { vm.SelectedArticle = vm.Articles[0]; } catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: set SelectedArticle", ex); }
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: update VM", ex); }
 
             IndexEditor.Shared.EditorState.CurrentFolder = folder;
 
@@ -884,13 +854,13 @@ public partial class MainWindow : Window
                     {
                         foreach (var p in allPages)
                         {
-                            try { if (IndexEditor.Shared.ImageHelper.ImageExists(folder, p)) { firstImage = p; break; } } catch { }
+                            try { if (IndexEditor.Shared.ImageHelper.ImageExists(folder, p)) { firstImage = p; break; } } catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: ImageExists check", ex); }
                         }
                     }
                 }
                 IndexEditor.Shared.EditorState.CurrentPage = firstImage ?? 1;
             }
-            catch { IndexEditor.Shared.EditorState.CurrentPage = 1; }
+            catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: choose first image", ex); IndexEditor.Shared.EditorState.CurrentPage = 1; }
 
             IndexEditor.Shared.EditorState.NotifyStateChanged();
         }

@@ -6,80 +6,15 @@ namespace IndexEditor.Shared
 {
     public static class IndexFileParser
     {
-        // Parse page text like "1|2-4" into list of ints
+        // Delegate to shared common parser utilities to avoid duplication
         public static List<int> ParsePageNumbers(string pageStr, out bool hasError)
         {
-            var pages = new List<int>();
-            hasError = false;
-            if (string.IsNullOrWhiteSpace(pageStr))
-            {
-                hasError = true;
-                return pages;
-            }
-            var parts = pageStr.Split('|');
-            foreach (var part in parts)
-            {
-                var trimmed = part.Trim();
-                if (string.IsNullOrEmpty(trimmed))
-                {
-                    hasError = true;
-                    continue;
-                }
-                if (trimmed.Contains('-'))
-                {
-                    var range = trimmed.Split('-');
-                    if (range.Length == 2 && int.TryParse(range[0], out int start) && int.TryParse(range[1], out int end) && start <= end)
-                    {
-                        for (int i = start; i <= end; i++)
-                            pages.Add(i);
-                    }
-                    else
-                    {
-                        hasError = true;
-                    }
-                }
-                else if (int.TryParse(trimmed, out int singlePage))
-                {
-                    pages.Add(singlePage);
-                }
-                else
-                {
-                    hasError = true;
-                }
-            }
-            return pages;
+            return Common.Shared.IndexParserUtilities.ParsePageNumbers(pageStr, out hasError);
         }
 
-        // Split respecting escaped commas (\,)
         public static List<string> SplitRespectingEscapedCommas(string line)
         {
-            var parts = new List<string>();
-            var currentPart = new System.Text.StringBuilder();
-            bool escaped = false;
-            for (int i = 0; i < line.Length; i++)
-            {
-                char c = line[i];
-                if (escaped)
-                {
-                    currentPart.Append(c);
-                    escaped = false;
-                }
-                else if (c == '\\' && i + 1 < line.Length)
-                {
-                    escaped = true;
-                }
-                else if (c == ',')
-                {
-                    parts.Add(currentPart.ToString().Trim());
-                    currentPart.Clear();
-                }
-                else
-                {
-                    currentPart.Append(c);
-                }
-            }
-            parts.Add(currentPart.ToString().Trim());
-            return parts;
+            return Common.Shared.IndexParserUtilities.SplitRespectingEscapedCommas(line);
         }
 
         public static Common.Shared.ArticleLine? ParseArticleLine(string line)
@@ -98,9 +33,9 @@ namespace IndexEditor.Shared
             {
                 var pages = article.Pages;
                 // Ensure the Segments collection exists and update it in-place so UI bindings receive collection change notifications
-                try { if (article.Segments == null) article.Segments = new System.Collections.ObjectModel.ObservableCollection<Common.Shared.Segment>(); } catch { }
+                try { if (article.Segments == null) article.Segments = new System.Collections.ObjectModel.ObservableCollection<Common.Shared.Segment>(); } catch (Exception ex) { DebugLogger.LogException("IndexFileParser.ParseArticleLine: ensure segments", ex); }
                 // Clear existing collection if possible
-                try { article.Segments.Clear(); } catch { }
+                try { article.Segments.Clear(); } catch (Exception ex) { DebugLogger.LogException("IndexFileParser.ParseArticleLine: clear segments", ex); }
                 if (pages != null && pages.Count > 0)
                 {
                     pages.Sort();
@@ -116,11 +51,11 @@ namespace IndexEditor.Shared
                             i++;
                         }
                         // Stored segments are closed ranges, so set End to the final page
-                        try { article.Segments.Add(new Common.Shared.Segment(start, end)); } catch { }
+                        try { article.Segments.Add(new Common.Shared.Segment(start, end)); } catch (Exception ex) { DebugLogger.LogException("IndexFileParser.ParseArticleLine: add segment", ex); }
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("IndexFileParser.ParseArticleLine: outer", ex); }
 
             article.Category = parts.Count > 1 ? parts[1] : "";
             if (string.IsNullOrWhiteSpace(article.Category))
@@ -180,7 +115,7 @@ namespace IndexEditor.Shared
                     article.Authors = article.Photographers.Select(p => p).ToList();
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("IndexFileParser.ParseArticleLine: humour fallback", ex); }
 
             return article;
         }
