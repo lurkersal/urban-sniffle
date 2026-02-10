@@ -560,18 +560,8 @@ public partial class MainWindow : Window
                     var end = IndexEditor.Shared.EditorState.CurrentPage;
                     if (end < start) (start, end) = (end, start);
 
-                    var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
-                    if (pc != null)
-                        pc.EndActiveSegment();
-                    else
-                    {
-                        // Fallback: set seg.End to current page and clear active segment
-                        seg.End = IndexEditor.Shared.EditorState.CurrentPage;
-                        seg.WasNew = false;
-                        try { seg.CurrentPreviewEnd = null; } catch (Exception ex) { DebugLogger.LogException("MainWindow: clear CurrentPreviewEnd", ex); }
-                        IndexEditor.Shared.EditorState.ActiveSegment = null;
-                        IndexEditor.Shared.EditorState.NotifyStateChanged();
-                    }
+                    // Use EditorActions (UI-agnostic) to end the active segment and update pages
+                    try { IndexEditor.Shared.EditorActions.EndActiveSegment(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: EditorActions.EndActiveSegment", ex); }
 
                     // User feedback
                     try { IndexEditor.Shared.ToastService.Show($"Segment ended ({start}-{end})"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show on end segment", ex); }
@@ -584,22 +574,33 @@ public partial class MainWindow : Window
             // No active segment: focus the first editable field in the article editor (Title textbox)
             try
             {
+                // Ask ArticleEditor instances to focus via the EditorState focus request counter
+                try { IndexEditor.Shared.EditorState.RequestArticleEditorFocus(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: RequestArticleEditorFocus", ex); }
+
                 var ae = this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl") ?? this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
                 if (ae != null)
                 {
-                    ae.FocusTitle();
+                    try { ae.FocusTitle(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ae.FocusTitle", ex); }
                     e.Handled = true;
                     return;
                 }
 
-                // As a final fallback, trigger the EditorState.StateChanged hook which ArticleEditor listens to
+                // As a fallback, try to focus TitleTextBox directly inside the EditorContent host if present
                 try
                 {
-                    IndexEditor.Shared.EditorState.NotifyStateChanged();
-                    e.Handled = true;
-                    return;
+                    var host = this.FindControl<ContentControl>("EditorContentHost") ?? this.FindControl<ContentControl>("EditorContent");
+                    if (host?.Content is Avalonia.Controls.Control hostContent)
+                    {
+                        var tb = hostContent.FindControl<TextBox>("TitleTextBox");
+                        if (tb != null) { try { tb.Focus(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: tb.Focus fallback", ex); } e.Handled = true; return; }
+                        var cb = hostContent.FindControl<ComboBox>("CategoryComboBox");
+                        if (cb != null) { try { cb.Focus(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: cb.Focus fallback", ex); } e.Handled = true; return; }
+                    }
                 }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: NotifyStateChanged", ex); }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: fallback focus search", ex); }
+
+                // Final fallback: trigger a state notify so listeners may react
+                try { IndexEditor.Shared.EditorState.NotifyStateChanged(); e.Handled = true; return; } catch (Exception ex) { DebugLogger.LogException("MainWindow: NotifyStateChanged fallback", ex); }
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindow: focus Title", ex); }
         }
