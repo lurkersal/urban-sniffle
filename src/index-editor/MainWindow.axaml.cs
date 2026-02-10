@@ -95,9 +95,16 @@ public partial class MainWindow : Window
                         }
                         else if (ke.Key == Key.A && ke.KeyModifiers.HasFlag(KeyModifiers.Control))
                         {
-                            try { IndexEditor.Shared.ToastService.Show("Ctrl+A: adding segment"); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: toast Ctrl+A", ex); }
-                            var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
-                            pc?.AddSegmentAtCurrentPage();
+                            // Ctrl+A: add segment at current page
+                            try { IndexEditor.Shared.ToastService.Show("Ctrl+A: add segment"); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: toast Ctrl+A add", ex); }
+                            try { IndexEditor.Shared.EditorActions.AddSegmentAtCurrentPage(); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: AddSegmentAtCurrentPage", ex); }
+                            ke.Handled = true;
+                        }
+                        else if (ke.Key == Key.Return && ke.KeyModifiers.HasFlag(KeyModifiers.Control))
+                        {
+                            // Ctrl+Enter: focus Title textbox in ArticleEditor (global)
+                            try { IndexEditor.Shared.ToastService.Show("Ctrl+Enter: focus title"); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: toast Ctrl+Enter focus", ex); }
+                            try { IndexEditor.Shared.EditorActions.FocusArticleTitle(); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: FocusArticleTitle", ex); }
                             ke.Handled = true;
                         }
                     }
@@ -426,16 +433,25 @@ public partial class MainWindow : Window
         try { Console.WriteLine($"[TRACE] OnMainWindowKeyDown: Key={e.Key} Modifiers={e.KeyModifiers} Handled={e.Handled}"); } catch {}
         try
         {
+            if (e.Key == Key.Return && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            {
+                try
+                {
+                    // Ctrl+Enter: focus Title textbox in ArticleEditor (global)
+                    try { IndexEditor.Shared.ToastService.Show("Ctrl+Enter: focus title"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show Ctrl+Enter focus", ex); }
+                    try { IndexEditor.Shared.EditorActions.FocusArticleTitle(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: FocusArticleTitle", ex); }
+                }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Enter handler", ex); }
+                e.Handled = true;
+                return;
+            }
+            // Ctrl+A: add segment at current page (global)
             if (e.Key == Key.A && e.KeyModifiers.HasFlag(KeyModifiers.Control))
             {
                 try
                 {
-                    if (MainViewModel != null) MainViewModel.AddSegment();
-                    else
-                    {
-                        var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
-                        pc?.AddSegmentAtCurrentPage();
-                    }
+                    try { IndexEditor.Shared.ToastService.Show("Ctrl+A: add segment"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show Ctrl+A add", ex); }
+                    try { IndexEditor.Shared.EditorActions.AddSegmentAtCurrentPage(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: AddSegmentAtCurrentPage", ex); }
                 }
                 catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+A handler", ex); }
                 e.Handled = true;

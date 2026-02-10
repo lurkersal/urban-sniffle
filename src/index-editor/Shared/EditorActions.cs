@@ -51,29 +51,92 @@ namespace IndexEditor.Shared
                     ToastService.Show("No active article selected");
                     return false;
                 }
+                // If there's any active segment open elsewhere, disallow creating a new one
                 if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
                 {
-                    ToastService.Show("Finish or cancel the open segment first");
+                    ToastService.Show("Finish or cancel the active segment first");
+                    try { Console.WriteLine("[TRACE] EditorActions.AddSegmentAtCurrentPage: blocked - active segment exists"); } catch {};
                     return false;
                 }
+
                 var page = EditorState.CurrentPage;
+
+                // If the page already belongs to this article, attempt to find the segment that contains it and make it active
                 if (art.Pages != null && art.Pages.Contains(page))
                 {
-                    ToastService.Show($"Page {page} already in article");
-                    return false;
+                    try
+                    {
+                        var existingSeg = art.Segments?.FirstOrDefault(s =>
+                        {
+                            try
+                            {
+                                var sEnd = s.End ?? s.Start;
+                                return page >= s.Start && page <= sEnd;
+                            }
+                            catch { return false; }
+                        });
+
+                        if (existingSeg != null)
+                        {
+                            // Open the existing (closed) segment so it becomes active
+                            if (existingSeg.End.HasValue)
+                            {
+                                existingSeg.OriginalEnd = existingSeg.End;
+                                existingSeg.WasNew = false;
+                                existingSeg.End = null; // make active
+                            }
+                            // Set global active segment and article
+                            EditorState.ActiveSegment = existingSeg;
+                            try { existingSeg.CurrentPreviewEnd = EditorState.CurrentPage; } catch (Exception ex) { DebugLogger.LogException("EditorActions.AddSegmentAtCurrentPage:set preview on existing", ex); }
+                            try { Console.WriteLine($"[TRACE] EditorActions.AddSegmentAtCurrentPage: activated existing segment start={existingSeg.Start} article='{art.Title ?? "<untitled>"}'"); } catch {};
+                            EditorState.NotifyStateChanged();
+                            return true;
+                        }
+                        else
+                        {
+                            // No existing segment found that contains the page: treat as 'page already in article' and do not create duplicate
+                            ToastService.Show($"Page {page} already in article");
+                            return false;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        DebugLogger.LogException("EditorActions.AddSegmentAtCurrentPage: find existing segment", ex);
+                        ToastService.Show($"Page {page} already in article");
+                        return false;
+                    }
                 }
-                var seg = new Common.Shared.Segment(page);
-                seg.WasNew = true;
-                seg.End = null;
-                art.Segments.Add(seg);
-                if (art.Pages == null) art.Pages = new System.Collections.Generic.List<int> { page };
-                else if (!art.Pages.Contains(page)) { art.Pages.Add(page); art.Pages.Sort(); }
-                EditorState.ActiveSegment = seg;
-                try { seg.CurrentPreviewEnd = EditorState.CurrentPage; } catch (Exception ex) { DebugLogger.LogException("EditorActions.AddSegmentAtCurrentPage:set preview", ex); }
-                EditorState.NotifyStateChanged();
-                return true;
+
+                // NOTE: Intentionally do not activate segments from OTHER articles. Add/activate applies only to the current active article.
+
+                // Page is not in article -> create a new active segment
+                 var seg = new Common.Shared.Segment(page);
+                 seg.WasNew = true;
+                 seg.End = null;
+                 art.Segments.Add(seg);
+                 if (art.Pages == null) art.Pages = new System.Collections.Generic.List<int> { page };
+                 else if (!art.Pages.Contains(page)) { art.Pages.Add(page); art.Pages.Sort(); }
+                 // Set global active segment and active article so UI locks selection to this article
+                 EditorState.ActiveSegment = seg;
+                 try { seg.CurrentPreviewEnd = EditorState.CurrentPage; } catch (Exception ex) { DebugLogger.LogException("EditorActions.AddSegmentAtCurrentPage:set preview", ex); }
+                 try { Console.WriteLine($"[TRACE] EditorActions.AddSegmentAtCurrentPage: created new active segment start={seg.Start} article='{art.Title ?? "<untitled>"}'"); } catch {};
+                 EditorState.NotifyStateChanged();
+                 return true;
             }
             catch (Exception ex) { DebugLogger.LogException("EditorActions.AddSegmentAtCurrentPage: outer", ex); return false; }
+        }
+
+        // Request focus for the ArticleEditor's Title TextBox.
+        // This increments the EditorState counter which ArticleEditor instances observe and will
+        // attempt to focus the TitleTextBox when they see the request.
+        public static void FocusArticleTitle()
+        {
+            try
+            {
+                EditorState.RequestArticleEditorFocus();
+                try { Console.WriteLine("[TRACE] EditorActions.FocusArticleTitle: requested focus"); } catch { }
+            }
+            catch (Exception ex) { DebugLogger.LogException("EditorActions.FocusArticleTitle", ex); }
         }
 
         // Create a new closed single-page article at the current page. Does not make it active.

@@ -644,48 +644,9 @@ namespace IndexEditor.Views
         {
             try
             {
-                var art = EditorState.ActiveArticle;
-                if (art == null)
-                {
-                    ToastService.Show("No active article selected");
-                    try { Console.WriteLine("[DEBUG] AddSegmentAtCurrentPage: no active article"); } catch (Exception ex) { DebugLogger.LogException("AddSegmentAtCurrentPage:no active", ex); }
-                    return false;
-                }
-
-                // If an active segment exists, do not auto-close; block creation
-                if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
-                {
-                    ToastService.Show("Finish or cancel the open segment first");
-                    try { Console.WriteLine("[DEBUG] AddSegmentAtCurrentPage: active segment already open"); } catch (Exception ex) { DebugLogger.LogException("AddSegmentAtCurrentPage:active open", ex); }
-                    return false;
-                }
-
-                // Do not allow adding if current page is already in the article's pages
-                var page = EditorState.CurrentPage;
-                if (art.Pages != null && art.Pages.Contains(page))
-                {
-                    ToastService.Show($"Page {page} already in article");
-                    try { Console.WriteLine($"[DEBUG] AddSegmentAtCurrentPage: page {page} already in article"); } catch (Exception ex) { DebugLogger.LogException("AddSegmentAtCurrentPage:page in article", ex); }
-                    return false;
-                }
-
-                // Create a new active segment starting at current page
-                var seg = new Common.Shared.Segment(page);
-                seg.WasNew = true;
-                seg.End = null; // active open segment
-                art.Segments.Add(seg);
-                // Also ensure the Pages list contains the start page
-                if (art.Pages == null) art.Pages = new List<int> { page };
-                else if (!art.Pages.Contains(page)) { art.Pages.Add(page); art.Pages.Sort(); }
-
-                EditorState.ActiveSegment = seg;
-                // New active segment: ensure no preview end is set yet (it will be updated when the Page setter runs)
-                try { seg.CurrentPreviewEnd = EditorState.CurrentPage; } catch (Exception ex) { DebugLogger.LogException("AddSegmentAtCurrentPage:set preview", ex); }
-                EditorState.NotifyStateChanged();
-                try { Console.WriteLine($"[DEBUG] AddSegmentAtCurrentPage: created new active segment start={page}"); } catch (Exception ex) { DebugLogger.LogException("AddSegmentAtCurrentPage:created", ex); }
-                return true;
+                return IndexEditor.Shared.EditorActions.AddSegmentAtCurrentPage();
             }
-            catch (Exception ex) { DebugLogger.LogException("AddSegmentAtCurrentPage: outer", ex); return false; }
+            catch (Exception ex) { DebugLogger.LogException("PageControllerView.AddSegmentAtCurrentPage: outer", ex); return false; }
         }
 
         // Public helpers so external callers (e.g., MainWindow key handlers) can move to the previous/next existing page

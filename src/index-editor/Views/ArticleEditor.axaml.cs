@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -119,6 +120,34 @@ namespace IndexEditor.Views
                 if (fallback != null) { fallback.Focus(); FlashControl(fallback); return; }
 
                 // Stronger fallback: search visual descendants of the window/root for any control named TitleTextBox
+                try
+                {
+                    var root = this.VisualRoot as Avalonia.Visual;
+                    if (root != null)
+                    {
+                        // BFS search for control with Name == "TitleTextBox"
+                        var stack = new System.Collections.Generic.Queue<Avalonia.Visual>();
+                        stack.Enqueue(root);
+                        while (stack.Count > 0)
+                        {
+                            var v = stack.Dequeue();
+                            if (v is Avalonia.Controls.Control c && string.Equals(c.Name, "TitleTextBox", StringComparison.Ordinal))
+                            {
+                                try { c.Focus(); FlashControl(c); System.Console.WriteLine("[DEBUG] ArticleEditor.FocusTitle: TitleTextBox found via visual-tree search"); return; } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.FocusTitle: focus found control", ex); }
+                            }
+                            try
+                            {
+                                foreach (var child in Avalonia.VisualTree.VisualExtensions.GetVisualChildren(v).OfType<Avalonia.Visual>())
+                                {
+                                    stack.Enqueue(child);
+                                }
+                            }
+                            catch (Exception) { /* ignore traversal errors on some platforms */ }
+                        }
+                    }
+                }
+                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.FocusTitle: visual-tree search", ex); }
+
                 // If we couldn't find the inner TitleTextBox via the DataTemplate or direct FindControl fallback,
                 // fall back to flashing the editor overlay so the user sees an indication. We avoid scanning the
                 // entire visual tree here to keep compatibility across Avalonia versions.

@@ -12,6 +12,28 @@ namespace IndexEditor.Views
 {
     public partial class ArticleList : UserControl
     {
+        // Helper: find the owning article for a given segment
+        private Common.Shared.ArticleLine? GetArticleForSegment(Common.Shared.Segment? seg)
+        {
+            if (seg == null) return null;
+            try
+            {
+                var vm = this.DataContext as EditorStateViewModel;
+                if (vm != null)
+                {
+                    var a = vm.Articles.FirstOrDefault(ar => ar.Segments != null && ar.Segments.Contains(seg));
+                    if (a != null) return a;
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("ArticleList.GetArticleForSegment: vm search", ex); }
+            try
+            {
+                return IndexEditor.Shared.EditorState.Articles?.FirstOrDefault(ar => ar.Segments != null && ar.Segments.Contains(seg));
+            }
+            catch (Exception ex) { DebugLogger.LogException("ArticleList.GetArticleForSegment: state search", ex); }
+            return null;
+        }
+
         private bool _listHandlersAttached = false;
 
         // Track last click timestamp per article as a fallback for double-click detection
@@ -116,8 +138,11 @@ namespace IndexEditor.Views
                     var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
                     // Disable the list entirely when an active segment exists to prevent user selecting any other article
                     list.IsEnabled = !(activeSeg != null && activeSeg.IsActive);
-                    if (activeSeg != null && activeSeg.IsActive && IndexEditor.Shared.EditorState.ActiveArticle != null)
-                        list.SelectedItem = IndexEditor.Shared.EditorState.ActiveArticle;
+                    if (activeSeg != null && activeSeg.IsActive)
+                    {
+                        var owner = GetArticleForSegment(activeSeg);
+                        if (owner != null) list.SelectedItem = owner;
+                    }
                 }
                 catch (Exception ex) { DebugLogger.LogException("ArticleList.constructor: initial enable state", ex); }
 
@@ -129,10 +154,11 @@ namespace IndexEditor.Views
                     {
                         // Disable the list entirely while there's an active open segment
                         list.IsEnabled = !(activeSeg != null && activeSeg.IsActive);
-                        // If a segment is active, force the SelectedItem to the owning active article
-                        if (activeSeg != null && activeSeg.IsActive && IndexEditor.Shared.EditorState.ActiveArticle != null)
+                        // If a segment is active, force the SelectedItem to the owning article (derived from the segment)
+                        if (activeSeg != null && activeSeg.IsActive)
                         {
-                            list.SelectedItem = IndexEditor.Shared.EditorState.ActiveArticle;
+                            var owner = GetArticleForSegment(activeSeg);
+                            if (owner != null) list.SelectedItem = owner;
                         }
 
                         // Clear highlighting on all segments, then set only the active one
@@ -156,7 +182,7 @@ namespace IndexEditor.Views
                 list.SelectionChanged += (s, e) =>
                 {
                     var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
-                    var activeArticle = IndexEditor.Shared.EditorState.ActiveArticle;
+                    var activeArticle = GetArticleForSegment(activeSeg);
                     var selected = list.SelectedItem as Common.Shared.ArticleLine;
                     if (activeSeg != null && activeSeg.IsActive && selected != null && activeArticle != null && !object.ReferenceEquals(selected, activeArticle))
                     {
