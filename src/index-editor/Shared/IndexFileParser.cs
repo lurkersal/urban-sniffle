@@ -92,44 +92,23 @@ namespace IndexEditor.Shared
             if (parts.Count == 7)
             {
                 // 7-column canonical format: parts[5]=contributors, parts[6]=measurements
-                var contribList = new List<string>();
                 if (!string.IsNullOrWhiteSpace(parts[5]))
-                    contribList = parts[5].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-
-                // Populate unified Contributors and keep Authors/Photographers for compatibility
-                article.Contributors = contribList.Count > 0 ? contribList : new List<string> { string.Empty };
-                article.Photographers = new List<string> { article.Contributors.Count > 0 ? article.Contributors[0] : string.Empty };
-                article.Authors = new List<string> { article.Contributors.Count > 0 ? article.Contributors[0] : string.Empty };
+                    article.Contributors = parts[5].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
                 if (!string.IsNullOrWhiteSpace(parts[6]))
-                {
                     article.Measurements = parts[6].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-                }
             }
 
             if (article.ModelNames == null || article.ModelNames.Count == 0)
                 article.ModelNames = new List<string> { string.Empty };
-            if (article.Photographers == null || article.Photographers.Count == 0)
-                article.Photographers = new List<string> { string.Empty };
-            if (article.Authors == null || article.Authors.Count == 0)
-                article.Authors = new List<string> { string.Empty };
+            if (article.Contributors == null || article.Contributors.Count == 0)
+                article.Contributors = new List<string> { string.Empty };
             if (article.Measurements == null || article.Measurements.Count == 0)
                 article.Measurements = new List<string> { string.Empty };
             if (article.Ages == null || article.Ages.Count == 0)
                 article.Ages = new List<int?> { null };
 
-            // Keep humour fallback for now (if desired)
-            try
-            {
-                var cat = (article.Category ?? string.Empty).Trim().ToLowerInvariant();
-                bool authorsEmpty = article.Authors == null || article.Authors.All(a => string.IsNullOrWhiteSpace(a));
-                bool photographersHave = article.Photographers != null && article.Photographers.Any(p => !string.IsNullOrWhiteSpace(p));
-                if (cat == "humour" && authorsEmpty && photographersHave)
-                {
-                    article.Authors = article.Photographers.Select(p => p).ToList();
-                }
-            }
-            catch (Exception ex) { DebugLogger.LogException("IndexFileParser.ParseArticleLine: humour fallback", ex); }
+            // No legacy fallback required: Contributors is canonical. If parsing needs to notify user, the caller will handle it.
 
             return article;
         }

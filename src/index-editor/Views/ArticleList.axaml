@@ -75,7 +75,7 @@
 
                             <!-- Third row: Photographer (left) and Pages (right, always visible) -->
                             <Grid Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2">
-                                <TextBlock Text="{Binding Photographer0}" FontSize="13" FontWeight="Normal" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
+                                <TextBlock Text="{Binding Contributor0}" FontSize="13" FontWeight="Normal" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
                             </Grid>
 
                             <!-- Segments list: simplified rows (transparent background) -->

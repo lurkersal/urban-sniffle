@@ -36,10 +36,10 @@ namespace Common.Tests
                     string Escape(string s) => s?.Replace(",", "\\,") ?? string.Empty;
                     var modelNames = (a.ModelNames != null && a.ModelNames.Count > 0) ? string.Join('|', a.ModelNames) : string.Empty;
                     var ages = (a.Ages != null && a.Ages.Count > 0) ? string.Join('|', a.Ages.Select(v => v.HasValue ? v.Value.ToString() : string.Empty)) : string.Empty;
-                    var photographers = (a.Photographers != null && a.Photographers.Count > 0) ? string.Join('|', a.Photographers) : string.Empty;
-                    var authors = (a.Authors != null && a.Authors.Count > 0) ? string.Join('|', a.Authors) : string.Empty;
+                    var contributors = (a.Contributors != null && a.Contributors.Count > 0) ? string.Join('|', a.Contributors) : string.Empty;
                     var measurements = (a.Measurements != null && a.Measurements.Count > 0) ? string.Join('|', a.Measurements) : string.Empty;
-                    var parts = new List<string> { pagesText, Escape(a.Category), Escape(a.Title), Escape(modelNames), Escape(ages), Escape(photographers), Escape(authors), Escape(measurements) };
+                    // Use canonical 7-field format: pages,category,title,modelNames,ages,contributors,measurements
+                    var parts = new List<string> { pagesText, Escape(a.Category), Escape(a.Title), Escape(modelNames), Escape(ages), Escape(contributors), Escape(measurements) };
                     var line = string.Join(",", parts);
                     lines.Add(line);
                 }

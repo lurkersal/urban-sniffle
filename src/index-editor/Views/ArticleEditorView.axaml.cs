@@ -58,13 +58,10 @@ namespace IndexEditor.Views
         {
             try
             {
-                System.Console.WriteLine("[DEBUG] ArticleEditorView.FocusEditor: called");
                 var tb = this.FindControl<TextBox>("TitleTextBox");
-                System.Console.WriteLine(tb == null ? "[DEBUG] ArticleEditorView.FocusEditor: TitleTextBox not found" : "[DEBUG] ArticleEditorView.FocusEditor: TitleTextBox found");
                 if (tb != null) { tb.Focus(); return; }
                 // fallback to category if title absent
                 var cb = this.FindControl<ComboBox>("CategoryComboBox");
-                System.Console.WriteLine(cb == null ? "[DEBUG] ArticleEditorView.FocusEditor: CategoryComboBox not found" : "[DEBUG] ArticleEditorView.FocusEditor: CategoryComboBox found");
                 if (cb != null) cb.Focus();
             }
             catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.FocusEditor", ex); }
@@ -73,11 +70,9 @@ namespace IndexEditor.Views
         // Specifically focus the title textbox
         public void FocusTitle()
         {
-            System.Console.WriteLine("[DEBUG] ArticleEditorView.FocusTitle: called");
             try
             {
                 var tb = this.FindControl<TextBox>("TitleTextBox");
-                System.Console.WriteLine(tb == null ? "[DEBUG] ArticleEditorView.FocusTitle: TitleTextBox not found" : "[DEBUG] ArticleEditorView.FocusTitle: TitleTextBox found");
                 if (tb != null) tb.Focus();
             }
             catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.FocusTitle", ex); }
@@ -244,17 +239,7 @@ namespace IndexEditor.Views
                 }
             }
             IndexEditor.Shared.EditorState.Articles = articles;
-            // Debug: append first article measurements to a temp log so tests can inspect it when console is unavailable
-            try
-            {
-                if (articles.Count > 0)
-                {
-                    var m = string.Join(";", articles[0].Measurements ?? new List<string>());
-                    var log = $"Loaded folder '{_currentFolder ?? "?"}' first article measurements: {m}\n";
-                    try { System.IO.File.AppendAllText("/tmp/index_editor_measurements_debug.txt", log); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: append measurements debug", ex); }
-                }
-            }
-            catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: outer append", ex); }
+
             // Update the view-model's observable collection so UI bindings (SelectedArticle, Articles) refresh.
             var vm = this.DataContext as EditorStateViewModel;
             if (vm != null)
@@ -264,20 +249,16 @@ namespace IndexEditor.Views
                     vm.Articles.Clear();
                     foreach (var a in articles)
                     {
-                        // Ensure Measurements list exists and normalize the first value via Validate
                         try
                         {
                             if (a.Measurements == null || a.Measurements.Count == 0)
                                 a.Measurements = new System.Collections.Generic.List<string> { string.Empty };
-                            // Trigger normalization/validation so Measurements0 becomes canonical
                             try { a.Validate(); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: a.Validate", ex); }
-                            // Raise PropertyChanged for Measurements and Measurements0 so UI bindings see the values
                             try { a.NotifyPropertyChanged(nameof(a.Measurements)); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: NotifyPropertyChanged Measurements", ex); }
                             try { a.NotifyPropertyChanged(nameof(a.Measurements0)); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: NotifyPropertyChanged Measurements0", ex); }
                         }
                         catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: per-article setup", ex); }
                         vm.Articles.Add(a);
-                        try { System.IO.File.AppendAllText("/tmp/index_editor_articles_debug.txt", $"Loaded article: Title='{a.Title}', Category='{a.Category}', Contributor0='{a.Contributor0}'\n"); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: append article debug", ex); }
                     }
                 }
                 catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: update VM articles", ex); }

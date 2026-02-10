@@ -9,8 +9,7 @@ public class ContentLine
     public List<string> ModelNames { get; set; } = new();
     public int? Age { get; set; }
     public List<int?> Ages { get; set; } = new();
-    public List<string> Photographers { get; set; } = new();
-    public List<string> Authors { get; set; } = new();
+    public List<string> Contributors { get; set; } = new();
     public List<string> Illustrators { get; set; } = new();
     public string ModelSize { get; set; } = string.Empty;
     public List<string> Measurements { get; set; } = new();
@@ -34,18 +33,25 @@ public class ContentLine
     }
     public string Photographer
     {
-        get => Photographers.Count > 0 ? string.Join(" | ", Photographers) : string.Empty;
-        set { if (!string.IsNullOrWhiteSpace(value)) Photographers = SplitNames(value); }
+        // For backward compatibility, reflect the first contributor as photographer
+        get => Contributors.Count > 0 ? string.Join(" | ", Contributors) : string.Empty;
+        set { if (!string.IsNullOrWhiteSpace(value)) Contributors = SplitNames(value); }
     }
     public string Author
     {
-        get => Authors.Count > 0 ? string.Join(" | ", Authors) : string.Empty;
-        set { if (!string.IsNullOrWhiteSpace(value)) Authors = SplitNames(value); }
+        // For backward compatibility, reflect the first contributor as author
+        get => Contributors.Count > 0 ? string.Join(" | ", Contributors) : string.Empty;
+        set { if (!string.IsNullOrWhiteSpace(value)) Contributors = SplitNames(value); }
     }
     public string Illustrator
     {
         get => Illustrators.Count > 0 ? string.Join(" | ", Illustrators) : string.Empty;
         set { if (!string.IsNullOrWhiteSpace(value)) Illustrators = SplitNames(value); }
+    }
+    public string Contributor
+    {
+        get => Contributors.Count > 0 ? string.Join(" | ", Contributors) : string.Empty;
+        set { if (!string.IsNullOrWhiteSpace(value)) Contributors = SplitNames(value); }
     }
 
     private static List<string> SplitNames(string value)

@@ -63,8 +63,15 @@ namespace common.Shared.Services
                 }
             }
 
-            // Store first age for backward compatibility
-            contentLine.Photographer = parts.Count > 5 ? parts[5] : "";
+            // Canonical format: parts[5] is contributors (single unified field)
+            if (parts.Count > 5)
+            {
+                contentLine.Contributors = parts[5].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+            }
+            else
+            {
+                contentLine.Contributors = new List<string>();
+            }
             // Split measurements by '|', store as list
             List<string> measurements = new();
             List<int?> bustSizes = new();
@@ -165,8 +172,13 @@ namespace common.Shared.Services
                     if (parts.Count > 5 && System.Int32.TryParse(parts[5], out int newAge))
                         contentLine.Age = newAge;
 
-                    contentLine.Photographer = parts.Count > 6 ? parts[6] : "";
-                    contentLine.ModelSize = parts.Count > 7 ? parts[7] : "";
+                    // For older formats where photographer and model-size were shifted, attempt to preserve behavior
+                    if (parts.Count > 6)
+                    {
+                        // If there are 7+ parts, parts[6] used to be measurements or photographer depending on format.
+                        // We'll set ModelSize from part 7 if present, and treat part 6 as contributor (already handled above).
+                        contentLine.ModelSize = parts.Count > 7 ? parts[7] : parts[6];
+                    }
                 }
             }
 
@@ -342,3 +354,4 @@ namespace common.Shared.Services
         }
     }
 }
+

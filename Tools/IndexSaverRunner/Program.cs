@@ -46,14 +46,14 @@ class Program
                 Pages = new System.Collections.Generic.List<int> { 77,78,108 },
                 Category = "Feature",
                 Title = "Courting St James's: how to belong to a gentleman's club",
-                Authors = new System.Collections.Generic.List<string>{"Paul Keers"}
+                Contributors = new System.Collections.Generic.List<string>{"Paul Keers"}
             },
             new Common.Shared.ArticleLine
             {
                 Pages = new System.Collections.Generic.List<int> { 80,81,82,83,84,85 },
                 Category = "Model",
                 Title = "Louise",
-                Authors = new System.Collections.Generic.List<string>{"Louise Cohen"}
+                Contributors = new System.Collections.Generic.List<string>{"Louise Cohen"}
             },
             new Common.Shared.ArticleLine
             {

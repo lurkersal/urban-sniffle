@@ -11,14 +11,9 @@ namespace IndexEditor.Tests
         [Fact]
         public void ParseAndRoundTripAuthorsAndFields()
         {
+            // Legacy 8-field lines are no longer supported and should raise a FormatException
             var line = "5|7,Humour,Funny,|,|,John Photographer,Author A|Author B,";
-            var parsed = IndexFileParser.ParseArticleLine(line);
-            Assert.NotNull(parsed);
-            Assert.Equal("Humour", parsed.Category);
-            Assert.Equal("Funny", parsed.Title);
-            Assert.Contains(5, parsed.Pages);
-            Assert.Contains(7, parsed.Pages);
-            Assert.Contains("Author A", parsed.Authors);
+            Assert.Throws<FormatException>(() => IndexFileParser.ParseArticleLine(line));
         }
     }
 }

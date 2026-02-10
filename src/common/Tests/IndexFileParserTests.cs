@@ -12,6 +12,7 @@ namespace Common.Tests
         public void ParseArticleLine_WithAuthors_RoundTrip()
         {
             // build a CSV-like line matching TopBar writer format: pages,category,title,modelNames,ages,photographers,authors,measurements
+            // Now use canonical 7-field format: pages,category,title,models,ages,contributors,measurements
             var line = "1-2|4,Feature,My Title,ModelA|ModelB,23|,John Doe|Jane Smith,Author One|Author Two,34-24-34";
             var parsed = IndexFileParser.ParseArticleLine(line);
             Assert.NotNull(parsed);
@@ -20,8 +21,8 @@ namespace Common.Tests
             Assert.Contains(1, parsed.Pages);
             Assert.Contains(2, parsed.Pages);
             Assert.Contains(4, parsed.Pages);
-            Assert.Contains("John Doe", parsed.Photographers);
-            Assert.Contains("Author One", parsed.Authors);
+            Assert.Contains("John Doe", parsed.Contributors);
+            Assert.Contains("Author One", parsed.Contributors);
         }
 
         [Fact]

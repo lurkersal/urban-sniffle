@@ -121,9 +121,6 @@ namespace Common.Shared
         public List<string> ModelNames { get; set; } = new();
         public int? Age { get; set; }
         public List<int?> Ages { get; set; } = new();
-        public List<string> Photographers { get; set; } = new();
-        public List<string> Authors { get; set; } = new();
-        // New unified contributors list (field 6 in the _index.txt)
         public List<string> Contributors { get; set; } = new();
         public List<string> Illustrators { get; set; } = new();
         public string ModelSize { get; set; } = string.Empty;
@@ -299,15 +296,12 @@ namespace Common.Shared
                 if (Contributors[0] != value)
                 {
                     Contributors[0] = value ?? string.Empty;
-                    // Keep backward-compatible lists in sync
-                    try { if (Photographers.Count == 0) Photographers.Add(string.Empty); Photographers[0] = Contributors[0]; } catch { }
-                    try { if (Authors.Count == 0) Authors.Add(string.Empty); Authors[0] = Contributors[0]; } catch { }
-
+                    // Keep backward-compatible behaviour through Contributors only
+                    // (no separate Photographers/Authors lists maintained)
+                     
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Contributors)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Contributor0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
-                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Photographers))); } catch { }
-                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Authors))); } catch { }
                 }
             }
         }
@@ -322,13 +316,8 @@ namespace Common.Shared
                 if (Contributors[0] != value)
                 {
                     Contributors[0] = value ?? string.Empty;
-                    if (Photographers.Count == 0) Photographers.Add(string.Empty);
-                    Photographers[0] = Contributors[0];
-                    if (Authors.Count == 0) Authors.Add(string.Empty);
-                    Authors[0] = Contributors[0];
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Contributor0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Photographer0)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Author0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
                 }
             }
@@ -344,13 +333,8 @@ namespace Common.Shared
                 if (Contributors[0] != value)
                 {
                     Contributors[0] = value ?? string.Empty;
-                    if (Authors.Count == 0) Authors.Add(string.Empty);
-                    Authors[0] = Contributors[0];
-                    if (Photographers.Count == 0) Photographers.Add(string.Empty);
-                    Photographers[0] = Contributors[0];
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Contributor0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Author0)));
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Photographer0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
                 }
             }
@@ -467,21 +451,21 @@ namespace Common.Shared
             if (cat == "editorial")
                 return $"{categoryText}\n{pagesText}\nTitle: {Title}";
 
-            // Cartoons: rename photographer to cartoonist
+            // Cartoons: rename photographer to cartoonist (use Contributors if available)
             if (cat == "cartoons")
-                return $"{categoryText}\n{pagesText}\nTitle: {Title}\nCartoonist: {string.Join(", ", Photographers)}";
+                return $"{categoryText}\n{pagesText}\nTitle: {Title}\nCartoonist: {string.Join(", ", Contributors)}";
 
-            // Model and Cover: show photographer, model, age, measurements
+            // Model and Cover: show photographer, model, age, measurements (use Contributors if populated)
             if (cat == "model" || cat == "cover")
-                return $"{categoryText}\n{pagesText}\nModel: {string.Join(", ", ModelNames)}\nAge: {string.Join(", ", Ages.Where(a => a.HasValue).Select(a => a.GetValueOrDefault().ToString()))}\nPhotographer: {string.Join(", ", Photographers)}\nMeasurements: {string.Join(", ", Measurements)}";
+                return $"{categoryText}\n{pagesText}\nModel: {string.Join(", ", ModelNames)}\nAge: {string.Join(", ", Ages.Where(a => a.HasValue).Select(a => a.GetValueOrDefault().ToString()))}\nPhotographer: {string.Join(", ", Contributors)}\nMeasurements: {string.Join(", ", Measurements)}";
 
-            // Feature, Fiction, Review, Humour: rename photographer as author
+            // Feature, Fiction, Review, Humour: show contributors as Author
             if (cat == "feature" || cat == "fiction" || cat == "review" || cat == "humour" || cat == "humor")
-                return $"{categoryText}\n{pagesText}\nTitle: {Title}\nAuthor: {string.Join(", ", Authors)}";
+                return $"{categoryText}\n{pagesText}\nTitle: {Title}\nAuthor: {string.Join(", ", Contributors)}";
 
-            // Photographer category: show photographer and title
+            // Photographer category: show photographer and title (contributors if present)
             if (cat == "photographer")
-                return $"{categoryText}\n{pagesText}\nPhotographer: {string.Join(", ", Photographers)}\nTitle: {Title}";
+                return $"{categoryText}\n{pagesText}\nPhotographer: {string.Join(", ", Contributors)}\nTitle: {Title}";
 
             // Illustration: show illustrator and title
             if (cat == "illustration")

@@ -14,9 +14,9 @@ class Program
             if (parsed == null) { Console.WriteLine("parsed null"); return 2; }
             Console.WriteLine($"Title: {parsed.Title}");
             Console.WriteLine($"Category: {parsed.Category}");
-            Console.WriteLine($"Authors count: {parsed.Authors?.Count}");
-            if (parsed.Authors != null) Console.WriteLine($"Authors[0]: { (parsed.Authors.Count>0?parsed.Authors[0]:"(none)") }");
-            Console.WriteLine($"Author0 property: {parsed.Author0}");
+            Console.WriteLine($"Contributors count: {parsed.Contributors?.Count}");
+            if (parsed.Contributors != null) Console.WriteLine($"Contributors[0]: { (parsed.Contributors.Count>0?parsed.Contributors[0]:"(none)") }");
+            Console.WriteLine($"Contributor0 property: {parsed.Contributor0}");
             return 0;
         }
         catch (Exception ex)
@@ -26,4 +26,3 @@ class Program
         }
     }
 }
-

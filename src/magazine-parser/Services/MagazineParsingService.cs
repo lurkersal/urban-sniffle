@@ -849,16 +849,14 @@ public class MagazineParsingService
                     _userInteraction.DisplayMessage($"    ⚠ Warning: Image file for page {page} not found");
                 }
                 var contentId = _repository.InsertContent(issueId, page, articleId, relativePath);
-                // Link contributors to content
-                foreach (var photographer in contentLine.Photographers)
+                // Link contributors to content using canonical Contributors list
+                var contributors = contentLine.Contributors ?? new List<string>();
+                foreach (var contrib in contributors)
                 {
-                    var contributorId = _repository.GetOrCreateContributorId(photographer, "Photographer");
-                    _repository.LinkContentToContributor(contentId, contributorId);
-                }
-                
-                foreach (var author in contentLine.Authors)
-                {
-                    var contributorId = _repository.GetOrCreateContributorId(author, "Author");
+                    var role = (contentLine.Category.Equals("Model", StringComparison.OrdinalIgnoreCase) || contentLine.Category.Equals("Cover", StringComparison.OrdinalIgnoreCase))
+                        ? "Photographer"
+                        : "Author";
+                    var contributorId = _repository.GetOrCreateContributorId(contrib, role);
                     _repository.LinkContentToContributor(contentId, contributorId);
                 }
                 
