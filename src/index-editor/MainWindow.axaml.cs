@@ -42,6 +42,8 @@ public partial class MainWindow : Window
 
     public MainWindow() : this(null) { }
 
+    private IndexEditor.Shared.IKeyboardShortcutService? _shortcutService;
+
     public MainWindow(string? folderToOpen = null)
     {
         // MainWindow constructor
@@ -111,6 +113,19 @@ public partial class MainWindow : Window
                     catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: KeyboardFocusHost.KeyDown", ex); }
                 };
             }
+
+            // Initialize centralized keyboard shortcut service and register the shortcuts
+            try
+            {
+                _shortcutService = new KeyboardShortcutService();
+                _shortcutService.Register(Key.Return, KeyModifiers.Control, (ke) => { IndexEditor.Shared.EditorActions.FocusArticleTitle(); return true; }, null, "FocusTitle");
+                _shortcutService.Register(Key.A, KeyModifiers.Control, (ke) => { IndexEditor.Shared.EditorActions.AddSegmentAtCurrentPage(); return true; }, () => { var s = EditorState.ActiveSegment; return s == null || !s.IsActive; }, "AddSegment");
+                _shortcutService.Register(Key.N, KeyModifiers.Control, (ke) => { if (MainViewModel != null) MainViewModel.NewArticle(); else { var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl"); pc?.CreateNewArticle(); } return true; }, null, "NewArticle");
+                _shortcutService.Register(Key.S, KeyModifiers.Control, (ke) => { if (MainViewModel != null) MainViewModel.SaveIndex(); else { var folder = EditorState.CurrentFolder; if (string.IsNullOrWhiteSpace(folder)) { IndexEditor.Shared.ToastService.Show("No folder open; cannot save _index.txt"); return true; } IndexEditor.Shared.IndexSaver.SaveIndex(folder); } return true; }, () => { var s = EditorState.ActiveSegment; return s == null || !s.IsActive; }, "SaveIndex");
+                _shortcutService.Register(Key.O, KeyModifiers.Control, (ke) => { var s = EditorState.ActiveSegment; if (s != null && s.IsActive) { IndexEditor.Shared.ToastService.Show("End or cancel the active segment before opening a new folder"); return true; } var wnd = this.VisualRoot as Window ?? this; var start = IndexEditor.Shared.EditorState.CurrentFolder; Dispatcher.UIThread.Post(async () => { try { var path = await IndexEditor.Shared.FolderPicker.PickFolderAsync(wnd, start); if (!string.IsNullOrWhiteSpace(path)) LoadArticlesFromFolder(path); } catch (Exception ex) { IndexEditor.Shared.ToastService.Show("Open folder dialog failed: " + ex.Message); } }); return true; }, null, "OpenFolder");
+                _shortcutService.Register(Key.I, KeyModifiers.Control, (ke) => { var overlay = this.FindControl<Border>("IndexOverlay"); var tb = this.FindControl<TextBox>("IndexOverlayTextBox"); if (overlay != null && tb != null) { if (overlay.IsVisible) overlay.IsVisible = false; else { var folder = IndexEditor.Shared.EditorState.CurrentFolder; if (string.IsNullOrWhiteSpace(folder)) tb.Text = "No folder open."; else { var path = System.IO.Path.Combine(folder, "_index.txt"); tb.Text = System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : $"_index.txt not found in folder: {folder}"; } overlay.IsVisible = true; } } return true; }, null, "ToggleIndexOverlay");
+            }
+            catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: init shortcut service", ex); }
         }
         catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: hook KeyboardFocusHost", ex); }
 
@@ -433,6 +448,17 @@ public partial class MainWindow : Window
         try { Console.WriteLine($"[TRACE] OnMainWindowKeyDown: Key={e.Key} Modifiers={e.KeyModifiers} Handled={e.Handled}"); } catch {}
         try
         {
+            // Forward to the centralized shortcut service first
+            try
+            {
+                if (_shortcutService != null && _shortcutService.HandleKey(e))
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("MainWindow: shortcut service handle", ex); }
+
             if (e.Key == Key.Return && e.KeyModifiers.HasFlag(KeyModifiers.Control))
             {
                 try
@@ -575,27 +601,197 @@ public partial class MainWindow : Window
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindow: Esc dismiss overlay", ex); }
 
-            // Use shared helper to cancel active segment if present, otherwise preserve existing fullscreen behavior
-            var hadActive = IndexEditor.Shared.EditorState.ActiveSegment != null && IndexEditor.Shared.EditorState.ActiveSegment.IsActive;
-            if (hadActive)
+            // If the ArticleEditor (or one of its child controls) has focus, pressing Escape should
+            // move focus back to the article list (unless an active segment exists, in which case
+            // the Esc semantics remain to cancel the segment).
+            try
             {
-                try
+                // Determine whether focus is currently inside the ArticleEditor.
+                // Rely on the ArticleEditor focus tracking (GotFocus/LostFocus) for now.
+                // TODO: If we need to detect the focused descendant more precisely, use the Avalonia API
+                // that exposes the currently focused element on the proper FocusManager for the runtime version in use.
+                var editorFocused = IndexEditor.Shared.EditorState.IsArticleEditorFocused;
+                var hadActive = IndexEditor.Shared.EditorState.ActiveSegment != null && IndexEditor.Shared.EditorState.ActiveSegment.IsActive;
+
+                // If the editor has focus, ask it to end any inner editing (close dropdowns etc.) so Esc always stops editing.
+                if (editorFocused)
                 {
-                    IndexEditor.Shared.EditorActions.CancelActiveSegment();
-                    try { IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: NotifyStateChanged", ex); }
-                    try { IndexEditor.Shared.ToastService.Show("Segment cancelled"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show on cancel", ex); }
+                    try
+                    {
+                        var aeCtrl = this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl") ?? this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
+                        if (aeCtrl != null) { try { aeCtrl.EndEdit(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: EndEdit on Esc", ex); } }
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("MainWindow: EndEdit lookup on Esc", ex); }
                 }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: cancel active segment", ex); }
-                e.Handled = true;
-            }
-            else
-            {
-                if (this.WindowState == WindowState.FullScreen)
+
+                if (editorFocused && !hadActive)
                 {
-                    this.WindowState = WindowState.Normal;
+                    try
+                    {
+                        // Ask the ArticleEditor to end any active editing (close dropdowns, clear flags)
+                        try
+                        {
+                            var aeCtrl = this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl") ?? this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
+                            if (aeCtrl != null)
+                            {
+                                try { aeCtrl.EndEdit(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: call ArticleEditor.EndEdit", ex); }
+                            }
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("MainWindow: EndEdit lookup", ex); }
+                       
+                        var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
+                        if (articleList != null)
+                        {
+                            var lb = articleList.FindControl<ListBox>("ArticlesListBox");
+                            if (lb != null)
+                            {
+                                // Defer focus to the UI thread to avoid focus race conditions
+                                Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+                                {
+                                    try
+                                    {
+                                        try
+                                        {
+                                            Console.WriteLine(
+                                                "[TRACE] MainWindow.Esc: attempting to focus ArticlesListBox");
+                                        }
+                                        catch
+                                        {
+                                        }
+
+                                        // Focus querying via FocusManager.Instance is not portable across Avalonia versions used here.
+                                        // Skip detailed focused-control diagnostics and rely on EditorState.IsArticleEditorFocused instead.
+                                        try
+                                        {
+                                            Console.WriteLine(
+                                                "[TRACE] MainWindow.Esc: focused control query skipped (editorFocused=" +
+                                                editorFocused + ")");
+                                        }
+                                        catch
+                                        {
+                                        }
+
+                                        // Ensure the list is enabled (it may have been disabled previously when an active segment existed)
+                                        if (!lb.IsEnabled) lb.IsEnabled = true;
+                                        // Ensure there is a selected item so focus lands predictably
+                                        if (lb.SelectedIndex < 0 && lb.ItemCount > 0) lb.SelectedIndex = 0;
+                                        // Clear editor-focused flag since focus is about to move
+                                        try
+                                        {
+                                            IndexEditor.Shared.EditorState.IsArticleEditorFocused = false;
+                                        }
+                                        catch
+                                        {
+                                        }
+
+                                        // Retry loop: try several times to set focus (handles race conditions where other handlers reassert focus)
+                                        bool focused = false;
+                                        for (int attempt = 0; attempt < 6; attempt++)
+                                        {
+                                            try
+                                            {
+                                                lb.Focus();
+                                                await System.Threading.Tasks.Task.Delay(40);
+                                                if (lb.IsFocused)
+                                                {
+                                                    focused = true;
+                                                    break;
+                                                }
+
+                                                try
+                                                {
+                                                    Console.WriteLine(
+                                                        $"[TRACE] MainWindow.Esc: focus attempt {attempt} succeeded? {lb.IsFocused}");
+                                                }
+                                                catch
+                                                {
+                                                }
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                DebugLogger.LogException("MainWindow: Esc focus attempt", ex);
+                                            }
+                                        }
+
+                                        if (!focused)
+                                        {
+                                            try
+                                            {
+                                                Console.WriteLine(
+                                                    "[WARN] MainWindow.Esc: failed to focus ArticlesListBox after retries");
+                                            }
+                                            catch
+                                            {
+                                            }
+
+                                            ;
+                                            // As a fallback, try focusing the ArticleList control itself
+                                            try
+                                            {
+                                                articleList.Focus();
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                DebugLogger.LogException(
+                                                    "MainWindow: Esc focus articleList fallback", ex);
+                                            }
+                                        }
+                                        else
+                                        {
+                                            try
+                                            {
+                                                Console.WriteLine(
+                                                    "[TRACE] MainWindow.Esc: ArticlesListBox is now focused");
+                                            }
+                                            catch
+                                            {
+                                            }
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        DebugLogger.LogException("MainWindow: Esc focus ArticleList (UIThread)", ex);
+                                    }
+
+                                    e.Handled = true;
+                                    return;
+
+                                });
+                            }
+                        }
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("MainWindow: Esc focus ArticleList", ex); }
+                }
+
+                // Use shared helper to cancel active segment if present, otherwise preserve existing fullscreen behavior
+                if (hadActive)
+                {
+                    try
+                    {
+                        // Ensure editing has been ended in the editor (close dropdowns) before cancelling the segment
+                        try
+                        {
+                            var aeCtrl2 = this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl") ?? this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
+                            if (aeCtrl2 != null) { try { aeCtrl2.EndEdit(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: EndEdit before CancelActiveSegment", ex); } }
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("MainWindow: EndEdit lookup before cancel", ex); }
+                        IndexEditor.Shared.EditorActions.CancelActiveSegment();
+                        try { IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: NotifyStateChanged", ex); }
+                        try { IndexEditor.Shared.ToastService.Show("Segment cancelled"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show on cancel", ex); }
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("MainWindow: cancel active segment", ex); }
                     e.Handled = true;
                 }
+                else
+                {
+                    if (this.WindowState == WindowState.FullScreen)
+                    {
+                        this.WindowState = WindowState.Normal;
+                        e.Handled = true;
+                    }
+                }
             }
+            catch (Exception ex) { DebugLogger.LogException("MainWindow: Esc overall", ex); }
         }
         else if (e.Key == Key.Enter && !e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt))
         {
@@ -736,36 +932,39 @@ public partial class MainWindow : Window
             {
                 try
                 {
-                    var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
-                    if (articleList != null)
-                    {
-                        var lb = articleList.FindControl<ListBox>("ArticlesListBox");
-                        if (lb != null)
-                        {
-                            var cur = lb.SelectedIndex;
-                            int next = cur;
-                            if (e.Key == Key.Up) next = Math.Max(0, cur - 1);
-                            else next = Math.Min((lb.ItemCount > 0 ? lb.ItemCount - 1 : 0), cur + 1);
-                            if (next != cur && lb.ItemCount > 0)
-                            {
-                                lb.SelectedIndex = next;
-                                try { lb.Focus(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: lb.Focus on Up/Down", ex); }
-                                // Execute selection command on VM
-                                try
-                                {
-                                    var item = lb.SelectedItem as Common.Shared.ArticleLine;
-                                    var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-                                    if (vm != null && item != null && vm.SelectArticleCommand.CanExecute(item))
-                                        vm.SelectArticleCommand.Execute(item);
-                                }
-                                catch (Exception ex) { DebugLogger.LogException("MainWindow: article list selection", ex); }
-                            }
-                            e.Handled = true;
-                        }
-                    }
-                }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: Up/Down arrow", ex); }
-            }
+                    // If the user is typing / navigating inside the ArticleEditor (e.g., a ComboBox has focus),
+                    // let the editor control handle the arrow keys rather than changing the article selection.
+                    if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) return;
+                     var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
+                     if (articleList != null)
+                     {
+                         var lb = articleList.FindControl<ListBox>("ArticlesListBox");
+                         if (lb != null)
+                         {
+                             var cur = lb.SelectedIndex;
+                             int next = cur;
+                             if (e.Key == Key.Up) next = Math.Max(0, cur - 1);
+                             else next = Math.Min((lb.ItemCount > 0 ? lb.ItemCount - 1 : 0), cur + 1);
+                             if (next != cur && lb.ItemCount > 0)
+                             {
+                                 lb.SelectedIndex = next;
+                                 try { lb.Focus(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: lb.Focus on Up/Down", ex); }
+                                 // Execute selection command on VM
+                                 try
+                                 {
+                                     var item = lb.SelectedItem as Common.Shared.ArticleLine;
+                                     var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+                                     if (vm != null && item != null && vm.SelectArticleCommand.CanExecute(item))
+                                         vm.SelectArticleCommand.Execute(item);
+                                 }
+                                 catch (Exception ex) { DebugLogger.LogException("MainWindow: article list selection", ex); }
+                             }
+                             e.Handled = true;
+                         }
+                     }
+                 }
+                 catch (Exception ex) { DebugLogger.LogException("MainWindow: Up/Down arrow", ex); }
+             }
         }
     }
 

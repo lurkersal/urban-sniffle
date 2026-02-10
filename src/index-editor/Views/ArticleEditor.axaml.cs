@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.Input;
+using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using IndexEditor.Shared;
 
@@ -248,6 +249,53 @@ namespace IndexEditor.Views
                 });
             }
             catch (Exception ex) { DebugLogger.LogException("ArticleEditor.TriggerOverlayFlash: outer", ex); }
+        }
+
+        // End editing in the article editor: close open dropdowns and move focus away so edits stop.
+        public void EndEdit()
+        {
+            try
+            {
+                // Close any open ComboBox dropdowns inside the editor
+                try
+                {
+                    var host = this.FindControl<ContentControl>("EditorContent");
+                    if (host?.Content is Avalonia.Controls.Control hostContent)
+                    {
+                        foreach (var cb in hostContent.GetLogicalDescendants().OfType<ComboBox>())
+                        {
+                            try { cb.IsDropDownOpen = false; } catch { }
+                        }
+                        foreach (var tb in hostContent.GetLogicalDescendants().OfType<TextBox>())
+                        {
+                            // Optionally trigger LostFocus by moving focus off the textbox later
+                        }
+                    }
+                }
+                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.EndEdit: close dropdowns", ex); }
+
+                // Clear editor-focused flag so global handlers know editor is no longer focused
+                try { IndexEditor.Shared.EditorState.IsArticleEditorFocused = false; } catch { }
+
+                // Move keyboard focus to the invisible host to remove focus from inner editor controls
+                try
+                {
+                    var wnd = this.VisualRoot as Window;
+                    if (wnd != null)
+                    {
+                        var host = wnd.FindControl<Border>("KeyboardFocusHost");
+                        if (host != null)
+                        {
+                            host.Focus();
+                            return;
+                        }
+                        // Fallback: focus the window itself
+                        wnd.Focus();
+                    }
+                }
+                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.EndEdit: move focus to host/window", ex); }
+            }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditor.EndEdit: outer", ex); }
         }
 
         // Flash a control briefly so the user can see which control got focus (debugging aid)
