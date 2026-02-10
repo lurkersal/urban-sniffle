@@ -22,7 +22,7 @@ namespace IndexEditor.Views
                 }
                 return seg.Display ?? "—";
             }
-            catch { return "— none —"; }
+            catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("ActiveSegmentToTextConverter.Convert", ex); return "— none —"; }
         }
 
         public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
@@ -31,4 +31,3 @@ namespace IndexEditor.Views
         }
     }
 }
-

@@ -1,9 +1,12 @@
 using System;
 using System.IO;
 using MagazineParser.Interfaces;
-using MagazineParser.Repositories;
-using MagazineParser.Services;
+using common.Shared.Repositories;
+using common.Shared.Interfaces;
+using common.Shared.Services;
+using magazine_parser.Services;
 using Npgsql;
+using Common.Shared;
 
 class Program
 {

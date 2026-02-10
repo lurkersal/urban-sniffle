@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
+using IndexEditor.Shared;
+using Common.Shared;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
@@ -29,7 +31,7 @@ namespace IndexEditor.Views
                     if (volText != null) volText.Text = $"Vol: {vol}";
                     if (numText != null) numText.Text = $"No: {num}";
                 }
-                catch { }
+                catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar.RefreshMetadataDisplay", ex); }
             }
             RefreshMetadataDisplay();
             IndexEditor.Shared.EditorState.StateChanged += RefreshMetadataDisplay;
@@ -39,7 +41,7 @@ namespace IndexEditor.Views
                 // Initial enablement
                 btn.IsEnabled = IndexEditor.Shared.EditorState.ActiveSegment == null;
                 // Update enablement when state changes
-                IndexEditor.Shared.EditorState.StateChanged += () => Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { btn.IsEnabled = IndexEditor.Shared.EditorState.ActiveSegment == null; } catch { } });
+                IndexEditor.Shared.EditorState.StateChanged += () => Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { btn.IsEnabled = IndexEditor.Shared.EditorState.ActiveSegment == null; } catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: update btn.IsEnabled", ex); } });
 
                 btn.Click += (s, e) =>
                 {
@@ -103,12 +105,12 @@ namespace IndexEditor.Views
                         }
                         finally
                         {
-                            try { if (System.IO.File.Exists(tempPath)) System.IO.File.Delete(tempPath); } catch { }
+                            try { if (System.IO.File.Exists(tempPath)) System.IO.File.Delete(tempPath); } catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: delete temp file", ex); }
                             // re-evaluate enablement based on active segment
                             btn.IsEnabled = IndexEditor.Shared.EditorState.ActiveSegment == null;
                         }
                     }
-                    catch { IndexEditor.Shared.ToastService.Show("Failed to save _index.txt"); Console.WriteLine("[ERROR] Saving _index.txt failed"); }
+                    catch (Exception ex) { IndexEditor.Shared.ToastService.Show("Failed to save _index.txt"); IndexEditor.Shared.DebugLogger.LogException("TopBar: save _index.txt", ex); }
                 };
             }
             if (openBtn != null)
@@ -127,7 +129,8 @@ namespace IndexEditor.Views
                         }
                         catch (Exception ex)
                         {
-                            try { IndexEditor.Shared.ToastService.Show("Open folder dialog failed: " + ex.Message); } catch { }
+                            try { IndexEditor.Shared.ToastService.Show("Open folder dialog failed: " + ex.Message); } catch (Exception tex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: ToastService.Show open folder failed", tex); }
+                            IndexEditor.Shared.DebugLogger.LogException("TopBar: FolderPicker failed", ex);
                             return;
                         }
                         if (string.IsNullOrWhiteSpace(path))
@@ -138,7 +141,7 @@ namespace IndexEditor.Views
                         var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
                         if (vm != null)
                         {
-                            try { vm.Articles.Clear(); } catch { }
+                            try { vm.Articles.Clear(); } catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: clear vm.Articles", ex); }
                         }
 
                         IndexEditor.Shared.EditorState.CurrentFolder = path;
@@ -157,16 +160,15 @@ namespace IndexEditor.Views
                                 }
                             }
                         }
-                        catch { }
+                        catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: reflection invoke LoadArticlesFromFolder", ex); }
 
                         // As an absolute fallback, set the CurrentFolder and notify state so the MainWindow may react elsewhere
                         IndexEditor.Shared.EditorState.CurrentFolder = path;
-                        try { IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch { }
+                        try { IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: NotifyStateChanged fallback", ex); }
                     }
-                    catch { }
+                    catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: Open button click handler outer", ex); }
                 };
             }
-            // DebugFlash button (manual trigger for the overlay)
             try
             {
                 var debugBtn = this.FindControl<Button>("DebugFlashBtn");
@@ -183,23 +185,23 @@ namespace IndexEditor.Views
                             {
                                 System.Console.WriteLine("[DEBUG] TopBar.DebugFlashBtn: triggering persistent overlay on ArticleEditor");
                                 ae.TriggerOverlayFlash(true);
-                                try { ae.FocusEditor(); } catch { }
+                                try { ae.FocusEditor(); } catch (Exception ex) { DebugLogger.LogException("TopBar.DebugFlashBtn: ae.FocusEditor", ex); }
                                 return;
                             }
                             // As fallback, find any ArticleEditor in visual tree
                             try
                             {
                                 var any = this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
-                                if (any != null) { any.TriggerOverlayFlash(true); try { any.FocusEditor(); } catch { } return; }
+                                if (any != null) { any.TriggerOverlayFlash(true); try { any.FocusEditor(); } catch (Exception ex) { DebugLogger.LogException("TopBar.DebugFlashBtn: any.FocusEditor", ex); } return; }
                             }
-                            catch { }
+                            catch (Exception ex) { DebugLogger.LogException("TopBar.DebugFlashBtn: find any ArticleEditor", ex); }
                             System.Console.WriteLine("[DEBUG] TopBar.DebugFlashBtn: ArticleEditor instance not found to trigger overlay");
                         }
-                        catch (Exception ex) { System.Console.WriteLine("[DEBUG] TopBar.DebugFlashBtn: exception on click: " + ex.Message); }
+                        catch (Exception ex) { DebugLogger.LogException("TopBar.DebugFlashBtn: exception on click", ex); }
                     };
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("TopBar ctor: debugBtn wiring", ex); }
         }
     }
 }

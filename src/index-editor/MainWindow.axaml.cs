@@ -288,7 +288,7 @@ public partial class MainWindow : Window
                 article.Authors = article.Photographers.Select(p => p).ToList();
             }
         }
-        catch { }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow.ParseArticleLine: fallback authors", ex); }
 
         // Ensure UI bindings update if the article instance is already bound
         try
@@ -297,7 +297,7 @@ public partial class MainWindow : Window
             article.NotifyPropertyChanged(nameof(Common.Shared.ArticleLine.Author0));
             article.NotifyPropertyChanged(nameof(Common.Shared.ArticleLine.FormattedCardText));
         }
-        catch { }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow.ParseArticleLine: notify bindings (post-fallback)", ex); }
 
         return article;
     }
@@ -383,7 +383,7 @@ public partial class MainWindow : Window
             {
                 try
                 {
-                    try { IndexEditor.Shared.ToastService.Show("Ctrl+N pressed: creating new article"); } catch { }
+                    try { IndexEditor.Shared.ToastService.Show("Ctrl+N pressed: creating new article"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show Ctrl+N", ex); }
                     // Ctrl+N received
                     var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
                     if (pc != null)
@@ -423,7 +423,7 @@ public partial class MainWindow : Window
                                 }
                                 catch (Exception ex)
                                 {
-                                    try { IndexEditor.Shared.ToastService.Show("Open folder dialog failed: " + ex.Message); } catch { }
+                                    try { IndexEditor.Shared.ToastService.Show("Open folder dialog failed: " + ex.Message); } catch (Exception logEx) { DebugLogger.LogException("MainWindow: ToastService.Show open folder failed", logEx); }
                                     return;
                                 }
                                 if (string.IsNullOrWhiteSpace(path))
@@ -433,7 +433,7 @@ public partial class MainWindow : Window
                             }
                             catch (Exception exOuter)
                             {
-                                try { IndexEditor.Shared.ToastService.Show("Failed to open folder: " + exOuter.Message); } catch { }
+                                try { IndexEditor.Shared.ToastService.Show("Failed to open folder: " + exOuter.Message); } catch (Exception logEx) { DebugLogger.LogException("MainWindow: ToastService.Show failed to open folder", logEx); }
                             }
                         });
                     }
@@ -541,7 +541,7 @@ public partial class MainWindow : Window
                 {
                     IndexEditor.Shared.EditorActions.CancelActiveSegment();
                     try { IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: NotifyStateChanged", ex); }
-                    try { IndexEditor.Shared.ToastService.Show("Segment cancelled"); } catch { }
+                    try { IndexEditor.Shared.ToastService.Show("Segment cancelled"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show on cancel", ex); }
                 }
                 catch (Exception ex) { DebugLogger.LogException("MainWindow: cancel active segment", ex); }
                 e.Handled = true;
@@ -576,13 +576,13 @@ public partial class MainWindow : Window
                         // Fallback: set seg.End to current page and clear active segment
                         seg.End = IndexEditor.Shared.EditorState.CurrentPage;
                         seg.WasNew = false;
-                        try { seg.CurrentPreviewEnd = null; } catch { }
+                        try { seg.CurrentPreviewEnd = null; } catch (Exception ex) { DebugLogger.LogException("MainWindow: clear CurrentPreviewEnd", ex); }
                         IndexEditor.Shared.EditorState.ActiveSegment = null;
                         IndexEditor.Shared.EditorState.NotifyStateChanged();
                     }
 
                     // User feedback
-                    try { IndexEditor.Shared.ToastService.Show($"Segment ended ({start}-{end})"); } catch { }
+                    try { IndexEditor.Shared.ToastService.Show($"Segment ended ({start}-{end})"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show on end segment", ex); }
                 }
                 catch (Exception ex) { DebugLogger.LogException("MainWindow: EndActiveSegment", ex); }
                 e.Handled = true;
@@ -698,7 +698,7 @@ public partial class MainWindow : Window
                             if (next != cur && lb.ItemCount > 0)
                             {
                                 lb.SelectedIndex = next;
-                                try { lb.Focus(); } catch { }
+                                try { lb.Focus(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: lb.Focus on Up/Down", ex); }
                                 // Execute selection command on VM
                                 try
                                 {

@@ -1,8 +1,8 @@
-using MagazineParser.Interfaces;
-using MagazineParser.Models;
+using common.Shared.Interfaces;
+using common.Shared.Models;
 using Npgsql;
 
-namespace MagazineParser.Repositories;
+namespace common.Shared.Repositories;
 
 public class PostgresRepository : IDatabaseRepository
 {

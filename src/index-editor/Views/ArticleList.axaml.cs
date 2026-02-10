@@ -4,6 +4,7 @@ using System;
 using System.Linq;
 using System.Collections.Specialized;
 using Avalonia.Input;
+using IndexEditor.Shared;
 
 namespace IndexEditor.Views
 {
@@ -31,7 +32,7 @@ namespace IndexEditor.Views
                     // Console.WriteLine($"[DEBUG] ArticleList VM articles count: {vmModel.Articles?.Count ?? 0}");
                     foreach (var art in vmModel.Articles)
                     {
-                        try { art.PropertyChanged -= Article_PropertyChanged; } catch { }
+                        try { art.PropertyChanged -= Article_PropertyChanged; } catch (Exception ex) { DebugLogger.LogException("ArticleList.AttachedToVisualTree: remove handler", ex); }
                         art.PropertyChanged += Article_PropertyChanged;
                         // Console.WriteLine($"[DEBUG] Article: '{art.DisplayTitle}' Segments: {art.Segments?.Count ?? 0}");
                     }
@@ -46,7 +47,7 @@ namespace IndexEditor.Views
                                 {
                                     if (ni is Common.Shared.ArticleLine newArt)
                                     {
-                                        try { newArt.PropertyChanged -= Article_PropertyChanged; } catch { }
+                                        try { newArt.PropertyChanged -= Article_PropertyChanged; } catch (Exception ex) { DebugLogger.LogException("ArticleList.Incc.CollectionChanged: remove handler", ex); }
                                         newArt.PropertyChanged += Article_PropertyChanged;
                                         // Console.WriteLine($"[DEBUG] New Article added: '{newArt.DisplayTitle}' Segments: {newArt.Segments?.Count ?? 0}");
                                     }
@@ -72,7 +73,7 @@ namespace IndexEditor.Views
                     if (activeSeg != null && activeSeg.IsActive && IndexEditor.Shared.EditorState.ActiveArticle != null)
                         list.SelectedItem = IndexEditor.Shared.EditorState.ActiveArticle;
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("ArticleList.constructor: initial enable state", ex); }
 
                 // Subscribe to global state changes to enforce selection and enabledness
                 IndexEditor.Shared.EditorState.StateChanged += () =>
@@ -102,7 +103,7 @@ namespace IndexEditor.Views
                             if (activeSeg != null)
                                 activeSeg.IsHighlighted = true;
                         }
-                        catch { }
+                        catch (Exception ex) { DebugLogger.LogException("ArticleList.StateChanged: clearing highlights", ex); }
                     });
                 };
 
@@ -114,8 +115,8 @@ namespace IndexEditor.Views
                     if (activeSeg != null && activeSeg.IsActive && selected != null && activeArticle != null && !object.ReferenceEquals(selected, activeArticle))
                     {
                         // Notify user and revert selection
-                        try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch { }
-                        try { list.SelectedItem = activeArticle; } catch { }
+                        try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch (Exception ex) { DebugLogger.LogException("ArticleList.SelectionChanged: toast", ex); }
+                        try { list.SelectedItem = activeArticle; } catch (Exception ex) { DebugLogger.LogException("ArticleList.SelectionChanged: revert selection", ex); }
                         return;
                     }
 
@@ -129,7 +130,7 @@ namespace IndexEditor.Views
                             // Mark the selected as selected so converters update border brush
                             selected.IsSelected = true;
                         }
-                        catch { }
+                        catch (Exception ex) { DebugLogger.LogException("ArticleList.SelectionChanged: mark selected", ex); }
                     }
                 };
             }
@@ -160,7 +161,7 @@ namespace IndexEditor.Views
                  Control? container = null;
                  if (idx >= 0)
                  {
-                     try { container = list.ItemContainerGenerator.ContainerFromIndex(idx) as Control; } catch { }
+                     try { container = list.ItemContainerGenerator.ContainerFromIndex(idx) as Control; } catch (Exception ex) { DebugLogger.LogException("ArticleList.Article_PropertyChanged: ContainerFromIndex", ex); }
                  }
                  if (container == null) return;
                  var overlay = container.FindControl<Border>("AutoHighlightOverlay");
@@ -191,12 +192,12 @@ namespace IndexEditor.Views
                              }
                              overlay.Opacity = 0;
                              // Clear the WasAutoHighlighted flag so it can be triggered again
-                             try { article.WasAutoHighlighted = false; } catch { }
+                             try { article.WasAutoHighlighted = false; } catch (Exception ex) { DebugLogger.LogException("ArticleList.Animation: clear WasAutoHighlighted", ex); }
                          }
-                         catch { }
+                         catch (Exception ex) { DebugLogger.LogException("ArticleList.Animation: outer", ex); }
                      });
                  }
-                 catch { }
+                 catch (Exception ex) { DebugLogger.LogException("ArticleList.Article_PropertyChanged: animation outer", ex); }
              }
          }
 
@@ -213,7 +214,7 @@ namespace IndexEditor.Views
                     e.Handled = true;
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ArticleList.OnListKeyDown: outer", ex); }
         }
 
         // Handle pointer pressed on the article Border - select the clicked article
@@ -228,7 +229,7 @@ namespace IndexEditor.Views
                     var activeArticle = IndexEditor.Shared.EditorState.ActiveArticle;
                     if (activeSeg != null && activeSeg.IsActive && activeArticle != null && !object.ReferenceEquals(art, activeArticle))
                     {
-                        try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch { }
+                        try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch (Exception ex) { DebugLogger.LogException("ArticleList.OnArticlePointerPressed: toast", ex); }
                         return;
                     }
 
@@ -245,7 +246,7 @@ namespace IndexEditor.Views
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ArticleList.OnArticlePointerPressed: outer", ex); }
         }
 
         // New: handle pointer on a segment row - set active segment and jump page controller to segment start
@@ -276,7 +277,7 @@ namespace IndexEditor.Views
                     var activeArticle = IndexEditor.Shared.EditorState.ActiveArticle;
                     if (activeSeg != null && activeSeg.IsActive && activeArticle != null && !object.ReferenceEquals(activeArticle, owner))
                     {
-                        try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch { }
+                        try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch (Exception ex) { DebugLogger.LogException("ArticleList.OnSegmentPointerPressed: toast", ex); }
                         return;
                     }
 
@@ -286,7 +287,7 @@ namespace IndexEditor.Views
                         foreach (var a in (this.DataContext as EditorStateViewModel)?.Articles ?? new System.Collections.ObjectModel.ObservableCollection<Common.Shared.ArticleLine>())
                             a.IsSelected = false;
                     }
-                    catch { }
+                    catch (Exception ex) { DebugLogger.LogException("ArticleList.OnSegmentPointerPressed: clear IsSelected", ex); }
                     owner.IsSelected = true;
                     IndexEditor.Shared.EditorState.ActiveArticle = owner;
 
@@ -301,7 +302,7 @@ namespace IndexEditor.Views
                             seg.End = null;
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { DebugLogger.LogException("ArticleList.OnSegmentPointerPressed: reopen seg", ex); }
 
                     // Set global active segment (if it's not already)
                     IndexEditor.Shared.EditorState.ActiveSegment = seg;
@@ -313,7 +314,7 @@ namespace IndexEditor.Views
                     IndexEditor.Shared.EditorState.NotifyStateChanged();
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ArticleList.OnSegmentPointerPressed: outer", ex); }
         }
 
     }

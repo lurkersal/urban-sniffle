@@ -1,6 +1,6 @@
 using common.Shared.Models;
 
-namespace common.Shared.Interfaces;
+namespace common.Shared.Repositories;
 
 public interface IDatabaseRepository
 {

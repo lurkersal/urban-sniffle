@@ -17,7 +17,7 @@ namespace IndexEditor.Views
                     var parts = segs.Select(s => s.Display).ToList();
                     return parts.Count == 0 ? string.Empty : string.Join(", ", parts);
                 }
-                catch { }
+                catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("SegmentsToTextConverter.Convert", ex); }
             }
             return string.Empty;
         }

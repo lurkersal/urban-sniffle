@@ -64,7 +64,7 @@ namespace IndexEditor.Views
                 System.Console.WriteLine(cb == null ? "[DEBUG] ArticleEditorView.FocusEditor: CategoryComboBox not found" : "[DEBUG] ArticleEditorView.FocusEditor: CategoryComboBox found");
                 if (cb != null) cb.Focus();
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.FocusEditor", ex); }
         }
 
         // Specifically focus the title textbox
@@ -77,7 +77,7 @@ namespace IndexEditor.Views
                 System.Console.WriteLine(tb == null ? "[DEBUG] ArticleEditorView.FocusTitle: TitleTextBox not found" : "[DEBUG] ArticleEditorView.FocusTitle: TitleTextBox found");
                 if (tb != null) tb.Focus();
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.FocusTitle", ex); }
         }
 
         // Clicks are handled by the OnSegmentLozengePressed method wired in XAML.
@@ -102,7 +102,7 @@ namespace IndexEditor.Views
                     var activeArticle = IndexEditor.Shared.EditorState.ActiveArticle;
                     if (activeSeg != null && activeSeg.IsActive && activeArticle != null && owner != null && !object.ReferenceEquals(activeArticle, owner))
                     {
-                        try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch { }
+                        try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.OnSegmentLozengePressed: ToastService.Show", ex); }
                         return;
                     }
 
@@ -120,7 +120,7 @@ namespace IndexEditor.Views
                     IndexEditor.Shared.EditorState.NotifyStateChanged();
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.OnSegmentLozengePressed: outer", ex); }
         }
 
         private string? _currentFolder;
@@ -155,10 +155,10 @@ namespace IndexEditor.Views
                 {
                     var m = string.Join(";", articles[0].Measurements ?? new List<string>());
                     var log = $"Loaded folder '{_currentFolder ?? "?"}' first article measurements: {m}\n";
-                    try { System.IO.File.AppendAllText("/tmp/index_editor_measurements_debug.txt", log); } catch { }
+                    try { System.IO.File.AppendAllText("/tmp/index_editor_measurements_debug.txt", log); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: append measurements debug", ex); }
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: outer append", ex); }
             // Update the view-model's observable collection so UI bindings (SelectedArticle, Articles) refresh.
             var vm = this.DataContext as EditorStateViewModel;
             if (vm != null)
@@ -174,19 +174,19 @@ namespace IndexEditor.Views
                             if (a.Measurements == null || a.Measurements.Count == 0)
                                 a.Measurements = new System.Collections.Generic.List<string> { string.Empty };
                             // Trigger normalization/validation so Measurements0 becomes canonical
-                            try { a.Validate(); } catch { }
+                            try { a.Validate(); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: a.Validate", ex); }
                             // Raise PropertyChanged for Measurements and Measurements0 so UI bindings see the values
-                            try { a.NotifyPropertyChanged(nameof(a.Measurements)); } catch { }
-                            try { a.NotifyPropertyChanged(nameof(a.Measurements0)); } catch { }
+                            try { a.NotifyPropertyChanged(nameof(a.Measurements)); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: NotifyPropertyChanged Measurements", ex); }
+                            try { a.NotifyPropertyChanged(nameof(a.Measurements0)); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: NotifyPropertyChanged Measurements0", ex); }
                         }
-                        catch { }
+                        catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: per-article setup", ex); }
                         vm.Articles.Add(a);
                     }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: update VM articles", ex); }
                 if (articles.Count > 0)
                 {
-                    try { vm.SelectedArticle = articles[0]; } catch { }
+                    try { vm.SelectedArticle = articles[0]; } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: set SelectedArticle", ex); }
                 }
             }
             // Also maintain the global EditorState for other components
@@ -204,25 +204,25 @@ namespace IndexEditor.Views
                 var articles = IndexEditor.Shared.EditorState.Articles ?? new List<Common.Shared.ArticleLine>();
                 if (vm != null)
                 {
-                    try { vm.Articles.Clear(); } catch { }
+                    try { vm.Articles.Clear(); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: clear vm.Articles", ex); }
                     foreach (var a in articles)
                     {
                         try
                         {
                             if (a.Measurements == null || a.Measurements.Count == 0)
                                 a.Measurements = new System.Collections.Generic.List<string> { string.Empty };
-                            try { a.Validate(); } catch { }
-                            try { a.NotifyPropertyChanged(nameof(a.Measurements)); } catch { }
-                            try { a.NotifyPropertyChanged(nameof(a.Measurements0)); } catch { }
+                            try { a.Validate(); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: a.Validate", ex); }
+                            try { a.NotifyPropertyChanged(nameof(a.Measurements)); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: notify Measurements", ex); }
+                            try { a.NotifyPropertyChanged(nameof(a.Measurements0)); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: notify Measurements0", ex); }
                         }
-                        catch { }
-                        try { vm.Articles.Add(a); } catch { }
+                        catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: per-article", ex); }
+                        try { vm.Articles.Add(a); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: vm.Articles.Add", ex); }
                     }
                     if (vm.SelectedArticle == null && vm.Articles.Count > 0)
                         vm.SelectedArticle = vm.Articles[0];
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: outer", ex); }
         }
     }
 }

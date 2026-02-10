@@ -44,7 +44,14 @@ namespace IndexEditor.Views
                     Path.Combine(folder, "p" + p.ToString() + ".jpg") };
                 foreach (var c in candidates)
                 {
-                    try { if (File.Exists(c)) return p; } catch { }
+                    try
+                    {
+                        if (File.Exists(c)) return p;
+                    }
+                    catch (Exception ex)
+                    {
+                        DebugLogger.LogException("EditorStateViewModel.FindFirstPageWithImage: File.Exists", ex);
+                    }
                 }
             }
             return null;
@@ -60,7 +67,7 @@ namespace IndexEditor.Views
             {
                 pick = FindFirstPageWithImage(article, IndexEditor.Shared.EditorState.CurrentFolder);
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.NavigateToArticle: FindFirstPageWithImage", ex); }
 
             if (pick.HasValue)
                 IndexEditor.Shared.EditorState.CurrentPage = pick.Value;
@@ -116,10 +123,10 @@ namespace IndexEditor.Views
                      {
                          foreach (var a in Articles)
                          {
-                             try { a.IsSelected = object.ReferenceEquals(a, _selectedArticle); } catch { }
+                             try { a.IsSelected = object.ReferenceEquals(a, _selectedArticle); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: set IsSelected", ex); }
                          }
                      }
-                     catch { }
+                     catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: updating IsSelected flags", ex); }
                      // Ensure the global EditorState reflects the current selected article so
                      // other views (PageController, etc.) can read the active article details.
                      try
@@ -127,7 +134,7 @@ namespace IndexEditor.Views
                          IndexEditor.Shared.EditorState.ActiveArticle = _selectedArticle;
                          IndexEditor.Shared.EditorState.NotifyStateChanged();
                      }
-                     catch { }
+                     catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: set active article/notify", ex); }
                      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
                      // Notify SelectedCategory so the editor ComboBox updates to the new article's category
                      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
@@ -167,7 +174,7 @@ namespace IndexEditor.Views
                      // Only accept category values that come from the DB-backed Categories list
                      if (!Categories.Contains(newVal))
                      {
-                         try { IndexEditor.Shared.ToastService.Show("Category must be chosen from the predefined list"); } catch { }
+                         try { IndexEditor.Shared.ToastService.Show("Category must be chosen from the predefined list"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedCategory: ToastService.Show", ex); }
                          // Re-notify so the UI reverts selection
                          PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
                          return;
@@ -218,7 +225,7 @@ namespace IndexEditor.Views
                         Categories.Clear();
                         foreach (var c in IndexEditor.Shared.CategoryService.Categories) Categories.Add(c);
                         // Mark that categories came from DB
-                        try { _categoriesLoadedFromDb = IndexEditor.Shared.CategoryService.Categories.Count > 0; } catch { }
+                        try { _categoriesLoadedFromDb = IndexEditor.Shared.CategoryService.Categories.Count > 0; } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel: mirror categories count", ex); }
                         // Subscribe to future changes so we mirror updates
                         try
                         {
@@ -231,10 +238,10 @@ namespace IndexEditor.Views
                                 });
                             };
                         }
-                        catch { }
+                        catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel: subscribe CategoryService.CollectionChanged", ex); }
                      });
                  }
-                 catch { }
+                 catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel: initial CategoryService.InitializeAsync", ex); }
              });
 
              // Asynchronously try to load categories from DB (do not block UI thread)
@@ -251,7 +258,7 @@ namespace IndexEditor.Views
                          foreach (var c in IndexEditor.Shared.CategoryService.Categories) Categories.Add(c);
                      });
                  }
-                 catch { }
+                 catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel: CategoryService.InitializeAsync (secondary)", ex); }
                  finally
                  {
                      Dispatcher.UIThread.Post(() => IsLoadingCategories = false);
@@ -293,7 +300,7 @@ namespace IndexEditor.Views
                      }
                      return seg.Display ?? "— none —";
                  }
-                 catch { return "— none —"; }
+                 catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.ActiveSegmentDisplay: compute", ex); return "— none —"; }
              }
          }
 
@@ -303,31 +310,31 @@ namespace IndexEditor.Views
             {
                 // Try multiple likely locations for appsettings.json to avoid issues when working directory differs from app folder.
                 var candidates = new List<string>();
-                try { candidates.Add(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json")); } catch { }
-                try { candidates.Add(Path.Combine(AppContext.BaseDirectory ?? string.Empty, "appsettings.json")); } catch { }
+                try { candidates.Add(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json")); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: add candidate current dir", ex); }
+                try { candidates.Add(Path.Combine(AppContext.BaseDirectory ?? string.Empty, "appsettings.json")); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: add candidate base dir", ex); }
                 // Also try the application's assembly folder as a fallback
                 try
                 {
                     var asmFolder = Path.GetDirectoryName(typeof(EditorStateViewModel).Assembly.Location);
                     if (!string.IsNullOrWhiteSpace(asmFolder)) candidates.Add(Path.Combine(asmFolder, "appsettings.json"));
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: asmFolder detection", ex); }
 
                 string? foundPath = null;
-                foreach (var cand in candidates.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct())
+                foreach (var c in candidates.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct())
                 {
                     try
                     {
-                        if (File.Exists(cand))
+                        if (File.Exists(c))
                         {
-                            foundPath = cand;
+                            foundPath = c;
                             break;
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: File.Exists check", ex); }
                 }
 
-                try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"LoadCategories: candidates={string.Join(";", candidates)} found={foundPath}\n"); } catch { }
+                try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"LoadCategories: candidates={string.Join(";", candidates)} found={foundPath}\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append debug file", ex); }
 
                 if (string.IsNullOrWhiteSpace(foundPath))
                     return null;
@@ -345,7 +352,7 @@ namespace IndexEditor.Views
                 try
                 {
                     var cats = await IndexEditor.Shared.CategoryRepository.GetCategoriesAsync(connString);
-                    try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"DB returned {cats?.Count ?? 0} categories\n"); } catch { }
+                    try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"DB returned {cats?.Count ?? 0} categories\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append DB count", ex); }
                     if (cats != null && cats.Count > 0)
                     {
                         return cats;
@@ -353,11 +360,12 @@ namespace IndexEditor.Views
                 }
                 catch (Exception ex)
                 {
-                    try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"DB error: {ex}\n"); } catch { }
+                    try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"DB error: {ex}\n"); } catch (Exception ex2) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append DB error", ex2); }
+                    DebugLogger.LogException("EditorStateViewModel.LoadCategories: DB error", ex);
                 }
                 return null;
              }
-             catch { return null; }
+             catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: outer", ex); return null; }
          }
 
         private void UpdateCategories(List<string> newCats, bool fromDatabase = false)
@@ -367,7 +375,7 @@ namespace IndexEditor.Views
             // If categories are already loaded from DB, ignore any non-DB updates
             if (!fromDatabase && _categoriesLoadedFromDb)
             {
-                try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", "UpdateCategories: skipped non-DB update because DB list already loaded\n"); } catch { }
+                try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", "UpdateCategories: skipped non-DB update because DB list already loaded\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append skipped non-DB", ex); }
                 return;
             }
 
@@ -385,7 +393,7 @@ namespace IndexEditor.Views
                     var newSet = new HashSet<string>(sorted);
                     if (newSet.SetEquals(currentSet))
                     {
-                        try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", "UpdateCategories: DB update identical to current set - ignored\n"); } catch { }
+                        try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", "UpdateCategories: DB update identical to current set - ignored\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append identical", ex); }
                         return;
                     }
                     // Accept only if new set is a superset or strictly larger (new categories added)
@@ -394,12 +402,12 @@ namespace IndexEditor.Views
                         Categories.Clear();
                         foreach (var c in sorted)
                             Categories.Add(c);
-                        try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"Updated Categories (DB superset applied): {string.Join(",", sorted)}\n"); } catch { }
+                        try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"Updated Categories (DB superset applied): {string.Join(",", sorted)}\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append superset", ex); }
                         return;
                     }
                     else
                     {
-                        try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"UpdateCategories: DB update skipped (would shrink/replace smaller set): {string.Join(",", sorted)}\n"); } catch { }
+                        try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"UpdateCategories: DB update skipped (would shrink/replace smaller set): {string.Join(",", sorted)}\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append skip shrink", ex); }
                         return;
                     }
                 }
@@ -409,7 +417,7 @@ namespace IndexEditor.Views
                 foreach (var c in sorted)
                     Categories.Add(c);
                 _categoriesLoadedFromDb = true;
-                try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"Updated Categories (DB preferred first load): {string.Join(",", sorted)}\n"); } catch { }
+                try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"Updated Categories (DB preferred first load): {string.Join(",", sorted)}\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append first load", ex); }
                 return;
             }
 
@@ -427,7 +435,7 @@ namespace IndexEditor.Views
                 if (!Categories.Contains(c))
                     Categories.Add(c);
             }
-            try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"Updated Categories (merged): {string.Join(",", merged)}\n"); } catch { }
+            try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"Updated Categories (merged): {string.Join(",", merged)}\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append merged", ex); }
          }
 
         private void SyncArticles()
@@ -537,7 +545,7 @@ namespace IndexEditor.Views
                     try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegmentDisplay))); } catch { }
                 });
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.OnEditorStateChanged", ex); }
         }
     }
 }

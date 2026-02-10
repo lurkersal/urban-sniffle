@@ -1,9 +1,12 @@
+using common.Shared.Interfaces;
 using MagazineParser.Interfaces;
+using common.Shared.Repositories;
+using common.Shared.Models;
 using MagazineParser.Models;
 using System.Text.RegularExpressions;
 using SixLabors.ImageSharp;
 
-namespace MagazineParser.Services;
+namespace magazine_parser.Services;
 
 public class MagazineParsingService
 {
@@ -89,7 +92,7 @@ public class MagazineParsingService
         }
 
         // Parse all content lines first
-        var contentLines = new List<ContentLine>();
+        var contentLines = new List<common.Shared.Models.ContentLine>();
         var lineNumbers = new List<int>();
         var autoInsertedCount = 0;
         
@@ -317,7 +320,7 @@ public class MagazineParsingService
         return result;
     }
 
-    private (bool success, bool modified) HandleExistingContent(string line, ExistingContentMatch existingContent, int lineNumber)
+    private (bool success, bool modified) HandleExistingContent(string line, common.Shared.Models.ExistingContentMatch existingContent, int lineNumber)
     {
         if (existingContent.Matches)
         {
@@ -359,14 +362,14 @@ public class MagazineParsingService
         return (false, false);
     }
 
-    private (bool success, bool modified) HandleNewContent(string line, int issueId, ContentLine contentLine, int lineNumber, List<string> allLines, int lineIndex)
+    private (bool success, bool modified) HandleNewContent(string line, int issueId, common.Shared.Models.ContentLine contentLine, int lineNumber, List<string> allLines, int lineIndex)
     {
         var insertResult = InsertContentLine(issueId, contentLine);
 
         if (insertResult.Success)
         {
-            var pageInfo = contentLine.Pages.Count > 1 
-                ? $"pages {contentLine.Pages.Min()}-{contentLine.Pages.Max()}" 
+            var pageInfo = contentLine.Pages.Count > 1
+                ? $"pages {contentLine.Pages.Min()}-{contentLine.Pages.Max()}"
                 : $"page {contentLine.Pages[0]}";
             _userInteraction.DisplayMessage($"    ✓ Inserted {contentLine.Category} ({pageInfo})");
             return (true, false);
@@ -389,7 +392,7 @@ public class MagazineParsingService
         return HandleGeneralError(line, issueId, allLines, lineIndex, lineNumber);
     }
 
-    private (bool success, bool modified) HandleCategoryError(string line, int issueId, ContentLine contentLine, string errorMessage, List<string> allLines, int lineIndex, int lineNumber)
+    private (bool success, bool modified) HandleCategoryError(string line, int issueId, common.Shared.Models.ContentLine contentLine, string errorMessage, List<string> allLines, int lineIndex, int lineNumber)
     {
         var categoryMatch = Regex.Match(errorMessage, @"'([^']+)'");
         if (!categoryMatch.Success)
@@ -470,7 +473,7 @@ public class MagazineParsingService
         return (false, false);
     }
 
-    private InsertResult InsertContentLine(int issueId, ContentLine contentLine)
+    private InsertResult InsertContentLine(int issueId, common.Shared.Models.ContentLine contentLine)
     {
         try
         {

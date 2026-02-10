@@ -4,6 +4,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.Input;
 using Avalonia.VisualTree;
+using IndexEditor.Shared;
 
 namespace IndexEditor.Views
 {
@@ -18,13 +19,13 @@ namespace IndexEditor.Views
             IndexEditor.Shared.EditorState.StateChanged += OnEditorStateFocusRequested;
             this.DetachedFromVisualTree += (s, e) =>
             {
-                try { IndexEditor.Shared.EditorState.StateChanged -= OnEditorStateChanged; } catch { }
-                try { IndexEditor.Shared.EditorState.StateChanged -= OnEditorStateFocusRequested; } catch { }
+                try { IndexEditor.Shared.EditorState.StateChanged -= OnEditorStateChanged; } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.DetachedFromVisualTree: remove OnEditorStateChanged", ex); }
+                try { IndexEditor.Shared.EditorState.StateChanged -= OnEditorStateFocusRequested; } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.DetachedFromVisualTree: remove OnEditorStateFocusRequested", ex); }
             };
 
             // Track focus within the article editor so global key handlers can avoid intercepting arrow keys
-            this.GotFocus += (s, e) => { try { IndexEditor.Shared.EditorState.IsArticleEditorFocused = true; } catch { } };
-            this.LostFocus += (s, e) => { try { IndexEditor.Shared.EditorState.IsArticleEditorFocused = false; } catch { } };
+            this.GotFocus += (s, e) => { try { IndexEditor.Shared.EditorState.IsArticleEditorFocused = true; } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.GotFocus: set IsArticleEditorFocused", ex); } };
+            this.LostFocus += (s, e) => { try { IndexEditor.Shared.EditorState.IsArticleEditorFocused = false; } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.LostFocus: clear IsArticleEditorFocused", ex); } };
         }
 
         private int _lastFocusRequest = 0;
@@ -39,10 +40,10 @@ namespace IndexEditor.Views
                 // Schedule a UI thread attempt to focus the title textbox
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
-                    try { FocusTitle(); } catch { }
+                    try { FocusTitle(); } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.OnEditorStateFocusRequested: FocusTitle", ex); }
                 }, Avalonia.Threading.DispatcherPriority.Background);
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditor.OnEditorStateFocusRequested: outer", ex); }
         }
 
         // Public helper to focus the category combobox in the editor
@@ -68,7 +69,7 @@ namespace IndexEditor.Views
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.FocusEditor: search in host.Content", ex); }
 
                 // Fallback: search entire visual tree of this control
                 var fallbackTitle = this.FindControl<TextBox>("TitleTextBox");
@@ -89,12 +90,12 @@ namespace IndexEditor.Views
                     {
                         // briefly open dropdown to make focus obvious
                         fallback.IsDropDownOpen = true;
-                        System.Threading.Tasks.Task.Delay(400).ContinueWith(_ => Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { fallback.IsDropDownOpen = false; } catch { } }));
+                        System.Threading.Tasks.Task.Delay(400).ContinueWith(_ => Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { fallback.IsDropDownOpen = false; } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.FocusEditor: close dropdown fallback", ex); } }));
                     }
-                    catch { }
+                    catch (Exception ex) { DebugLogger.LogException("ArticleEditor.FocusEditor: open dropdown", ex); }
                 }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditor.FocusEditor: outer", ex); }
         }
 
         // Specifically focus the title textbox (for new-article flow)
@@ -123,9 +124,9 @@ namespace IndexEditor.Views
                 // entire visual tree here to keep compatibility across Avalonia versions.
 
                 // If we couldn't find the inner TitleTextBox, flash the editor overlay so user sees an indication
-                try { TriggerOverlayFlash(false); } catch { }
+                try { TriggerOverlayFlash(false); } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.FocusTitle: TriggerOverlayFlash", ex); }
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditor.FocusTitle: outer", ex); }
         }
 
         // Show a brief overlay flash over the entire editor (used when inner controls aren't available)
@@ -146,7 +147,7 @@ namespace IndexEditor.Views
                             overlay.Opacity = 1.0;
                             overlay.IsHitTestVisible = true;
                         }
-                        catch { }
+                        catch (Exception ex) { DebugLogger.LogException("ArticleEditor.ShowOverlayFlash: show persistent", ex); }
                     });
 
                     // Attach a one-time key handler on the window to dismiss the overlay
@@ -162,12 +163,12 @@ namespace IndexEditor.Views
                                 {
                                     Dispatcher.UIThread.Post(() =>
                                     {
-                                        try { overlay.IsVisible = false; overlay.IsHitTestVisible = false; overlay.Opacity = 1.0; } catch { }
+                                        try { overlay.IsVisible = false; overlay.IsHitTestVisible = false; overlay.Opacity = 1.0; } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.ShowOverlayFlash: clear persistent overlay inner", ex); }
                                     });
                                     wnd.KeyDown -= handler!;
                                     System.Console.WriteLine("[DEBUG] ArticleEditor.ShowOverlayFlash: persistent overlay cleared by key");
                                 }
-                                catch { }
+                                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.ShowOverlayFlash: persistent handler", ex); }
                             };
                             wnd.KeyDown += handler;
                         }
@@ -196,7 +197,7 @@ namespace IndexEditor.Views
                         overlay.Opacity = 0.85;
                         overlay.IsHitTestVisible = false;
                     }
-                    catch { }
+                    catch (Exception ex) { DebugLogger.LogException("ArticleEditor.ShowOverlayFlash: show transient", ex); }
                 });
                 _ = System.Threading.Tasks.Task.Run(async () =>
                 {
@@ -209,15 +210,15 @@ namespace IndexEditor.Views
                             var t = i + 1;
                             var newOp = 0.85 - ((double)t / steps * 0.85);
                             if (newOp < 0.0) newOp = 0.0;
-                            Dispatcher.UIThread.Post(() => { try { overlay.Opacity = newOp; } catch { } });
+                            Dispatcher.UIThread.Post(() => { try { overlay.Opacity = newOp; } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.ShowOverlayFlash: fade out", ex); } });
                             await System.Threading.Tasks.Task.Delay(stepMs).ConfigureAwait(false);
                         }
-                        Dispatcher.UIThread.Post(() => { try { overlay.IsVisible = false; overlay.Opacity = 0.85; } catch { } });
+                        Dispatcher.UIThread.Post(() => { try { overlay.IsVisible = false; overlay.Opacity = 0.85; } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.ShowOverlayFlash: hide", ex); } });
                     }
-                    catch { }
+                    catch (Exception ex) { DebugLogger.LogException("ArticleEditor.ShowOverlayFlash: transient task", ex); }
                 });
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditor.TriggerOverlayFlash: outer", ex); }
         }
 
         // Flash a control briefly so the user can see which control got focus (debugging aid)
@@ -247,7 +248,7 @@ namespace IndexEditor.Views
                                     if (origBg != null) tb.Background = origBg; else tb.ClearValue(TextBox.BackgroundProperty);
                                     if (origBorder != null) tb.BorderBrush = origBorder; else tb.ClearValue(TextBox.BorderBrushProperty);
                                 }
-                                catch { }
+                                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.FlashControl: restore TextBox visuals", ex); }
                             });
                         });
                     }
@@ -261,7 +262,7 @@ namespace IndexEditor.Views
                             await System.Threading.Tasks.Task.Delay(420).ConfigureAwait(false);
                             Dispatcher.UIThread.Post(() =>
                             {
-                                try { if (origBg != null) cb.Background = origBg; else cb.ClearValue(ComboBox.BackgroundProperty); } catch { }
+                                try { if (origBg != null) cb.Background = origBg; else cb.ClearValue(ComboBox.BackgroundProperty); } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.FlashControl: restore ComboBox visuals", ex); }
                             });
                         });
                     }
@@ -275,7 +276,7 @@ namespace IndexEditor.Views
                             await System.Threading.Tasks.Task.Delay(420).ConfigureAwait(false);
                             Dispatcher.UIThread.Post(() =>
                             {
-                                try { if (origBg != null) br.Background = origBg; else br.ClearValue(Border.BackgroundProperty); } catch { }
+                                try { if (origBg != null) br.Background = origBg; else br.ClearValue(Border.BackgroundProperty); } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.FlashControl: restore Border visuals", ex); }
                             });
                         });
                     }
@@ -289,12 +290,12 @@ namespace IndexEditor.Views
                             await System.Threading.Tasks.Task.Delay(420).ConfigureAwait(false);
                             Dispatcher.UIThread.Post(() =>
                             {
-                                try { if (origBg != null) p.Background = origBg; else p.ClearValue(Panel.BackgroundProperty); } catch { }
+                                try { if (origBg != null) p.Background = origBg; else p.ClearValue(Panel.BackgroundProperty); } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.FlashControl: restore Panel visuals", ex); }
                             });
                         });
                     }
                 }
-                catch { }
+                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.FlashControl: outer", ex); }
             });
         }
 
@@ -329,36 +330,36 @@ namespace IndexEditor.Views
                                                 TextBox? tb = null;
                                                 if (host != null && host.Content is Avalonia.Controls.Control hostContent)
                                                 {
-                                                    try { tb = hostContent.FindControl<TextBox>("TitleTextBox"); } catch { }
+                                                    try { tb = hostContent.FindControl<TextBox>("TitleTextBox"); } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.OnEditorStateChanged: find TitleTextBox in hostContent", ex); }
                                                     System.Console.WriteLine(tb == null ? $"[DEBUG] ArticleEditor.OnEditorStateChanged: TitleTextBox not found in host.Content on attempt {i}" : $"[DEBUG] ArticleEditor.OnEditorStateChanged: TitleTextBox found in host.Content on attempt {i}");
                                                     if (tb != null)
                                                     {
-                                                        try { tb.Focus(); System.Console.WriteLine($"[DEBUG] ArticleEditor.OnEditorStateChanged: focused TitleTextBox on attempt {i}"); } catch { }
+                                                        try { tb.Focus(); System.Console.WriteLine($"[DEBUG] ArticleEditor.OnEditorStateChanged: focused TitleTextBox on attempt {i}"); } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.OnEditorStateChanged: focus tb", ex); }
                                                         return;
                                                     }
                                                 }
 
                                                 // fallback: search whole visual tree
-                                                try { tb = this.FindControl<TextBox>("TitleTextBox"); } catch { }
+                                                try { tb = this.FindControl<TextBox>("TitleTextBox"); } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.OnEditorStateChanged: find TitleTextBox fallback", ex); }
                                                 if (tb != null)
                                                 {
-                                                    try { tb.Focus(); System.Console.WriteLine($"[DEBUG] ArticleEditor.OnEditorStateChanged: focused TitleTextBox via fallback on attempt {i}"); } catch { }
+                                                    try { tb.Focus(); System.Console.WriteLine($"[DEBUG] ArticleEditor.OnEditorStateChanged: focused TitleTextBox via fallback on attempt {i}"); } catch (Exception ex) { DebugLogger.LogException("ArticleEditor.OnEditorStateChanged: focus tb fallback", ex); }
                                                     return;
                                                 }
                                             }
-                                            catch { }
+                                            catch (Exception ex) { DebugLogger.LogException("ArticleEditor.OnEditorStateChanged: inner post", ex); }
                                         });
                                     }
-                                    catch { }
+                                    catch (Exception ex) { DebugLogger.LogException("ArticleEditor.OnEditorStateChanged: delay", ex); }
                                 }
                                 System.Console.WriteLine("[DEBUG] ArticleEditor.OnEditorStateChanged: focus retry loop finished");
                             });
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { DebugLogger.LogException("ArticleEditor.OnEditorStateChanged: post scheduling", ex); }
                 });
             }
-            catch { }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditor.OnEditorStateChanged: outermost", ex); }
         }
     }
 }

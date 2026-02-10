@@ -110,9 +110,9 @@ namespace Common.Shared
                 // Update the existing ObservableCollection so UI bindings observing collection changes update immediately
                 Segments.Clear();
                 foreach (var s in newSegs) Segments.Add(s);
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegment)));
+                try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegment))); } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.RecomputeSegmentsFromPages: notify ActiveSegment", ex); }
             }
-            catch { }
+            catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.RecomputeSegmentsFromPages: outer", ex); }
         }
 
         public bool HasPageNumberError { get; set; }
@@ -144,7 +144,7 @@ namespace Common.Shared
                 if (_lastModifiedSegment != value)
                 {
                     _lastModifiedSegment = value;
-                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LastModifiedSegment))); } catch { }
+                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LastModifiedSegment))); } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.LastModifiedSegment: notify", ex); }
                 }
             }
         }
@@ -156,14 +156,14 @@ namespace Common.Shared
             {
                 Segments.CollectionChanged += Segments_CollectionChanged;
             }
-            catch { }
+            catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.ctor: subscribe Segments.CollectionChanged", ex); }
         }
 
         // Provide a safe way for external code to request a property change notification
         // (can't invoke the event from outside the declaring class).
         public void NotifyPropertyChanged(string propertyName)
         {
-            try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName)); } catch { }
+            try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName)); } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.NotifyPropertyChanged", ex); }
         }
 
         private void Segments_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -176,13 +176,13 @@ namespace Common.Shared
                     {
                         if (ni is Segment s)
                         {
-                            s.PropertyChanged += Segment_PropertyChanged;
-                            // If the new segment is active or was created as part of an add-operation (WasNew),
-                            // consider it as the last-modified so ActiveSegmentDisplay can show it.
-                            if (s.IsActive || s.WasNew)
-                            {
-                                LastModifiedSegment = s;
-                            }
+                            try { s.PropertyChanged += Segment_PropertyChanged; } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.Segments_CollectionChanged: attach Segment_PropertyChanged", ex); }
+                             // If the new segment is active or was created as part of an add-operation (WasNew),
+                             // consider it as the last-modified so ActiveSegmentDisplay can show it.
+                             if (s.IsActive || s.WasNew)
+                             {
+                                try { LastModifiedSegment = s; } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.Segments_CollectionChanged: set LastModifiedSegment", ex); }
+                             }
                         }
                     }
                 }
@@ -192,16 +192,16 @@ namespace Common.Shared
                     {
                         if (oi is Segment s)
                         {
-                            try { s.PropertyChanged -= Segment_PropertyChanged; } catch { }
+                            try { s.PropertyChanged -= Segment_PropertyChanged; } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.Segments_CollectionChanged: detach Segment_PropertyChanged", ex); }
                         }
                     }
                 }
             }
-            catch { }
-            // Notify that ActiveSegment and Segments/FormattedCardText may have changed
-            try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegment))); } catch { }
-            try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText))); } catch { }
-        }
+            catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.Segments_CollectionChanged: outer", ex); }
+             // Notify that ActiveSegment and Segments/FormattedCardText may have changed
+            try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegment))); } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.Segments_CollectionChanged: notify ActiveSegment", ex); }
+            try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText))); } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.Segments_CollectionChanged: notify FormattedCardText", ex); }
+         }
 
         private void Segment_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
@@ -210,12 +210,12 @@ namespace Common.Shared
                 if (e.PropertyName == nameof(Segment.IsActive) || e.PropertyName == nameof(Segment.End) || e.PropertyName == nameof(Segment.Start))
                 {
                     // Mark this segment as last-modified when its End or IsActive changes
-                    try { LastModifiedSegment = sender as Segment; } catch { }
-                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegment))); } catch { }
-                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText))); } catch { }
+                    try { LastModifiedSegment = sender as Segment; } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.Segment_PropertyChanged: set LastModifiedSegment", ex); }
+                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegment))); } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.Segment_PropertyChanged: notify ActiveSegment", ex); }
+                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText))); } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.Segment_PropertyChanged: notify FormattedCardText", ex); }
                 }
             }
-            catch { }
+            catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.Segment_PropertyChanged: outer", ex); }
         }
 
         public Segment? ActiveSegment => Segments.FirstOrDefault(s => s.IsActive);

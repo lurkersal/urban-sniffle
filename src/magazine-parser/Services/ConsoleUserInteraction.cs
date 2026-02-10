@@ -1,6 +1,6 @@
 using MagazineParser.Interfaces;
 
-namespace MagazineParser.Services;
+namespace magazine_parser.Services;
 
 public class ConsoleUserInteraction : IUserInteraction
 {

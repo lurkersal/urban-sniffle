@@ -1,4 +1,4 @@
-namespace MagazineParser.Models;
+namespace common.Shared.Models;
 
 public class ExistingContentMatch
 {

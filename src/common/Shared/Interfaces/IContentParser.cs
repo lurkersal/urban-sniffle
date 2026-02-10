@@ -1,5 +1,7 @@
 
-namespace Common.Shared
+using common.Shared.Models;
+
+namespace common.Shared.Interfaces
 {
     public interface IContentParser
     {

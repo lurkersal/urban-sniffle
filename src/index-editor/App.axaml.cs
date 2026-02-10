@@ -1,3 +1,4 @@
+using System;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -31,7 +32,11 @@ public partial class App : Application
             DebugLogger.Initialize(factory);
             DebugLogger.Log("Logging initialized");
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Ensure any initialization errors are logged
+            try { DebugLogger.LogException("App.OnFrameworkInitializationCompleted: initialize logging", ex); } catch (Exception logEx) { Console.WriteLine("Failed to log during App init: " + logEx); }
+        }
 
         // App initialization completed
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)

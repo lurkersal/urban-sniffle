@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using System.Collections;
 using System.Reflection;
+using IndexEditor.Shared;
 
 namespace IndexEditor.Shared
 {
