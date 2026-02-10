@@ -118,17 +118,9 @@ namespace IndexEditor.Views
                 if (fallback != null) { fallback.Focus(); FlashControl(fallback); return; }
 
                 // Stronger fallback: search visual descendants of the window/root for any control named TitleTextBox
-                try
-                {
-                    var root = this.VisualRoot as IVisual;
-                    if (root != null)
-                    {
-                        var found = FindDescendantByName<TextBox>(root, "TitleTextBox");
-                        System.Console.WriteLine(found == null ? "[DEBUG] ArticleEditor.FocusTitle: TitleTextBox not found in visual tree fallback" : "[DEBUG] ArticleEditor.FocusTitle: TitleTextBox found in visual tree fallback");
-                        if (found != null) { found.Focus(); FlashControl(found); return; }
-                    }
-                }
-                catch { }
+                // If we couldn't find the inner TitleTextBox via the DataTemplate or direct FindControl fallback,
+                // fall back to flashing the editor overlay so the user sees an indication. We avoid scanning the
+                // entire visual tree here to keep compatibility across Avalonia versions.
 
                 // If we couldn't find the inner TitleTextBox, flash the editor overlay so user sees an indication
                 try { TriggerOverlayFlash(false); } catch { }
@@ -367,24 +359,6 @@ namespace IndexEditor.Views
                 });
             }
             catch { }
-        }
-
-        // Search visual descendants for a control with the given name and return it typed as T.
-        private T? FindDescendantByName<T>(IVisual root, string name) where T : class
-        {
-            try
-            {
-                if (root == null) return null;
-                foreach (var v in root.GetVisualDescendants())
-                {
-                    if (v is Avalonia.Controls.Control c && c.Name == name)
-                    {
-                        return c as T;
-                    }
-                }
-            }
-            catch { }
-            return null;
         }
     }
 }
