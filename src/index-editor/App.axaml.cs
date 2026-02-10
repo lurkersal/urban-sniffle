@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -69,6 +70,18 @@ public partial class App : Application
                 {
                     folderToOpen = args[0];
                 }
+            }
+
+            // If no folder was supplied on the command line, attempt to open the most recently opened folder
+            if (string.IsNullOrWhiteSpace(folderToOpen))
+            {
+                try
+                {
+                    var recent = RecentFolderStore.GetLastOpenedFolder();
+                    if (!string.IsNullOrWhiteSpace(recent) && Directory.Exists(recent))
+                        folderToOpen = recent;
+                }
+                catch (Exception ex) { DebugLogger.LogException("App: RecentFolderStore lookup", ex); }
             }
 
             // Resolve MainWindow and viewmodels via DI

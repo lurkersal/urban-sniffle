@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Avalonia.Interactivity;
 using IndexEditor.Shared;
 using IndexEditor.Views;
+using WindowState = Avalonia.Controls.WindowState;
 
 namespace IndexEditor;
 
@@ -111,6 +112,7 @@ public partial class MainWindow : Window
         {
             this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
             this.Opened += OnWindowOpened;
+            this.Closing += OnWindowClosing;
             WriteDiagFile("[TRACE] Opened handler attached");
         }
         catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: Opened handler", ex); }
@@ -173,6 +175,22 @@ public partial class MainWindow : Window
         // Opened event fired
         try
         {
+            // Restore window size/state
+            try
+            {
+                var st = IndexEditor.Shared.WindowStateStore.GetWindowState();
+                if (st != null)
+                {
+                    if (st.IsMaximized) this.WindowState = WindowState.Maximized; // remember maximized
+                    else
+                    {
+                        this.Width = st.Width > 0 ? st.Width : this.Width;
+                        this.Height = st.Height > 0 ? st.Height : this.Height;
+                    }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: restore window state", ex); }
+
             this.Activate();
             this.Topmost = true;
             this.Topmost = false;
@@ -209,6 +227,25 @@ public partial class MainWindow : Window
 
         }
         catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: outer", ex); WriteDiagFile("[TRACE] Exception raising window"); }
+    }
+
+    private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        try
+        {
+            try
+            {
+                var isMax = this.WindowState == WindowState.Maximized;
+                // If maximized, store previous normal size so restore works later; Avalonia provides ClientSize
+                var width = this.Width;
+                var height = this.Height;
+                if (double.IsNaN(width) || double.IsInfinity(width) || width <= 0) width = 1024;
+                if (double.IsNaN(height) || double.IsInfinity(height) || height <= 0) height = 768;
+                IndexEditor.Shared.WindowStateStore.SetWindowState(width, height, isMax);
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnWindowClosing: save window state", ex); }
+        }
+        catch (Exception ex) { DebugLogger.LogException("OnWindowClosing: outer", ex); }
     }
 
     // Parsing helpers
@@ -386,10 +423,7 @@ public partial class MainWindow : Window
     // Main window event handlers
     private void OnMainWindowKeyDown(object? sender, KeyEventArgs e)
     {
-        // KeyDown received
-        // Handle global key down events here
-        // For example, toggle fullscreen on F11
-        // Ctrl+A: add segment at current page (if possible)
+        try { Console.WriteLine($"[TRACE] OnMainWindowKeyDown: Key={e.Key} Modifiers={e.KeyModifiers} Handled={e.Handled}"); } catch {}
         try
         {
             if (e.Key == Key.A && e.KeyModifiers.HasFlag(KeyModifiers.Control))
@@ -864,6 +898,8 @@ public partial class MainWindow : Window
             catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: choose first image", ex); IndexEditor.Shared.EditorState.CurrentPage = 1; }
 
             IndexEditor.Shared.EditorState.NotifyStateChanged();
+            // Persist the folder as the most-recently opened so future runs can default to it
+            try { IndexEditor.Shared.RecentFolderStore.SetLastOpenedFolder(folder); } catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: persist recent folder", ex); }
         }
         catch (Exception ex)
         {

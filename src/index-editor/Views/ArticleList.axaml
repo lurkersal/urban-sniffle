@@ -54,7 +54,6 @@
                         Margin="8,4" Padding="8" CornerRadius="4"
                         BorderBrush="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Converter={StaticResource SelectedArticleBorderConverter}}"
                         BorderThickness="1"
-                        PointerPressed="OnArticlePointerPressed"
                         Tag="{Binding}" >
                         <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" ColumnDefinitions="Auto,*,Auto">
                             <!-- Left colour indicator: narrow bar bound to the article Category -->
@@ -89,7 +88,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <!-- Lozenge-shaped segment bar laid out horizontally -->
-                                        <Border CornerRadius="12" Padding="6,4" Margin="0,0,8,0" MinHeight="24" Tag="{Binding}" PointerPressed="OnSegmentPointerPressed" BorderBrush="#CCC" BorderThickness="1">
+                                        <Border Background="Transparent" CornerRadius="12" Padding="6,4" Margin="0,0,8,0" MinHeight="24" Tag="{Binding}" BorderBrush="#CCC" BorderThickness="1">
                                             <Grid>
                                                 <!-- Inactive base -->
                                                 <Border Background="{StaticResource SegmentInactiveBackground}" CornerRadius="12" />

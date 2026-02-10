@@ -9,7 +9,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HERE/.." && pwd)"
 PROJECT_PATH="$REPO_ROOT/src/index-editor/IndexEditor.csproj"
 DLL_PATH="$REPO_ROOT/src/index-editor/bin/Debug/net8.0/IndexEditor.dll"
-DEFAULT_FOLDER="/mnt/wwn-0x50014ee2b8946bd6-part2/Magazines/Club International/Club International 15-07, 1986"
+DEFAULT_FOLDER=""
 
 FOLDER="${1:-$DEFAULT_FOLDER}"
 
