@@ -1,6 +1,6 @@
-using MagazineParser.Models;
+using common.Shared.Models;
 
-namespace MagazineParser.Interfaces;
+namespace common.Shared.Interfaces;
 
 public interface IDatabaseRepository
 {
