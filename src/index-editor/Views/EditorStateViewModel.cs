@@ -117,40 +117,42 @@ namespace IndexEditor.Views
 
                 if (_selectedArticle != incoming)
                 {
-                    _selectedArticle = incoming;
-                     // Update IsSelected flags on all articles so UI bindings reflect selection
-                     try
-                     {
-                         foreach (var a in Articles)
-                         {
-                             try { a.IsSelected = object.ReferenceEquals(a, _selectedArticle); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: set IsSelected", ex); }
-                         }
-                     }
-                     catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: updating IsSelected flags", ex); }
-                     // Ensure the global EditorState reflects the current selected article so
-                     // other views (PageController, etc.) can read the active article details.
-                     try
-                     {
-                         IndexEditor.Shared.EditorState.ActiveArticle = _selectedArticle;
-                         IndexEditor.Shared.EditorState.NotifyStateChanged();
-                     }
-                     catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: set active article/notify", ex); }
-                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
-                     // Notify SelectedCategory so the editor ComboBox updates to the new article's category
-                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
-                     // Also notify CurrentShownArticle which may change when SelectedArticle changes
-                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentShownArticle)));
-                     // Run validation after UI bindings have a chance to populate the editor fields.
-                     // Schedule validation at Background priority so two-way bindings and initial control
-                     // population complete first; this avoids a false-negative when the editor first shows an article.
-                     Dispatcher.UIThread.Post(() => _selectedArticle?.Validate(), Avalonia.Threading.DispatcherPriority.Background);
-                     // Also schedule a second validation after a short delay to handle any remaining
-                     // asynchronous population that may occur after initial layout/binding.
-                     Task.Run(async () =>
-                     {
-                         await Task.Delay(150).ConfigureAwait(false);
-                         Dispatcher.UIThread.Post(() => _selectedArticle?.Validate(), Avalonia.Threading.DispatcherPriority.Background);
-                     });
+                    try { System.IO.File.AppendAllText("/tmp/index_editor_debug.txt", $"SelectedArticle changing. incoming.Title='{incoming?.Title}', Category='{incoming?.Category}', Contributor0='{incoming?.Contributor0}'\n"); } catch {}
+                     _selectedArticle = incoming;
+                      // Update IsSelected flags on all articles so UI bindings reflect selection
+                      try
+                      {
+                          foreach (var a in Articles)
+                          {
+                              try { a.IsSelected = object.ReferenceEquals(a, _selectedArticle); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: set IsSelected", ex); }
+                          }
+                      }
+                      catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: updating IsSelected flags", ex); }
+                      // Ensure the global EditorState reflects the current selected article so
+                      // other views (PageController, etc.) can read the active article details.
+                      try
+                      {
+                          IndexEditor.Shared.EditorState.ActiveArticle = _selectedArticle;
+                          IndexEditor.Shared.EditorState.NotifyStateChanged();
+                      }
+                      catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: set active article/notify", ex); }
+                      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
+                    try { System.IO.File.AppendAllText("/tmp/index_editor_debug.txt", $"SelectedArticle set. current.Title='{_selectedArticle?.Title}', Category='{_selectedArticle?.Category}', Contributor0='{_selectedArticle?.Contributor0}'\n"); } catch {}
+                      // Notify SelectedCategory so the editor ComboBox updates to the new article's category
+                      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
+                      // Also notify CurrentShownArticle which may change when SelectedArticle changes
+                      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentShownArticle)));
+                      // Run validation after UI bindings have a chance to populate the editor fields.
+                      // Schedule validation at Background priority so two-way bindings and initial control
+                      // population complete first; this avoids a false-negative when the editor first shows an article.
+                      Dispatcher.UIThread.Post(() => _selectedArticle?.Validate(), Avalonia.Threading.DispatcherPriority.Background);
+                      // Also schedule a second validation after a short delay to handle any remaining
+                      // asynchronous population that may occur after initial layout/binding.
+                      Task.Run(async () =>
+                      {
+                          await Task.Delay(150).ConfigureAwait(false);
+                          Dispatcher.UIThread.Post(() => _selectedArticle?.Validate(), Avalonia.Threading.DispatcherPriority.Background);
+                      });
                  }
              }
          }

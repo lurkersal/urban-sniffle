@@ -12,6 +12,8 @@
         <local:ShowAuthorCategoryConverter x:Key="ShowAuthor" />
         <local:ActiveSegmentToTextConverter x:Key="ActiveSegmentToTextConverter" />
         <local:ArticleActiveSegmentBrushConverter x:Key="ActiveSegmentBrushConverter" />
+        <local:ShowMeasurementsConverter x:Key="ShowMeasurements" />
+        <local:ShowContributorCategoryConverter x:Key="ShowContributor" />
     </UserControl.Resources>
     <Grid Margin="8">
         <Grid.RowDefinitions>
@@ -60,7 +62,7 @@
                                     <TextBox Text="{Binding Age0, Mode=TwoWay}" Width="120" />
                                 </StackPanel>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter=&quot;2&quot;}">
+                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Path=., Converter={StaticResource ShowMeasurements}}">
                                     <TextBlock Text="Measurements:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
                                     <TextBox Text="{Binding Measurements0, Mode=TwoWay}" Width="240" />
                                 </StackPanel>
@@ -68,16 +70,10 @@
                                 <TextBlock Text="{Binding MeasurementsErrorMessage}" Foreground="Red" FontSize="12" Margin="124,2,0,0" IsVisible="{Binding HasMeasurementsError}" />
                                 <TextBlock Text="Format: bust(+cup)-waist-hip — e.g. '36B-28-38' (separator must be '-')" Foreground="Gray" FontSize="11" Margin="124,2,0,0" IsVisible="{Binding HasMeasurementsError}" />
 
-                                <!-- Photographer row -->
-                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowPhotographer}}">
+                                <!-- Unified contributor row (field 6). Label changes depending on category via FieldLabelConverter. -->
+                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowContributor}}">
                                     <TextBlock Text="{Binding Category, Converter={StaticResource FieldLabelConverter}, ConverterParameter=Photographer}" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                    <TextBox Text="{Binding Photographer0, Mode=TwoWay}" Width="360" />
-                                </StackPanel>
-
-                                <!-- Author row (visible for Humour, Feature, Fiction, etc.) -->
-                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowAuthor}}">
-                                    <TextBlock Text="Author:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                    <TextBox Text="{Binding Author0, Mode=TwoWay}" Width="360" />
+                                    <TextBox Text="{Binding Contributor0, Mode=TwoWay}" Width="360" />
                                 </StackPanel>
 
                                 <!-- Pages row -->

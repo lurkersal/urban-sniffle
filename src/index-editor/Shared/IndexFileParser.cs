@@ -20,8 +20,28 @@ namespace IndexEditor.Shared
         public static Common.Shared.ArticleLine? ParseArticleLine(string line)
         {
             var parts = SplitRespectingEscapedCommas(line);
-            if (parts.Count < 2)
-                return null;
+            // Accept 6 or 7 column formats used in index files:
+            // - 6 columns: missing measurements -> we'll append an empty measurements field
+            // - 7 columns: canonical: pages,category,title,models,ages,contributors,measurements
+            // - 8+ columns: legacy format (photographers,authors) — treat as an error to avoid ambiguity
+            // If the line has fewer than 6 fields, treat missing fields as blank (pad with empty strings)
+            if (parts.Count < 6)
+            {
+                var needed = 6 - parts.Count;
+                for (int i = 0; i < needed; i++)
+                    parts.Add(string.Empty);
+            }
+            if (parts.Count == 6)
+            {
+                // append empty measurements field
+                parts.Add(string.Empty);
+            }
+            else if (parts.Count >= 8)
+            {
+                // Legacy 8-field lines are no longer supported — surface as a format error so UI shows overlay for correction
+                throw new FormatException($"Unsupported _index.txt line format: found {parts.Count} comma-separated fields (legacy 8-field format). Use the canonical 7-field format: pages,category,title,modelNames,ages,contributors,measurements. Line: '{line}'");
+            }
+
             var article = new Common.Shared.ArticleLine();
             article.Pages = ParsePageNumbers(parts[0], out bool hasError);
             article.HasPageNumberError = hasError;
@@ -32,9 +52,7 @@ namespace IndexEditor.Shared
             try
             {
                 var pages = article.Pages;
-                // Ensure the Segments collection exists and update it in-place so UI bindings receive collection change notifications
                 try { if (article.Segments == null) article.Segments = new System.Collections.ObjectModel.ObservableCollection<Common.Shared.Segment>(); } catch (Exception ex) { DebugLogger.LogException("IndexFileParser.ParseArticleLine: ensure segments", ex); }
-                // Clear existing collection if possible
                 try { article.Segments.Clear(); } catch (Exception ex) { DebugLogger.LogException("IndexFileParser.ParseArticleLine: clear segments", ex); }
                 if (pages != null && pages.Count > 0)
                 {
@@ -50,46 +68,43 @@ namespace IndexEditor.Shared
                             end = pages[i];
                             i++;
                         }
-                        // Stored segments are closed ranges, so set End to the final page
                         try { article.Segments.Add(new Common.Shared.Segment(start, end)); } catch (Exception ex) { DebugLogger.LogException("IndexFileParser.ParseArticleLine: add segment", ex); }
                     }
                 }
             }
             catch (Exception ex) { DebugLogger.LogException("IndexFileParser.ParseArticleLine: outer", ex); }
 
-            article.Category = parts.Count > 1 ? parts[1] : "";
+            article.Category = parts[1] ?? string.Empty;
             if (string.IsNullOrWhiteSpace(article.Category))
                 return null;
             if (article.Category.Equals("Contents", StringComparison.OrdinalIgnoreCase))
                 article.Category = "Index";
-            article.Title = parts.Count > 2 ? parts[2] : "";
-            if (parts.Count > 3)
-                article.ModelNames = parts[3].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-            // columns: 4=modelNames, 5=ages, 6=photographers, 7=authors, 8=measurements (0-based indices 3..7)
-            if (parts.Count > 4 && !string.IsNullOrWhiteSpace(parts[4]))
+            article.Title = parts[2] ?? string.Empty;
+            article.ModelNames = parts[3].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+            if (!string.IsNullOrWhiteSpace(parts[4]))
             {
-                // ages are numeric or empty; allow missing entries
                 var ageParts = parts[4].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 article.Ages = ageParts.Select(ap => int.TryParse(ap, out var iv) ? (int?)iv : null).ToList();
             }
-            // Common formats vary: some index files have 7 columns (pages,category,title,models,ages,photographers,measurements)
-            // while others use 8 columns with an authors column before measurements.
-            if (parts.Count > 5 && !string.IsNullOrWhiteSpace(parts[5]))
-                article.Photographers = parts[5].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
 
+            // Handle contributor(s) and measurements depending on number of parts
             if (parts.Count == 7)
             {
-                // 7-column format: treat parts[6] as Measurements
+                // 7-column canonical format: parts[5]=contributors, parts[6]=measurements
+                var contribList = new List<string>();
+                if (!string.IsNullOrWhiteSpace(parts[5]))
+                    contribList = parts[5].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+                // Populate unified Contributors and keep Authors/Photographers for compatibility
+                article.Contributors = contribList.Count > 0 ? contribList : new List<string> { string.Empty };
+                article.Photographers = new List<string> { article.Contributors.Count > 0 ? article.Contributors[0] : string.Empty };
+                article.Authors = new List<string> { article.Contributors.Count > 0 ? article.Contributors[0] : string.Empty };
+
                 if (!string.IsNullOrWhiteSpace(parts[6]))
+                {
                     article.Measurements = parts[6].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-            }
-            else
-            {
-                // 8+ column format: parts[6]=Authors, parts[7]=Measurements
-                if (parts.Count > 6 && !string.IsNullOrWhiteSpace(parts[6]))
-                    article.Authors = parts[6].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-                if (parts.Count > 7 && !string.IsNullOrWhiteSpace(parts[7]))
-                    article.Measurements = parts[7].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+                }
             }
 
             if (article.ModelNames == null || article.ModelNames.Count == 0)
@@ -103,7 +118,7 @@ namespace IndexEditor.Shared
             if (article.Ages == null || article.Ages.Count == 0)
                 article.Ages = new List<int?> { null };
 
-            // Fallback: some older index files place the author in the photographers column for Humour entries.
+            // Keep humour fallback for now (if desired)
             try
             {
                 var cat = (article.Category ?? string.Empty).Trim().ToLowerInvariant();
@@ -111,7 +126,6 @@ namespace IndexEditor.Shared
                 bool photographersHave = article.Photographers != null && article.Photographers.Any(p => !string.IsNullOrWhiteSpace(p));
                 if (cat == "humour" && authorsEmpty && photographersHave)
                 {
-                    // Copy photographers to authors so the editor's Author field is populated
                     article.Authors = article.Photographers.Select(p => p).ToList();
                 }
             }

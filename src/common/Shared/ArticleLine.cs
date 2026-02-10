@@ -35,6 +35,8 @@ namespace Common.Shared
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DisplayTitle)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CategoryDisplay)));
                     Validate();
+                    // Category affects which underlying list is used for Contributor0 (authors vs photographers)
+                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Contributor0))); } catch { }
                 }
             }
         }
@@ -121,6 +123,8 @@ namespace Common.Shared
         public List<int?> Ages { get; set; } = new();
         public List<string> Photographers { get; set; } = new();
         public List<string> Authors { get; set; } = new();
+        // New unified contributors list (field 6 in the _index.txt)
+        public List<string> Contributors { get; set; } = new();
         public List<string> Illustrators { get; set; } = new();
         public string ModelSize { get; set; } = string.Empty;
         public List<string> Measurements { get; set; } = new();
@@ -285,33 +289,68 @@ namespace Common.Shared
             }
         }
 
-        public string Photographer0
+        // Unified contributor convenience property (first contributor)
+        public string Contributor0
         {
-            get => Photographers.Count > 0 ? Photographers[0] : string.Empty;
+            get => Contributors.Count > 0 ? Contributors[0] : string.Empty;
             set
             {
-                if (Photographers.Count == 0) Photographers.Add(string.Empty);
-                if (Photographers[0] != value)
+                if (Contributors.Count == 0) Contributors.Add(string.Empty);
+                if (Contributors[0] != value)
                 {
-                    Photographers[0] = value;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Photographers)));
+                    Contributors[0] = value ?? string.Empty;
+                    // Keep backward-compatible lists in sync
+                    try { if (Photographers.Count == 0) Photographers.Add(string.Empty); Photographers[0] = Contributors[0]; } catch { }
+                    try { if (Authors.Count == 0) Authors.Add(string.Empty); Authors[0] = Contributors[0]; } catch { }
+
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Contributors)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Contributor0)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
+                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Photographers))); } catch { }
+                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Authors))); } catch { }
+                }
+            }
+        }
+
+        // Photographer0 proxies to Contributors for backward compatibility
+        public string Photographer0
+        {
+            get => Contributors.Count > 0 ? Contributors[0] : string.Empty;
+            set
+            {
+                if (Contributors.Count == 0) Contributors.Add(string.Empty);
+                if (Contributors[0] != value)
+                {
+                    Contributors[0] = value ?? string.Empty;
+                    if (Photographers.Count == 0) Photographers.Add(string.Empty);
+                    Photographers[0] = Contributors[0];
+                    if (Authors.Count == 0) Authors.Add(string.Empty);
+                    Authors[0] = Contributors[0];
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Contributor0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Photographer0)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Author0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
                 }
             }
         }
 
+        // Author0 proxies to Contributors for backward compatibility
         public string Author0
         {
-            get => Authors.Count > 0 ? Authors[0] : string.Empty;
+            get => Contributors.Count > 0 ? Contributors[0] : string.Empty;
             set
             {
-                if (Authors.Count == 0) Authors.Add(string.Empty);
-                if (Authors[0] != value)
+                if (Contributors.Count == 0) Contributors.Add(string.Empty);
+                if (Contributors[0] != value)
                 {
-                    Authors[0] = value;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Authors)));
+                    Contributors[0] = value ?? string.Empty;
+                    if (Authors.Count == 0) Authors.Add(string.Empty);
+                    Authors[0] = Contributors[0];
+                    if (Photographers.Count == 0) Photographers.Add(string.Empty);
+                    Photographers[0] = Contributors[0];
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Contributor0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Author0)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Photographer0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
                 }
             }

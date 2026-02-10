@@ -7,6 +7,9 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Avalonia.Media;
+using Avalonia;
+
 namespace IndexEditor.Views
 {
     public partial class ArticleEditorView : UserControl
@@ -134,17 +137,110 @@ namespace IndexEditor.Views
         private void LoadArticlesFromIndexFile()
         {
             if (string.IsNullOrEmpty(_currentFolder)) return;
-            var indexPath = System.IO.Path.Combine(_currentFolder, "_index.txt");
-            if (!System.IO.File.Exists(indexPath)) return;
-            var lines = System.IO.File.ReadAllLines(indexPath);
+            var indexFilePath = System.IO.Path.Combine(_currentFolder, "_index.txt");
+            if (!System.IO.File.Exists(indexFilePath)) return;
+            var lines = System.IO.File.ReadAllLines(indexFilePath);
             var articles = new List<Common.Shared.ArticleLine>();
             foreach (var line in lines)
             {
-                var parsed = IndexEditor.Shared.IndexFileParser.ParseArticleLine(line);
-                if (parsed != null)
+                // Skip empty or comment lines (header metadata starts with '#') — do not attempt to parse these as article lines
+                var raw = line?.Trim();
+                if (string.IsNullOrEmpty(raw))
+                    continue;
+                if (raw.StartsWith("#"))
+                    continue;
+                try
                 {
-                    // ParseArticleLine returns a fully-populated Common.Shared.ArticleLine
-                    articles.Add(parsed);
+                    var parsed = IndexEditor.Shared.IndexFileParser.ParseArticleLine(line);
+                    if (parsed != null)
+                    {
+                        // ParseArticleLine returns a fully-populated Common.Shared.ArticleLine
+                        articles.Add(parsed);
+                    }
+                }
+                catch (FormatException fx)
+                {
+                    // Format error: show toast and open the index overlay for correction
+                    try { IndexEditor.Shared.ToastService.Show("_index.txt format error: " + fx.Message); } catch { }
+                    try
+                    {
+                        var wnd = this.VisualRoot as MainWindow ?? (this.VisualRoot as Window);
+                        if (wnd != null)
+                        {
+                            var overlay = wnd.FindControl<Border>("IndexOverlay");
+                            var tb = wnd.FindControl<TextBox>("IndexOverlayTextBox");
+                            // Use the existing indexFilePath variable declared at the top of this method
+                            if (overlay != null && tb != null)
+                            {
+                                var fileText = System.IO.File.Exists(indexFilePath) ? System.IO.File.ReadAllText(indexFilePath) : $"_index.txt not found in folder: {_currentFolder}";
+                                tb.Text = fileText;
+                                // Highlight the overlay with a red border/background to indicate parse error
+                                try
+                                {
+                                    overlay.Background = Brushes.MistyRose;
+                                    overlay.BorderBrush = Brushes.Red;
+                                    overlay.BorderThickness = new Thickness(2);
+                                }
+                                catch { }
+
+                                // Try to select the offending line in the TextBox so user can see it immediately
+                                try
+                                {
+                                    var pos = fileText.IndexOf(line, StringComparison.Ordinal);
+                                    if (pos >= 0)
+                                    {
+                                        // Select the error substring
+                                        try
+                                        {
+                                            tb.SelectionStart = pos;
+                                            tb.SelectionEnd = pos + line.Length;
+                                            tb.CaretIndex = tb.SelectionEnd;
+                                            // give focus so selection is visible
+                                            tb.Focus();
+                                        }
+                                        catch { }
+                                    }
+                                    else
+                                    {
+                                        // If line not found, just focus the textbox
+                                        tb.Focus();
+                                    }
+                                }
+                                catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: select offending line", ex); }
+
+                                overlay.IsVisible = true;
+
+                                // Clear highlight when user starts editing the overlay text
+                                try
+                                {
+                                    // Subscribe to text changes to clear the red highlight
+                                    var disp = tb.GetObservable(TextBox.TextProperty).Subscribe(new LambdaObserver<string>(_ =>
+                                    {
+                                        try
+                                        {
+                                            overlay.Background = Brushes.Transparent;
+                                            overlay.BorderBrush = Brushes.Gray;
+                                            overlay.BorderThickness = new Thickness(1);
+                                        }
+                                        catch { }
+                                    }));
+                                    // If the overlay is closed, dispose the subscription - hook into IsVisible property
+                                    overlay.GetObservable(Border.IsVisibleProperty).Subscribe(new LambdaObserver<bool>(visible =>
+                                    {
+                                        if (!visible)
+                                        {
+                                            try { disp.Dispose(); } catch { }
+                                        }
+                                    }));
+                                }
+                                catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: subscribe clear highlight", ex); }
+                            }
+                        }
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: show overlay on format error", ex); }
+
+                    // Stop processing further lines
+                    break;
                 }
             }
             IndexEditor.Shared.EditorState.Articles = articles;
@@ -181,6 +277,7 @@ namespace IndexEditor.Views
                         }
                         catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: per-article setup", ex); }
                         vm.Articles.Add(a);
+                        try { System.IO.File.AppendAllText("/tmp/index_editor_articles_debug.txt", $"Loaded article: Title='{a.Title}', Category='{a.Category}', Contributor0='{a.Contributor0}'\n"); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: append article debug", ex); }
                     }
                 }
                 catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: update VM articles", ex); }
@@ -224,5 +321,18 @@ namespace IndexEditor.Views
             }
             catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: outer", ex); }
         }
+    }
+
+    // Simple IObserver<T> implementation used to adapt lambdas to IObserver for Subscribe calls
+    internal class LambdaObserver<T> : IObserver<T>
+    {
+        private readonly Action<T> _onNext;
+        public LambdaObserver(Action<T> onNext) => _onNext = onNext ?? throw new ArgumentNullException(nameof(onNext));
+        public void OnNext(T value)
+        {
+            try { _onNext(value); } catch { }
+        }
+        public void OnError(Exception error) { /* no-op */ }
+        public void OnCompleted() { /* no-op */ }
     }
 }

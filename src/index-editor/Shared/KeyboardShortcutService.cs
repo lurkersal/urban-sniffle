@@ -20,7 +20,7 @@ namespace IndexEditor.Shared
         private record ShortcutKey(Key Key, KeyModifiers Modifiers);
         private class ShortcutEntry
         {
-            public Func<KeyEventArgs, bool> Handler { get; init; }
+            public Func<KeyEventArgs, bool>? Handler { get; init; }
             public Func<bool>? CanExecute { get; init; }
             public string? Name { get; init; }
         }

@@ -73,39 +73,21 @@ namespace IndexEditor.Views
                     return;
                 }
 
-                var indexPath = System.IO.Path.Combine(folder, "_index.txt");
-                string Escape(string s) => s?.Replace(",", "\\,") ?? string.Empty;
-                var lines = new System.Collections.Generic.List<string>();
-                foreach (var a in EditorState.Articles)
+                try
                 {
-                    var pagesText = a.PagesText ?? string.Empty;
-                    var modelNames = (a.ModelNames != null && a.ModelNames.Count > 0) ? string.Join('|', a.ModelNames) : string.Empty;
-                    var ages = (a.Ages != null && a.Ages.Count > 0) ? string.Join('|', a.Ages.Select(v => v.HasValue ? v.Value.ToString() : string.Empty)) : string.Empty;
-                    var photographers = (a.Photographers != null && a.Photographers.Count > 0) ? string.Join('|', a.Photographers) : string.Empty;
-                    var authors = (a.Authors != null && a.Authors.Count > 0) ? string.Join('|', a.Authors) : string.Empty;
-                    var measurements = (a.Measurements != null && a.Measurements.Count > 0) ? string.Join('|', a.Measurements) : string.Empty;
-                    var parts = new System.Collections.Generic.List<string> { pagesText, Escape(a.Category), Escape(a.Title), Escape(modelNames), Escape(ages), Escape(photographers), Escape(authors), Escape(measurements) };
-                    lines.Add(string.Join(",", parts));
+                    IndexSaver.SaveIndex(folder);
+                    ToastService.Show("_index.txt saved");
+                    EditorState.NotifyStateChanged();
                 }
-
-                var outLinesList = new System.Collections.Generic.List<string>();
-                if (!string.IsNullOrWhiteSpace(EditorState.CurrentMagazine) || !string.IsNullOrWhiteSpace(EditorState.CurrentVolume) || !string.IsNullOrWhiteSpace(EditorState.CurrentNumber))
+                catch (Exception ex)
                 {
-                    var metaParts = new[] { Escape(EditorState.CurrentMagazine ?? string.Empty), Escape(EditorState.CurrentVolume ?? string.Empty), Escape(EditorState.CurrentNumber ?? string.Empty) };
-                    outLinesList.Add(string.Join(",", metaParts));
+                    DebugLogger.LogException("MainWindowViewModel.SaveIndex", ex);
+                    ToastService.Show("Failed to save _index.txt");
                 }
-                outLinesList.AddRange(lines);
-                var tempPath = indexPath + ".tmp";
-                System.IO.File.WriteAllLines(tempPath, outLinesList.ToArray());
-                if (System.IO.File.Exists(indexPath)) System.IO.File.Replace(tempPath, indexPath, null);
-                else System.IO.File.Move(tempPath, indexPath);
-
-                ToastService.Show("_index.txt saved");
-                EditorState.NotifyStateChanged();
             }
             catch (Exception ex)
             {
-                DebugLogger.LogException("MainWindowViewModel.SaveIndex", ex);
+                DebugLogger.LogException("MainWindowViewModel.SaveIndex: outer", ex);
                 ToastService.Show("Failed to save _index.txt");
             }
         }

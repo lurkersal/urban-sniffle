@@ -56,61 +56,23 @@ namespace IndexEditor.Views
 
                         // Prevent double-save
                         btn.IsEnabled = false;
-                        var indexPath = System.IO.Path.Combine(folder, "_index.txt");
-                        // Build lines from EditorState.Articles using same formatting as MainWindow.ParseArticleLine reversed
-                        var lines = new List<string>();
-                        // Escape helper for commas (uses same convention as reading code)
-                        string Escape(string s) => s?.Replace(",", "\\,") ?? string.Empty;
-                        foreach (var a in IndexEditor.Shared.EditorState.Articles)
-                        {
-                            // Use public PagesText which returns formatted segments like "1|2-3"
-                            var pagesText = a.PagesText ?? string.Empty;
-                            var modelNames = (a.ModelNames != null && a.ModelNames.Count > 0) ? string.Join('|', a.ModelNames) : string.Empty;
-                            var ages = (a.Ages != null && a.Ages.Count > 0) ? string.Join('|', a.Ages.Select(v => v.HasValue ? v.Value.ToString() : string.Empty)) : string.Empty;
-                            var photographers = (a.Photographers != null && a.Photographers.Count > 0) ? string.Join('|', a.Photographers) : string.Empty;
-                            var authors = (a.Authors != null && a.Authors.Count > 0) ? string.Join('|', a.Authors) : string.Empty;
-                            var measurements = (a.Measurements != null && a.Measurements.Count > 0) ? string.Join('|', a.Measurements) : string.Empty;
-                            var parts = new List<string> { pagesText, Escape(a.Category), Escape(a.Title), Escape(modelNames), Escape(ages), Escape(photographers), Escape(authors), Escape(measurements) };
-                            var line = string.Join(",", parts);
-                            lines.Add(line);
-                        }
-                        // Compose output lines: the first non-comment line must be the CSV metadata (Magazine,Volume,Number) if available
-                        var outLinesList = new List<string>();
-                        if (!string.IsNullOrWhiteSpace(IndexEditor.Shared.EditorState.CurrentMagazine) || !string.IsNullOrWhiteSpace(IndexEditor.Shared.EditorState.CurrentVolume) || !string.IsNullOrWhiteSpace(IndexEditor.Shared.EditorState.CurrentNumber))
-                        {
-                            // Write an uncommented CSV metadata line as the first non-comment line
-                            var metaParts = new[] { Escape(IndexEditor.Shared.EditorState.CurrentMagazine ?? string.Empty), Escape(IndexEditor.Shared.EditorState.CurrentVolume ?? string.Empty), Escape(IndexEditor.Shared.EditorState.CurrentNumber ?? string.Empty) };
-                            outLinesList.Add(string.Join(",", metaParts));
-                        }
-                        // Do not write legacy commented headers; metadata is represented by the first CSV line only.
-                        // Append article lines
-                        outLinesList.AddRange(lines);
-                        var outLines = outLinesList.ToArray();
-
-                        // Atomic write: write to temp then replace
-                        var tempPath = indexPath + ".tmp";
                         try
                         {
-                            System.IO.File.WriteAllLines(tempPath, outLines);
-                            // If the target exists, use Replace to be atomic; otherwise move
-                            if (System.IO.File.Exists(indexPath))
-                            {
-                                System.IO.File.Replace(tempPath, indexPath, null);
-                            }
-                            else
-                            {
-                                System.IO.File.Move(tempPath, indexPath);
-                            }
+                            IndexEditor.Shared.IndexSaver.SaveIndex(folder);
                             IndexEditor.Shared.ToastService.Show("_index.txt saved");
+                        }
+                        catch (Exception ex)
+                        {
+                            IndexEditor.Shared.ToastService.Show("Failed to save _index.txt");
+                            IndexEditor.Shared.DebugLogger.LogException("TopBar: save _index.txt", ex);
                         }
                         finally
                         {
-                            try { if (System.IO.File.Exists(tempPath)) System.IO.File.Delete(tempPath); } catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: delete temp file", ex); }
                             // re-evaluate enablement based on active segment
                             btn.IsEnabled = IndexEditor.Shared.EditorState.ActiveSegment == null;
                         }
                     }
-                    catch (Exception ex) { IndexEditor.Shared.ToastService.Show("Failed to save _index.txt"); IndexEditor.Shared.DebugLogger.LogException("TopBar: save _index.txt", ex); }
+                    catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: save click outer", ex); }
                 };
             }
             if (openBtn != null)

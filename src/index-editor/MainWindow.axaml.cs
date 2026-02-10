@@ -273,121 +273,21 @@ public partial class MainWindow : Window
     // Parsing helpers
     private Common.Shared.ArticleLine? ParseArticleLine(string line)
     {
-        var parts = IndexFileParser.SplitRespectingEscapedCommas(line);
-        if (parts.Count < 2)
+        try
+        {
+            // Delegate parsing to the centralized parser to keep behaviour consistent
+            return IndexEditor.Shared.IndexFileParser.ParseArticleLine(line);
+        }
+        catch (FormatException)
+        {
+            // Bubble up format exceptions for the caller to handle (overlay UI)
+            throw;
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException("MainWindow.ParseArticleLine: delegate parser threw", ex);
             return null;
-        var article = new Common.Shared.ArticleLine();
-        article.Pages = IndexFileParser.ParsePageNumbers(parts[0], out bool hasError);
-        article.HasPageNumberError = hasError;
-        if (article.Pages.Count == 0)
-            return null;
-
-        // Populate segments from pages so UI shows per-part segments
-        try
-        {
-            var pages = article.Pages;
-            try { article.Segments.Clear(); } catch (Exception ex) { DebugLogger.LogException("MainWindow.ParseArticleLine: clear segments", ex); }
-            if (pages != null && pages.Count > 0)
-            {
-                pages.Sort();
-                int i = 0;
-                while (i < pages.Count)
-                {
-                    int start = pages[i];
-                    int end = start;
-                    i++;
-                    while (i < pages.Count && pages[i] == end + 1)
-                    {
-                        end = pages[i];
-                        i++;
-                    }
-                    try { article.Segments.Add(new Common.Shared.Segment(start, end)); } catch (Exception ex) { DebugLogger.LogException("MainWindow.ParseArticleLine: add segment", ex); }
-                }
-            }
         }
-        catch (Exception ex) { DebugLogger.LogException("MainWindow.ParseArticleLine: outer", ex); }
-
-        article.Category = parts.Count > 1 ? parts[1] : "";
-        if (string.IsNullOrWhiteSpace(article.Category))
-            return null;
-        if (article.Category.Equals("Contents", StringComparison.OrdinalIgnoreCase))
-            article.Category = "Index";
-        article.Title = parts.Count > 2 ? parts[2] : "";
-        if (parts.Count > 3)
-            article.ModelNames = parts[3].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-        if (parts.Count > 4)
-        {
-            var ageParts = parts[4].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var ages = new List<int?>();
-            foreach (var ap in ageParts)
-            {
-                if (int.TryParse(ap, out int a))
-                    ages.Add(a);
-                else
-                    ages.Add(null);
-            }
-            article.Ages = ages;
-        }
-        if (parts.Count > 5 && !string.IsNullOrWhiteSpace(parts[5]))
-            article.Photographers = parts[5].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-        // Common formats vary: some index files have 7 columns (pages,category,title,models,ages,photographers,measurements)
-        // while others use 8 columns with an authors column before measurements.
-        if (parts.Count == 7)
-        {
-            // 7-column format: treat parts[6] as Measurements
-            if (!string.IsNullOrWhiteSpace(parts[6]))
-                article.Measurements = parts[6].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-        }
-        else
-        {
-            // 8+ column format: parts[6]=Authors, parts[7]=Measurements
-            if (parts.Count > 6 && !string.IsNullOrWhiteSpace(parts[6]))
-                article.Authors = parts[6].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-            if (parts.Count > 7 && !string.IsNullOrWhiteSpace(parts[7]))
-                article.Measurements = parts[7].Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-        }
-
-        // Notify bindings in case the UI is already bound to this instance
-        try
-        {
-            article.NotifyPropertyChanged(nameof(Common.Shared.ArticleLine.Authors));
-            article.NotifyPropertyChanged(nameof(Common.Shared.ArticleLine.Author0));
-            article.NotifyPropertyChanged(nameof(Common.Shared.ArticleLine.FormattedCardText));
-        }
-        catch (Exception ex) { DebugLogger.LogException("MainWindow.ParseArticleLine: notify bindings", ex); }
-
-        if (article.ModelNames == null || article.ModelNames.Count == 0)
-            article.ModelNames = new List<string> { string.Empty };
-        if (article.Photographers == null || article.Photographers.Count == 0)
-            article.Photographers = new List<string> { string.Empty };
-        if (article.Measurements == null || article.Measurements.Count == 0)
-            article.Measurements = new List<string> { string.Empty };
-        if (article.Ages == null || article.Ages.Count == 0)
-            article.Ages = new List<int?> { null };
-
-        // Fallback: some older index files place the author in the photographers column for Humour entries.
-        try
-        {
-            var cat = (article.Category ?? string.Empty).Trim().ToLowerInvariant();
-            bool authorsEmpty = article.Authors == null || article.Authors.All(a => string.IsNullOrWhiteSpace(a));
-            bool photographersHave = article.Photographers != null && article.Photographers.Any(p => !string.IsNullOrWhiteSpace(p));
-            if (cat == "humour" && authorsEmpty && photographersHave)
-            {
-                article.Authors = article.Photographers.Select(p => p).ToList();
-            }
-        }
-        catch (Exception ex) { DebugLogger.LogException("MainWindow.ParseArticleLine: fallback authors", ex); }
-
-        // Ensure UI bindings update if the article instance is already bound
-        try
-        {
-            article.NotifyPropertyChanged(nameof(Common.Shared.ArticleLine.Authors));
-            article.NotifyPropertyChanged(nameof(Common.Shared.ArticleLine.Author0));
-            article.NotifyPropertyChanged(nameof(Common.Shared.ArticleLine.FormattedCardText));
-        }
-        catch (Exception ex) { DebugLogger.LogException("MainWindow.ParseArticleLine: notify bindings (post-fallback)", ex); }
-
-        return article;
     }
 
     private List<int> ParsePageNumbers(string pageStr, out bool hasError)
@@ -448,6 +348,39 @@ public partial class MainWindow : Window
         try { Console.WriteLine($"[TRACE] OnMainWindowKeyDown: Key={e.Key} Modifiers={e.KeyModifiers} Handled={e.Handled}"); } catch {}
         try
         {
+            // If the index overlay is visible, allow the overlay's TextBox to capture all key presses.
+            // Only honor Ctrl+I (toggle overlay) and Esc (close overlay) here; everything else should go to the textbox.
+            try
+            {
+                var overlay = this.FindControl<Border>("IndexOverlay");
+                var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
+                if (overlay != null && overlay.IsVisible)
+                {
+                    // Ensure the textbox has focus so it receives typing input
+                    try { if (tb != null && !tb.IsFocused) tb.Focus(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: bring overlay textbox focus", ex); }
+
+                    // Allow Ctrl+I (toggle overlay) while editing
+                    if ((e.Key == Key.I) && (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta)))
+                    {
+                        try { overlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("MainWindow: toggle overlay via Ctrl+I", ex); }
+                        e.Handled = true;
+                        return;
+                    }
+
+                    // Allow Esc to close the overlay
+                    if (e.Key == Key.Escape)
+                    {
+                        try { overlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("MainWindow: close overlay via Esc", ex); }
+                        e.Handled = true;
+                        return;
+                    }
+
+                    // Let the textbox capture all other keys; do not run global shortcuts
+                    return;
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("MainWindow: overlay focus check", ex); }
+
             // Forward to the centralized shortcut service first
             try
             {
@@ -884,7 +817,7 @@ public partial class MainWindow : Window
                             }
                         }
                         overlay.IsVisible = true;
-                    }
+                     }
                  }
              }
              catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+I toggle overlay", ex); }
@@ -1063,8 +996,33 @@ public partial class MainWindow : Window
                 {
                     var line = lines[i];
                     if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#")) continue;
-                    var parsed = ParseArticleLine(line);
-                    if (parsed != null) articles.Add(parsed);
+                    try
+                    {
+                        var parsed = ParseArticleLine(line);
+                        if (parsed != null) articles.Add(parsed);
+                    }
+                    catch (FormatException fx)
+                    {
+                        // Show error and open index overlay with full file contents for user correction
+                        try { IndexEditor.Shared.ToastService.Show("_index.txt format error: " + fx.Message); } catch { }
+                        try
+                        {
+                            var overlay = this.FindControl<Border>("IndexOverlay");
+                            var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
+                            if (overlay != null && tb != null)
+                            {
+                                tb.Text = System.IO.File.ReadAllText(indexPath);
+                                overlay.IsVisible = true;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            DebugLogger.LogException("LoadArticlesFromFolder: show overlay on format error", ex);
+                        }
+
+                        // Stop further parsing; let the user fix the file
+                        break;
+                    }
                 }
             }
 
@@ -1122,3 +1080,4 @@ public partial class MainWindow : Window
         }
     }
 }
+

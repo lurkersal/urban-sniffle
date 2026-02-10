@@ -6,6 +6,9 @@
         <local:CategoryToBrushConverter x:Key="CategoryToBrush"/>
         <local:CategoryDisplayModeMatchesConverter x:Key="CategoryModeMatches" />
         <local:ShowPhotographerCategoryConverter x:Key="ShowPhotographer" />
+        <local:FieldLabelConverter x:Key="FieldLabelConverter" />
+        <local:ShowMeasurementsConverter x:Key="ShowMeasurements" />
+        <local:ShowContributorCategoryConverter x:Key="ShowContributor" />
     </UserControl.Resources>
     <Grid>
         <StackPanel Margin="16">
@@ -36,7 +39,7 @@
                         <TextBox Text="{Binding SelectedArticle.Ages[0], Mode=TwoWay}" Width="120"/>
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle.Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter='2'}">
+                    <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle, Converter={StaticResource ShowMeasurements}}">
                         <TextBlock Text="Measurements:" FontWeight="Bold" Width="120"/>
                         <TextBox Width="240">
                             <TextBox.Text>
@@ -47,9 +50,9 @@
                     <TextBlock Text="{Binding SelectedArticle.MeasurementsErrorMessage}" Foreground="Red" FontSize="12" Margin="124,2,0,0" IsVisible="{Binding SelectedArticle.HasMeasurementsError}" />
                     <TextBlock Text="Format: bust(+cup)-waist-hip — e.g. '36B-28-38' (separator must be '-')" Foreground="Gray" FontSize="11" Margin="124,2,0,0" IsVisible="{Binding SelectedArticle.HasMeasurementsError}" />
 
-                    <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle.Category, Converter={StaticResource ShowPhotographer}}">
-                        <TextBlock Text="Photographer:" FontWeight="Bold" Width="120"/>
-                        <TextBox Text="{Binding SelectedArticle.Photographers[0], Mode=TwoWay}" Width="240"/>
+                    <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle.Category, Converter={StaticResource ShowContributor}}">
+                        <TextBlock Text="{Binding SelectedArticle.Category, Converter={StaticResource FieldLabelConverter}, ConverterParameter=Photographer}" FontWeight="Bold" Width="120"/>
+                        <TextBox Text="{Binding SelectedArticle.Contributor0, Mode=TwoWay}" Width="240"/>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal">

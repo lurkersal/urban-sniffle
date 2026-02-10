@@ -36,7 +36,7 @@ namespace IndexEditor.Shared
                                     if (parameters.Length == 0)
                                         invokeResult = method.Invoke(storage, null);
                                     else
-                                        invokeResult = method.Invoke(storage, new object[] { null });
+                                        invokeResult = method.Invoke(storage, [null]);
                                 }
                                 catch (Exception ex) { DebugLogger.LogException("FolderPicker: invoke storage method", ex); try { invokeResult = method.Invoke(storage, null); } catch (Exception ex2) { DebugLogger.LogException("FolderPicker: invoke fallback", ex2); invokeResult = null; } }
 
