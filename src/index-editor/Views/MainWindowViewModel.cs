@@ -30,21 +30,7 @@ namespace IndexEditor.Views
         {
             try
             {
-                if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
-                {
-                    ToastService.Show("Finish or cancel the open segment first");
-                    return;
-                }
-
-                if (PageControllerBridge != null)
-                {
-                    PageControllerBridge.AddSegmentAtCurrentPage();
-                }
-                else
-                {
-                    // fallback: call shared helper
-                    IndexEditor.Shared.EditorActions.CancelActiveSegment(); // no-op but safe
-                }
+                EditorActions.AddSegmentAtCurrentPage();
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindowViewModel.AddSegment", ex); }
         }
@@ -53,12 +39,7 @@ namespace IndexEditor.Views
         {
             try
             {
-                if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
-                {
-                    ToastService.Show("End or cancel the active segment before adding a new article");
-                    return;
-                }
-                PageControllerBridge?.CreateNewArticle();
+                EditorActions.CreateNewArticle();
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindowViewModel.NewArticle", ex); }
         }
@@ -67,13 +48,13 @@ namespace IndexEditor.Views
         {
             try
             {
-                PageControllerBridge?.EndActiveSegment();
+                EditorActions.EndActiveSegment();
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindowViewModel.EndSegment", ex); }
         }
 
-        public void MoveLeft() => PageControllerBridge?.MoveLeft();
-        public void MoveRight() => PageControllerBridge?.MoveRight();
+        public void MoveLeft() { try { var pc = PageControllerBridge; if (pc != null) pc.MoveLeft(); else { /* fallback: change EditorState */ EditorState.CurrentPage = Math.Max(1, EditorState.CurrentPage - 1); EditorState.NotifyStateChanged(); } } catch (Exception ex) { DebugLogger.LogException("MainWindowViewModel.MoveLeft", ex); } }
+        public void MoveRight() { try { var pc = PageControllerBridge; if (pc != null) pc.MoveRight(); else { EditorState.CurrentPage = EditorState.CurrentPage + 1; EditorState.NotifyStateChanged(); } } catch (Exception ex) { DebugLogger.LogException("MainWindowViewModel.MoveRight", ex); } }
         public void SaveIndex()
         {
             try
