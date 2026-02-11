@@ -185,6 +185,43 @@ namespace IndexEditor.Shared
                     article.Segments?.Add(seg);
                 }
                 EditorState.NotifyStateChanged();
+                
+                // Select the new article in the ViewModel so it appears in the article list and editor
+                try
+                {
+                    // Find the MainWindow and get the EditorStateViewModel
+                    var app = Avalonia.Application.Current;
+                    if (app?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                    {
+                        var mainWindow = desktop.MainWindow;
+                        if (mainWindow != null)
+                        {
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                            {
+                                try
+                                {
+                                    var vm = mainWindow.DataContext as IndexEditor.Views.EditorStateViewModel;
+                                    if (vm != null)
+                                    {
+                                        // Find the article in the VM's collection (it should match by reference or pages)
+                                        var inList = vm.Articles.FirstOrDefault(a => object.ReferenceEquals(a, article))
+                                                  ?? vm.Articles.FirstOrDefault(a => a.Pages != null && article.Pages != null && a.Pages.SequenceEqual(article.Pages));
+                                        var toSelect = inList ?? article;
+                                        
+                                        // Select the article
+                                        if (vm.SelectArticleCommand != null && vm.SelectArticleCommand.CanExecute(toSelect))
+                                            vm.SelectArticleCommand.Execute(toSelect);
+                                        vm.SelectedArticle = toSelect;
+                                        
+                                        DebugLogger.Log($"EditorActions.CreateNewArticle: Selected article in ViewModel");
+                                    }
+                                }
+                                catch (Exception ex) { DebugLogger.LogException("EditorActions.CreateNewArticle: select article in VM", ex); }
+                            }, Avalonia.Threading.DispatcherPriority.Background);
+                        }
+                    }
+                }
+                catch (Exception ex) { DebugLogger.LogException("EditorActions.CreateNewArticle: find and select article", ex); }
             }
             catch (Exception ex) { DebugLogger.LogException("EditorActions.CreateNewArticle: outer", ex); }
         }
