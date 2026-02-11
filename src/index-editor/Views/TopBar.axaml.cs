@@ -84,10 +84,12 @@ namespace IndexEditor.Views
                         // Use custom folder browser window that lists only folders and selects a folder when it has no subfolders on double-click
                         var wnd = this.VisualRoot as Window;
                         var start = IndexEditor.Shared.EditorState.CurrentFolder;
+                        IndexEditor.Shared.DebugLogger.Log($"TopBar.OpenClick: Current folder is: {start ?? "(null)"}");
                         string? path = null;
                         try
                         {
                             path = await IndexEditor.Shared.FolderPicker.PickFolderAsync(wnd, start);
+                            IndexEditor.Shared.DebugLogger.Log($"TopBar.OpenClick: FolderPicker returned: {path ?? "(null)"}");
                         }
                         catch (Exception ex)
                         {
@@ -96,7 +98,12 @@ namespace IndexEditor.Views
                             return;
                         }
                         if (string.IsNullOrWhiteSpace(path))
+                        {
+                            IndexEditor.Shared.DebugLogger.Log("TopBar.OpenClick: Path is null or empty, returning");
                             return;
+                        }
+
+                        IndexEditor.Shared.DebugLogger.Log($"TopBar.OpenClick: Loading folder: {path}");
 
                         // Clear existing articles before loading new ones
                         IndexEditor.Shared.EditorState.Articles = new List<Common.Shared.ArticleLine>();
@@ -111,13 +118,17 @@ namespace IndexEditor.Views
                         try
                         {
                             var main = this.VisualRoot as MainWindow;
+                            IndexEditor.Shared.DebugLogger.Log($"TopBar.OpenClick: MainWindow found: {main != null}");
                             if (main != null)
                             {
                                 // Use reflection to call LoadArticlesFromFolder in case its protection level changes
                                 var mi = typeof(MainWindow).GetMethod("LoadArticlesFromFolder", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                                IndexEditor.Shared.DebugLogger.Log($"TopBar.OpenClick: LoadArticlesFromFolder method found: {mi != null}");
                                 if (mi != null)
                                 {
+                                    IndexEditor.Shared.DebugLogger.Log($"TopBar.OpenClick: Invoking LoadArticlesFromFolder with path: {path}");
                                     mi.Invoke(main, new object[] { path });
+                                    IndexEditor.Shared.DebugLogger.Log("TopBar.OpenClick: LoadArticlesFromFolder invoked successfully");
                                     return;
                                 }
                             }

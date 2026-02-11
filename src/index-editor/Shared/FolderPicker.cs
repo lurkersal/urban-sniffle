@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using System.Collections;
@@ -11,6 +12,21 @@ namespace IndexEditor.Shared
     {
         public static async Task<string?> PickFolderAsync(Window? parent, string? start = null)
         {
+            // If no start path provided, use current working directory
+            if (string.IsNullOrWhiteSpace(start))
+            {
+                try
+                {
+                    start = System.IO.Directory.GetCurrentDirectory();
+                    DebugLogger.Log($"FolderPicker: No start path, using current directory: {start}");
+                }
+                catch { }
+            }
+            else
+            {
+                DebugLogger.Log($"FolderPicker: Starting with path: {start}");
+            }
+
             // Try modern StorageProvider API via reflection
             try
             {
@@ -65,16 +81,108 @@ namespace IndexEditor.Shared
                                                 // If we have a start path, try to set common property names to it
                                                 if (!string.IsNullOrWhiteSpace(start))
                                                 {
-                                                    var prop = pType.GetProperty("StartingDirectory") ?? pType.GetProperty("StartPath") ?? pType.GetProperty("InitialDirectory") ?? pType.GetProperty("SuggestedStartLocation") ?? pType.GetProperty("Directory") ?? pType.GetProperty("Path");
-                                                    if (prop != null && prop.PropertyType == typeof(string) && prop.CanWrite)
+                                                    var prop = pType.GetProperty("SuggestedStartLocation");
+                                                    if (prop != null && prop.CanWrite)
                                                     {
-                                                        try { prop.SetValue(inst, start); } catch { }
+                                                        try 
+                                                        {
+                                                            // SuggestedStartLocation can be IStorageFolder or Uri
+                                                            if (prop.PropertyType.Name.Contains("IStorageFolder") || prop.PropertyType.Name.Contains("IStorageItem"))
+                                                            {
+                                                                // Try to get IStorageFolder from path
+                                                                var tryGetMethod = storageType.GetMethod("TryGetFolderFromPathAsync");
+                                                                if (tryGetMethod != null)
+                                                                {
+                                                                    // TryGetFolderFromPathAsync expects a Uri parameter
+                                                                    Uri pathUri;
+                                                                    if (!Uri.TryCreate(start, UriKind.Absolute, out pathUri!))
+                                                                    {
+                                                                        pathUri = new Uri("file://" + start);
+                                                                    }
+                                                                    var folderTask = tryGetMethod.Invoke(storage, new object[] { pathUri });
+                                                                    var folder = await UnwrapTaskResult(folderTask).ConfigureAwait(false);
+                                                                    if (folder != null)
+                                                                    {
+                                                                        prop.SetValue(inst, folder);
+                                                                        DebugLogger.Log($"FolderPicker: Set SuggestedStartLocation (IStorageFolder) to {start}");
+                                                                    }
+                                                                }
+                                                            }
+                                                            else if (prop.PropertyType == typeof(Uri))
+                                                            {
+                                                                // Convert path to Uri - handle both absolute paths and URIs
+                                                                Uri uri;
+                                                                if (Uri.TryCreate(start, UriKind.Absolute, out uri!))
+                                                                {
+                                                                    prop.SetValue(inst, uri);
+                                                                    DebugLogger.Log($"FolderPicker: Set SuggestedStartLocation (Uri) to {start}");
+                                                                }
+                                                                else
+                                                                {
+                                                                    // Try as file path
+                                                                    var fileUri = new Uri("file://" + start);
+                                                                    prop.SetValue(inst, fileUri);
+                                                                    DebugLogger.Log($"FolderPicker: Set SuggestedStartLocation (Uri from file path) to {start}");
+                                                                }
+                                                            }
+                                                            else if (prop.PropertyType == typeof(string))
+                                                            {
+                                                                prop.SetValue(inst, start);
+                                                                DebugLogger.Log($"FolderPicker: Set {prop.Name} (string) to {start}");
+                                                            }
+                                                            else
+                                                            {
+                                                                DebugLogger.Log($"FolderPicker: Unknown property type {prop.PropertyType.Name} for SuggestedStartLocation");
+                                                            }
+                                                        } 
+                                                        catch (Exception ex) 
+                                                        { 
+                                                            DebugLogger.LogException($"FolderPicker: set {prop.Name}", ex);
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        // Fallback to other property names
+                                                        prop = pType.GetProperty("StartingDirectory") ?? pType.GetProperty("StartPath") ?? pType.GetProperty("InitialDirectory") ?? pType.GetProperty("Directory") ?? pType.GetProperty("Path");
+                                                        if (prop != null && prop.CanWrite)
+                                                        {
+                                                            try 
+                                                            { 
+                                                                if (prop.PropertyType == typeof(string))
+                                                                {
+                                                                    prop.SetValue(inst, start);
+                                                                    DebugLogger.Log($"FolderPicker: Set {prop.Name} to {start}");
+                                                                }
+                                                                else if (prop.PropertyType == typeof(Uri))
+                                                                {
+                                                                    // Create file Uri from local path
+                                                                    Uri uri;
+                                                                    if (Uri.TryCreate(start, UriKind.Absolute, out uri!))
+                                                                    {
+                                                                        prop.SetValue(inst, uri);
+                                                                        DebugLogger.Log($"FolderPicker: Set {prop.Name} (Uri) to {start}");
+                                                                    }
+                                                                    else
+                                                                    {
+                                                                        // Try as file path
+                                                                        var fileUri = new Uri("file://" + start);
+                                                                        prop.SetValue(inst, fileUri);
+                                                                        DebugLogger.Log($"FolderPicker: Set {prop.Name} (Uri from file path) to {start}");
+                                                                    }
+                                                                }
+                                                            } 
+                                                            catch (Exception ex) 
+                                                            { 
+                                                                DebugLogger.LogException($"FolderPicker: set fallback property {prop?.Name}", ex);
+                                                            }
+                                                        }
                                                     }
                                                 }
                                                 args[pi] = inst;
                                             }
-                                            catch
+                                            catch (Exception ex)
                                             {
+                                                DebugLogger.LogException("FolderPicker: create options instance", ex);
                                                 args[pi] = null;
                                             }
                                         }
@@ -85,18 +193,27 @@ namespace IndexEditor.Shared
                                 catch (Exception ex) { DebugLogger.LogException("FolderPicker: invoke storage method", ex); try { invokeResult = method.Invoke(storage, null); } catch (Exception ex2) { DebugLogger.LogException("FolderPicker: invoke fallback", ex2); invokeResult = null; } }
 
                                 var unwrapped = await UnwrapTaskResult(invokeResult).ConfigureAwait(false);
+                                DebugLogger.Log($"FolderPicker: Unwrapped result type: {unwrapped?.GetType().Name ?? "null"}");
                                 if (unwrapped is IEnumerable enumerable)
                                 {
                                     foreach (var item in enumerable)
                                     {
                                         var candidate = ExtractPathFromStorageItem(item);
-                                        if (!string.IsNullOrWhiteSpace(candidate)) return candidate;
+                                        if (!string.IsNullOrWhiteSpace(candidate))
+                                        {
+                                            DebugLogger.Log($"FolderPicker: Returning path from enumerable: {candidate}");
+                                            return candidate;
+                                        }
                                     }
                                 }
                                 else if (unwrapped != null)
                                 {
                                     var candidate = ExtractPathFromStorageItem(unwrapped);
-                                    if (!string.IsNullOrWhiteSpace(candidate)) return candidate;
+                                    if (!string.IsNullOrWhiteSpace(candidate))
+                                    {
+                                        DebugLogger.Log($"FolderPicker: Returning path: {candidate}");
+                                        return candidate;
+                                    }
                                 }
                             }
                         }
@@ -111,20 +228,23 @@ namespace IndexEditor.Shared
 
         private static string? ExtractPathFromStorageItem(object? item)
         {
-            if (item == null) return null;
-            var t = item.GetType();
-            // Common property names
-            var p = t.GetProperty("Path") ?? t.GetProperty("FullPath") ?? t.GetProperty("Name");
-            if (p != null)
+            if (item == null)
             {
-                var v = p.GetValue(item) as string;
-                if (!string.IsNullOrWhiteSpace(v)) return v;
+                DebugLogger.Log("FolderPicker.ExtractPath: item is null");
+                return null;
             }
-
-            // Some types may have TryGetFullPath(out string)
-            var m = t.GetMethod("TryGetFullPath") ?? t.GetMethod("TryGetLocalPath");
+            var t = item.GetType();
+            DebugLogger.Log($"FolderPicker.ExtractPath: item type is {t.FullName}");
+            
+            // Log all available properties for debugging
+            var allProps = t.GetProperties();
+            DebugLogger.Log($"FolderPicker.ExtractPath: Available properties: {string.Join(", ", allProps.Select(p => $"{p.Name}({p.PropertyType.Name})"))}");
+            
+            // Try TryGetLocalPath first (most reliable for IStorageFolder)
+            var m = t.GetMethod("TryGetLocalPath") ?? t.GetMethod("TryGetFullPath");
             if (m != null)
             {
+                DebugLogger.Log($"FolderPicker.ExtractPath: Found method {m.Name}");
                 try
                 {
                     var parameters = m.GetParameters();
@@ -133,12 +253,60 @@ namespace IndexEditor.Shared
                         var args = new object?[] { null };
                         var resultObj = m.Invoke(item, args);
                         var ok = resultObj is bool b && b;
-                        if (ok && args[0] is string s && !string.IsNullOrWhiteSpace(s)) return s;
+                        DebugLogger.Log($"FolderPicker.ExtractPath: Method result: {ok}, args[0]: {args[0]}");
+                        if (ok && args[0] is string s && !string.IsNullOrWhiteSpace(s))
+                        {
+                            DebugLogger.Log($"FolderPicker.ExtractPath: Method returned: {s}");
+                            return s;
+                        }
                     }
                 }
-                catch (Exception ex) { DebugLogger.LogException("FolderPicker.ExtractPathFromStorageItem: TryGetFullPath", ex); }
+                catch (Exception ex) { DebugLogger.LogException("FolderPicker.ExtractPathFromStorageItem: TryGetPath", ex); }
+            }
+            
+            // Common property names
+            var p = t.GetProperty("Path");
+            if (p != null)
+            {
+                DebugLogger.Log($"FolderPicker.ExtractPath: Found property Path");
+                try
+                {
+                    var v = p.GetValue(item);
+                    DebugLogger.Log($"FolderPicker.ExtractPath: Path value type: {v?.GetType().Name ?? "null"}");
+                    
+                    // Handle Uri type
+                    if (v is Uri uri)
+                    {
+                        var localPath = uri.LocalPath;
+                        if (!string.IsNullOrWhiteSpace(localPath))
+                        {
+                            DebugLogger.Log($"FolderPicker.ExtractPath: Extracted from Uri: {localPath}");
+                            return localPath;
+                        }
+                    }
+                    else if (v is string str && !string.IsNullOrWhiteSpace(str))
+                    {
+                        DebugLogger.Log($"FolderPicker.ExtractPath: Extracted from Path: {str}");
+                        return str;
+                    }
+                }
+                catch (Exception ex) { DebugLogger.LogException("FolderPicker.ExtractPath: Path property", ex); }
             }
 
+            // Try other common property names
+            p = t.GetProperty("FullPath") ?? t.GetProperty("Name") ?? t.GetProperty("LocalPath");
+            if (p != null)
+            {
+                DebugLogger.Log($"FolderPicker.ExtractPath: Found property {p.Name}");
+                var v = p.GetValue(item) as string;
+                if (!string.IsNullOrWhiteSpace(v))
+                {
+                    DebugLogger.Log($"FolderPicker.ExtractPath: Extracted value: {v}");
+                    return v;
+                }
+            }
+
+            DebugLogger.Log("FolderPicker.ExtractPath: No path found");
             return null;
         }
 
