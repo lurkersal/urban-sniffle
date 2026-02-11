@@ -124,6 +124,10 @@ public partial class MainWindow : Window
                 _shortcutService.Register(Key.S, KeyModifiers.Control, (ke) => { if (MainViewModel != null) MainViewModel.SaveIndex(); else { var folder = EditorState.CurrentFolder; if (string.IsNullOrWhiteSpace(folder)) { IndexEditor.Shared.ToastService.Show("No folder open; cannot save _index.txt"); return true; } IndexEditor.Shared.IndexSaver.SaveIndex(folder); } return true; }, () => { var s = EditorState.ActiveSegment; return s == null || !s.IsActive; }, "SaveIndex");
                 _shortcutService.Register(Key.O, KeyModifiers.Control, (ke) => { var s = EditorState.ActiveSegment; if (s != null && s.IsActive) { IndexEditor.Shared.ToastService.Show("End or cancel the active segment before opening a new folder"); return true; } var wnd = this.VisualRoot as Window ?? this; var start = IndexEditor.Shared.EditorState.CurrentFolder; Dispatcher.UIThread.Post(async () => { try { var path = await IndexEditor.Shared.FolderPicker.PickFolderAsync(wnd, start); if (!string.IsNullOrWhiteSpace(path)) LoadArticlesFromFolder(path); } catch (Exception ex) { IndexEditor.Shared.ToastService.Show("Open folder dialog failed: " + ex.Message); } }); return true; }, null, "OpenFolder");
                 _shortcutService.Register(Key.I, KeyModifiers.Control, (ke) => { var overlay = this.FindControl<Border>("IndexOverlay"); var tb = this.FindControl<TextBox>("IndexOverlayTextBox"); if (overlay != null && tb != null) { if (overlay.IsVisible) overlay.IsVisible = false; else { var folder = IndexEditor.Shared.EditorState.CurrentFolder; if (string.IsNullOrWhiteSpace(folder)) tb.Text = "No folder open."; else { var path = System.IO.Path.Combine(folder, "_index.txt"); tb.Text = System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : $"_index.txt not found in folder: {folder}"; } overlay.IsVisible = true; } } return true; }, null, "ToggleIndexOverlay");
+                // Ctrl+Up / Ctrl+Down: previous/next article navigation
+                _shortcutService.Register(Key.Up, KeyModifiers.Control, (ke) => { return HandleCtrlUpShortcut(ke); }, null, "CtrlUp");
+
+                _shortcutService.Register(Key.Down, KeyModifiers.Control, (ke) => { return HandleCtrlDownShortcut(ke); }, null, "CtrlDown");
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: init shortcut service", ex); }
         }
@@ -1112,13 +1116,100 @@ public partial class MainWindow : Window
                 }
                 catch (Exception ex) { DebugLogger.LogException("MainWindow: Right arrow", ex); }
             }
-            else if (e.Key == Key.Up || e.Key == Key.Down)
+            // Ctrl+Up / Ctrl+Down: jump to previous/next article and set current page to its first available page
+            else if ((e.Key == Key.Up || e.Key == Key.Down) && e.KeyModifiers.HasFlag(KeyModifiers.Control))
             {
                 try
                 {
-                    // If the user is typing / navigating inside the ArticleEditor (e.g., a ComboBox has focus),
-                    // let the editor control handle the arrow keys rather than changing the article selection.
+                    // If the Article Editor has focus, let the editor handle the shortcut
                     if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) return;
+
+                    var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+                    List<Common.Shared.ArticleLine>? list = null;
+                    if (vm != null) list = vm.Articles.ToList();
+                    else if (IndexEditor.Shared.EditorState.Articles != null) list = new List<Common.Shared.ArticleLine>(IndexEditor.Shared.EditorState.Articles);
+
+                    if (list == null || list.Count == 0)
+                    {
+                        e.Handled = true;
+                        return;
+                    }
+
+                    // Determine current selection index
+                    int curIndex = -1;
+                    Common.Shared.ArticleLine? curArticle = null;
+                    if (vm != null)
+                    {
+                        curArticle = vm.SelectedArticle;
+                        if (curArticle != null) curIndex = list.IndexOf(curArticle);
+                    }
+                    if (curIndex == -1 && IndexEditor.Shared.EditorState.ActiveArticle != null)
+                    {
+                        curIndex = list.IndexOf(IndexEditor.Shared.EditorState.ActiveArticle);
+                        curArticle = IndexEditor.Shared.EditorState.ActiveArticle;
+                    }
+                    // If still -1, try to find article containing current page
+                    if (curIndex == -1)
+                    {
+                        curIndex = list.FindIndex(a => a.Pages != null && a.Pages.Contains(IndexEditor.Shared.EditorState.CurrentPage));
+                        if (curIndex != -1) curArticle = list[curIndex];
+                    }
+                    // Fallback to first article
+                    if (curIndex == -1) { curIndex = 0; curArticle = list[0]; }
+
+                    int targetIndex = curIndex;
+                    if (e.Key == Key.Up) targetIndex = Math.Max(0, curIndex - 1);
+                    else targetIndex = Math.Min(list.Count - 1, curIndex + 1);
+
+                    if (targetIndex == curIndex)
+                    {
+                        // nothing to do
+                        e.Handled = true;
+                        return;
+                    }
+
+                    var targetArticle = list[targetIndex];
+
+                    // Use VM navigation helper if available (it will set CurrentPage and notify)
+                    if (vm != null)
+                    {
+                        try
+                        {
+                            // Select the article in VM so bindings update
+                            vm.SelectedArticle = targetArticle;
+                        }
+                        catch { }
+                        try { vm.NavigateToArticle(targetArticle); } catch (Exception ex) { DebugLogger.LogException("MainWindow: NavigateToArticle", ex); }
+                    }
+                    else
+                    {
+                        // Set shared active article and compute first page with image
+                        try { IndexEditor.Shared.EditorState.ActiveArticle = targetArticle; } catch { }
+                        try
+                        {
+                            int? pick = null;
+                            try { pick = IndexEditor.Shared.ImageHelper.FindFirstImageInFolder(IndexEditor.Shared.EditorState.CurrentFolder ?? string.Empty, targetArticle.Pages != null && targetArticle.Pages.Count > 0 ? targetArticle.Pages.Min() : 1, 2000); } catch { }
+                            if (pick.HasValue) IndexEditor.Shared.EditorState.CurrentPage = pick.Value;
+                            else if (targetArticle.Pages != null && targetArticle.Pages.Count > 0) IndexEditor.Shared.EditorState.CurrentPage = targetArticle.Pages.Min();
+                            IndexEditor.Shared.EditorState.NotifyStateChanged();
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Up/Down fallback navigation", ex); }
+                    }
+
+                    // Ensure UI updates and image loads
+                    try { IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch { }
+                }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Up/Down handler", ex); }
+                e.Handled = true;
+                return;
+            }
+             else if (e.Key == Key.Up || e.Key == Key.Down)
+             {
+                 try
+                 {
+                     // If the user is typing / navigating inside the ArticleEditor (e.g., a ComboBox has focus),
+                     // let the editor control handle the arrow keys rather than changing the article selection.
+                     if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) return;
                      var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
                      if (articleList != null)
                      {
@@ -1388,6 +1479,76 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { DebugLogger.LogException("DeleteSelectedArticleAndCloseOverlay", ex); }
     }
+
+    // Handle Ctrl+Up shortcut: navigate to the previous article
+    private bool HandleCtrlUpShortcut(KeyEventArgs ke)
+    {
+        try
+        {
+            Console.WriteLine("[DEBUG] Shortcut Ctrl+Up invoked");
+            if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) { Console.WriteLine("[DEBUG] ArticleEditor focused - ignoring Ctrl+Up"); return false; }
+            var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+            List<Common.Shared.ArticleLine>? list = null;
+            if (vm != null) list = vm.Articles.ToList();
+            else if (IndexEditor.Shared.EditorState.Articles != null) list = new List<Common.Shared.ArticleLine>(IndexEditor.Shared.EditorState.Articles);
+            if (list == null || list.Count == 0) { Console.WriteLine("[DEBUG] No articles to navigate"); return true; }
+            int curIndex = -1;
+            if (vm != null && vm.SelectedArticle != null) curIndex = list.IndexOf(vm.SelectedArticle);
+            if (curIndex == -1 && IndexEditor.Shared.EditorState.ActiveArticle != null) curIndex = list.IndexOf(IndexEditor.Shared.EditorState.ActiveArticle);
+            if (curIndex == -1) curIndex = list.FindIndex(a => a.Pages != null && a.Pages.Contains(IndexEditor.Shared.EditorState.CurrentPage));
+            if (curIndex == -1) curIndex = 0;
+            int target = Math.Max(0, curIndex - 1);
+            if (target == curIndex) { Console.WriteLine("[DEBUG] Already at first article"); return true; }
+            var targetArticle = list[target];
+            if (vm != null)
+            {
+                try { vm.SelectedArticle = targetArticle; } catch { }
+                try { vm.NavigateToArticle(targetArticle); } catch (Exception ex) { DebugLogger.LogException("MainWindow: NavigateToArticle (Ctrl+Up)", ex); }
+            }
+            else
+            {
+                try { IndexEditor.Shared.EditorState.ActiveArticle = targetArticle; } catch { }
+                try { int? pick = IndexEditor.Shared.ImageHelper.FindFirstImageInFolder(IndexEditor.Shared.EditorState.CurrentFolder ?? string.Empty, targetArticle.Pages != null && targetArticle.Pages.Count > 0 ? targetArticle.Pages.Min() : 1, 2000); if (pick.HasValue) IndexEditor.Shared.EditorState.CurrentPage = pick.Value; else if (targetArticle.Pages != null && targetArticle.Pages.Count > 0) IndexEditor.Shared.EditorState.CurrentPage = targetArticle.Pages.Min(); IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Up fallback navigation", ex); }
+            }
+            Console.WriteLine($"[DEBUG] Ctrl+Up navigated to article index {target}");
+        }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Up handler", ex); }
+        return true;
+    }
+
+    // Handle Ctrl+Down shortcut: navigate to the next article
+    private bool HandleCtrlDownShortcut(KeyEventArgs ke)
+    {
+        try
+        {
+            Console.WriteLine("[DEBUG] Shortcut Ctrl+Down invoked");
+            if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) { Console.WriteLine("[DEBUG] ArticleEditor focused - ignoring Ctrl+Down"); return false; }
+            var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+            List<Common.Shared.ArticleLine>? list = null;
+            if (vm != null) list = vm.Articles.ToList();
+            else if (IndexEditor.Shared.EditorState.Articles != null) list = new List<Common.Shared.ArticleLine>(IndexEditor.Shared.EditorState.Articles);
+            if (list == null || list.Count == 0) { Console.WriteLine("[DEBUG] No articles to navigate"); return true; }
+            int curIndex = -1;
+            if (vm != null && vm.SelectedArticle != null) curIndex = list.IndexOf(vm.SelectedArticle);
+            if (curIndex == -1 && IndexEditor.Shared.EditorState.ActiveArticle != null) curIndex = list.IndexOf(IndexEditor.Shared.EditorState.ActiveArticle);
+            if (curIndex == -1) curIndex = list.FindIndex(a => a.Pages != null && a.Pages.Contains(IndexEditor.Shared.EditorState.CurrentPage));
+            if (curIndex == -1) curIndex = 0;
+            int target = Math.Min(list.Count - 1, curIndex + 1);
+            if (target == curIndex) { Console.WriteLine("[DEBUG] Already at last article"); return true; }
+            var targetArticle = list[target];
+            if (vm != null)
+            {
+                try { vm.SelectedArticle = targetArticle; } catch { }
+                try { vm.NavigateToArticle(targetArticle); } catch (Exception ex) { DebugLogger.LogException("MainWindow: NavigateToArticle (Ctrl+Down)", ex); }
+            }
+            else
+            {
+                try { IndexEditor.Shared.EditorState.ActiveArticle = targetArticle; } catch { }
+                try { int? pick = IndexEditor.Shared.ImageHelper.FindFirstImageInFolder(IndexEditor.Shared.EditorState.CurrentFolder ?? string.Empty, targetArticle.Pages != null && targetArticle.Pages.Count > 0 ? targetArticle.Pages.Min() : 1, 2000); if (pick.HasValue) IndexEditor.Shared.EditorState.CurrentPage = pick.Value; else if (targetArticle.Pages != null && targetArticle.Pages.Count > 0) IndexEditor.Shared.EditorState.CurrentPage = targetArticle.Pages.Min(); IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Down fallback navigation", ex); }
+            }
+            Console.WriteLine($"[DEBUG] Ctrl+Down navigated to article index {target}");
+        }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Down handler", ex); }
+        return true;
+    }
 }
-
-
