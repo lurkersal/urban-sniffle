@@ -109,5 +109,20 @@
                 </Border>
             </Grid>
         </Border>
+
+        <!-- Parser output overlay (hidden by default) -->
+        <Border x:Name="ParserOutputOverlay" Grid.Row="0" Grid.ColumnSpan="3" Grid.RowSpan="2" Background="#80000000" IsVisible="False">
+            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Border Width="900" Height="600" Background="White" CornerRadius="6" Padding="12">
+                    <Grid RowDefinitions="Auto,*,Auto">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                            <Button x:Name="ParserOutputCloseBtn" Content="Close" />
+                        </StackPanel>
+                        <TextBox x:Name="ParserOutputTextBox" Grid.Row="1" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="True" FontFamily="'Ubuntu Mono', 'DejaVu Sans Mono', 'Courier New', monospace" FontSize="14" />
+                        <TextBlock Grid.Row="2" Text="Parser output (read-only)" HorizontalAlignment="Right" FontSize="12" Foreground="#666" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

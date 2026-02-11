@@ -232,6 +232,18 @@ public partial class MainWindow : Window
                 }
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire HelpOverlayCloseBtn", ex); }
+
+            // Parser output overlay close wiring
+            try
+            {
+                var parserClose = this.FindControl<Button>("ParserOutputCloseBtn");
+                var parserOverlay = this.FindControl<Border>("ParserOutputOverlay");
+                if (parserClose != null && parserOverlay != null)
+                {
+                    parserClose.Click += (s, e) => { try { parserOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("ParserOutputCloseBtn.Click", ex); } };
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire ParserOutputCloseBtn", ex); }
             if (saveBtn != null && overlay != null && textBox != null)
             {
                 saveBtn.Click += (s, e) =>
@@ -980,9 +992,20 @@ public partial class MainWindow : Window
             // Delete key: if article list has focus and there's a selected article, ask to confirm deletion
             if (e.Key == Key.Delete)
             {
-                try
-                {
-                    Console.WriteLine($"[DEBUG] Delete key pressed. ActiveSegment present={IndexEditor.Shared.EditorState.ActiveSegment != null}");
+                 try
+                 {
+                    // If the user is editing fields in the ArticleEditor, do not treat Delete as 'delete article'
+                    try
+                    {
+                        if (IndexEditor.Shared.EditorState.IsArticleEditorFocused)
+                        {
+                            try { Console.WriteLine("[DEBUG] Delete key pressed but ArticleEditor has focus; ignoring"); } catch {}
+                            try { System.IO.File.AppendAllText("/tmp/indexeditor_keylog.txt", DateTime.Now.ToString("o") + " DELETE_IGNORED_EDITOR_FOCUSED\n"); } catch {}
+                            return;
+                        }
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("MainWindow: check IsArticleEditorFocused for Delete", ex); }
+                     Console.WriteLine($"[DEBUG] Delete key pressed. ActiveSegment present={IndexEditor.Shared.EditorState.ActiveSegment != null}");
                      // Do not allow deletion while an active segment exists
                      var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
                      if (activeSeg != null && activeSeg.IsActive)

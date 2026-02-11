@@ -13,6 +13,7 @@
 
             <Button Name="OpenFolderBtn" Content="Open Folder" DockPanel.Dock="Right" Margin="8" Width="96" />
             <Button Name="SaveIndexBtn" Content="Save" DockPanel.Dock="Right" Margin="8" Width="72" />
+            <Button Name="TestBtn" Content="Test" DockPanel.Dock="Right" Margin="8" Width="72" />
             <!-- Shortcut hints removed for production; debug flash button removed -->
             <!-- Add buttons and controls as needed -->
         </DockPanel>

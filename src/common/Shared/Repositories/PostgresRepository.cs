@@ -164,7 +164,6 @@ public class PostgresRepository : IDatabaseRepository
         if (existingId != null)
             return (int)existingId;
 
-        // Insert new contributor (Role column removed from schema)
         using var insCmd = new NpgsqlCommand(
             "INSERT INTO Contributor (Name) VALUES (@name) RETURNING ContributorId",
             _connection);

@@ -12,14 +12,30 @@ class Program
 {
     static int Main(string[] args)
     {
-        // Expected usage: magazine-parser <directory>
-        if (args.Length != 1)
+        // Expected usage: magazine-parser [--no-insert] <directory>
+        bool noInsert = false;
+        string directory = string.Empty;
+
+        if (args.Length == 0)
         {
-            Console.WriteLine("Usage: magazine-parser <directory>");
+            Console.WriteLine("Usage: magazine-parser [--no-insert] <directory>");
             return 1;
         }
 
-        var directory = args[0];
+        if (args.Length == 1)
+        {
+            directory = args[0];
+        }
+        else if (args.Length == 2 && (args[0] == "--no-insert" || args[0] == "-n"))
+        {
+            noInsert = true;
+            directory = args[1];
+        }
+        else
+        {
+            Console.WriteLine("Usage: magazine-parser [--no-insert] <directory>");
+            return 1;
+        }
 
         if (!Directory.Exists(directory))
         {
@@ -49,7 +65,6 @@ class Program
         try
         {
             var connectionString = "Host=localhost;Username=postgres;Password=Barnowl1;Database=magazines";
-            
             using var connection = new NpgsqlConnection(connectionString);
             connection.Open();
 
@@ -65,7 +80,7 @@ class Program
             IContentParser parser = new ContentLineParser(validCategories);
             IUserInteraction userInteraction = new ConsoleUserInteraction();
             
-            var parsingService = new MagazineParsingService(repository, parser, userInteraction);
+            var parsingService = new MagazineParsingService(repository, parser, userInteraction, noInsert);
             parsingService.ParseFile(indexPath);
             
             connection.Close();
@@ -78,4 +93,3 @@ class Program
         }
     }
 }
-

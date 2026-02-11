@@ -131,7 +131,216 @@ namespace IndexEditor.Views
                     catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: Open button click handler outer", ex); }
                 };
             }
-            // Debug button removed from XAML; no debug wiring required.
+            
+            var testBtn = this.FindControl<Button>("TestBtn");
+            if (testBtn != null)
+            {
+                // Test button should remain enabled at all times per spec
+                testBtn.IsEnabled = true;
+                testBtn.Click += async (s, e) =>
+                {
+                    try
+                    {
+                        var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                        if (string.IsNullOrWhiteSpace(folder))
+                        {
+                            IndexEditor.Shared.ToastService.Show("No folder opened; cannot run test");
+                            return;
+                        }
+
+                        // Save current edits first
+                        try
+                        {
+                            IndexEditor.Shared.IndexSaver.SaveIndex(folder);
+                            IndexEditor.Shared.ToastService.Show("_index.txt saved");
+                        }
+                        catch (Exception ex)
+                        {
+                            IndexEditor.Shared.ToastService.Show("Failed to save _index.txt before test");
+                            IndexEditor.Shared.DebugLogger.LogException("TopBar: Test save before run", ex);
+                            return;
+                        }
+
+                         // Prepare to run magazine-parser with --no-insert
+                         var wnd = this.VisualRoot as MainWindow;
+                         try
+                         {
+                             // Use dotnet run to invoke the project in-repo; compute absolute project path
+                             var repoRoot = System.IO.Path.GetFullPath(System.IO.Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+                             // If the app is running from build output, try to locate the repository root via the VisualRoot location fallback
+                             var projectPath = System.IO.Path.Combine(repoRoot, "src", "magazine-parser", "magazine-parser.csproj");
+                             if (!System.IO.File.Exists(projectPath))
+                             {
+                                 // Fallback: assume repo root is two levels up from the executable location
+                                 projectPath = System.IO.Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "src", "magazine-parser", "magazine-parser.csproj");
+                                 projectPath = System.IO.Path.GetFullPath(projectPath);
+                             }
+
+                            if (!System.IO.File.Exists(projectPath))
+                            {
+                                var msg = $"magazine-parser project not found at expected location: {projectPath}";
+                                IndexEditor.Shared.DebugLogger.Log(msg);
+                                IndexEditor.Shared.ToastService.Show("Test run failed: magazine-parser project not found");
+                                // Still show overlay with message
+                                if (wnd != null)
+                                {
+                                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                    {
+                                        try
+                                        {
+                                            var overlay = wnd.FindControl<Border>("ParserOutputOverlay");
+                                            var tb = wnd.FindControl<TextBox>("ParserOutputTextBox");
+                                            if (overlay != null && tb != null)
+                                            {
+                                                tb.Text = msg;
+                                                tb.CaretIndex = tb.Text.Length;
+                                                overlay.IsVisible = true;
+                                            }
+                                        }
+                                        catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: show missing project msg", ex); }
+                                    });
+                                }
+                                return;
+                            }
+
+                            var psi = new System.Diagnostics.ProcessStartInfo
+                             {
+                                 FileName = "dotnet",
+                                 Arguments = $"run --project \"{projectPath}\" -- --no-insert \"{folder}\"",
+                                 RedirectStandardOutput = true,
+                                 RedirectStandardError = true,
+                                 UseShellExecute = false,
+                                 CreateNoWindow = true,
+                             };
+
+                            // Prepare overlay for streaming output (if available)
+                            Border? overlayRef = null;
+                            TextBox? tbRef = null;
+                            if (wnd != null)
+                            {
+                                try
+                                {
+                                    overlayRef = wnd.FindControl<Border>("ParserOutputOverlay");
+                                    tbRef = wnd.FindControl<TextBox>("ParserOutputTextBox");
+                                    if (overlayRef != null && tbRef != null)
+                                    {
+                                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                        {
+                                            try { tbRef.Text = ""; overlayRef.IsVisible = true; tbRef.Focus(); } catch { }
+                                        });
+                                    }
+                                }
+                                catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: find overlay before run", ex); }
+                            }
+
+                            var proc = new System.Diagnostics.Process { StartInfo = psi };
+
+                             var outputBuilder = new System.Text.StringBuilder();
+                             proc.OutputDataReceived += (sender, ea) =>
+                             {
+                                 if (ea.Data == null) return;
+                                 outputBuilder.AppendLine(ea.Data);
+                                 if (tbRef != null)
+                                 {
+                                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                     {
+                                         try
+                                         {
+                                             tbRef.Text += ea.Data + "\n";
+                                             tbRef.CaretIndex = tbRef.Text.Length;
+                                         }
+                                         catch { }
+                                     });
+                                 }
+                             };
+                             proc.ErrorDataReceived += (sender, ea) =>
+                             {
+                                 if (ea.Data == null) return;
+                                 outputBuilder.AppendLine(ea.Data);
+                                 if (tbRef != null)
+                                 {
+                                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                                     {
+                                         try
+                                         {
+                                             tbRef.Text += ea.Data + "\n";
+                                             tbRef.CaretIndex = tbRef.Text.Length;
+                                         }
+                                         catch { }
+                                     });
+                                 }
+                             };
+
+                            // Start process
+                            try
+                            {
+                                proc.Start();
+                            }
+                            catch (System.ComponentModel.Win32Exception wx)
+                            {
+                                // Could not start 'dotnet' - try to run published binary in ~/bin
+                                IndexEditor.Shared.DebugLogger.LogException("TopBar: process start failed", wx);
+                                var home = Environment.GetFolderPath(Environment.SpecialFolder.Personal);
+                                var binCandidate = System.IO.Path.Combine(home, "bin", "magazine-parser");
+                                if (System.IO.File.Exists(binCandidate))
+                                {
+                                    psi = new System.Diagnostics.ProcessStartInfo
+                                    {
+                                        FileName = binCandidate,
+                                        Arguments = $"--no-insert \"{folder}\"",
+                                        RedirectStandardOutput = true,
+                                        RedirectStandardError = true,
+                                        UseShellExecute = false,
+                                        CreateNoWindow = true,
+                                    };
+                                    proc = new System.Diagnostics.Process { StartInfo = psi };
+                                    proc.OutputDataReceived += (sender, ea) =>
+                                    {
+                                        if (ea.Data == null) return;
+                                        outputBuilder.AppendLine(ea.Data);
+                                        if (tbRef != null) Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { tbRef.Text += ea.Data + "\n"; tbRef.CaretIndex = tbRef.Text.Length; } catch { } });
+                                    };
+                                    proc.ErrorDataReceived += (sender, ea) =>
+                                    {
+                                        if (ea.Data == null) return;
+                                        outputBuilder.AppendLine(ea.Data);
+                                        if (tbRef != null) Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { tbRef.Text += ea.Data + "\n"; tbRef.CaretIndex = tbRef.Text.Length; } catch { } });
+                                    };
+                                    try { proc.Start(); } catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: fallback binary start failed", ex); throw; }
+                                }
+                                else
+                                {
+                                    throw; // propagate original exception to outer catch
+                                }
+                            }
+
+                            proc.BeginOutputReadLine();
+                            proc.BeginErrorReadLine();
+                            await System.Threading.Tasks.Task.Run(() => proc.WaitForExit());
+
+                            var output = outputBuilder.ToString();
+
+                            // Append exit code info
+                            var exitInfo = $"\n[Process exited with code {proc.ExitCode}]";
+                            if (tbRef != null)
+                            {
+                                Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { tbRef.Text += exitInfo; tbRef.CaretIndex = tbRef.Text.Length; } catch { } });
+                            }
+                            else
+                            {
+                                IndexEditor.Shared.DebugLogger.Log("Parser test output:\n" + output + exitInfo);
+                                IndexEditor.Shared.ToastService.Show("Test run completed. Output length: " + output.Length + " ExitCode:" + proc.ExitCode);
+                            }
+                         }
+                         catch (Exception ex)
+                         {
+                             IndexEditor.Shared.ToastService.Show("Test run failed: " + ex.Message);
+                             IndexEditor.Shared.DebugLogger.LogException("TopBar: Test run process", ex);
+                         }
+                     }
+                     catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: Test click outer", ex); }
+                 };
+             }
         }
     }
 }

@@ -13,16 +13,19 @@ public class MagazineParsingService
     private readonly IDatabaseRepository _repository;
     private readonly IContentParser _parser;
     private readonly IUserInteraction _userInteraction;
+    private readonly bool _noInsert;
     private string _magazineDirectory = string.Empty;
 
     public MagazineParsingService(
         IDatabaseRepository repository,
         IContentParser parser,
-        IUserInteraction userInteraction)
+        IUserInteraction userInteraction,
+        bool noInsert = false)
     {
         _repository = repository;
         _parser = parser;
         _userInteraction = userInteraction;
+        _noInsert = noInsert;
     }
 
     public int ParseFile(string indexPath)
@@ -201,8 +204,15 @@ public class MagazineParsingService
                 var choice = _userInteraction.ChooseIssueResolution(category, count);
                 if (choice == 1)
                 {
-                    _repository.CreateCategory(category);
-                    _userInteraction.DisplayMessage($"✓ Category '{category}' created");
+                    if (_noInsert)
+                    {
+                        _userInteraction.DisplayMessage($"[no-insert] Would create category '{category}'");
+                    }
+                    else
+                    {
+                        _repository.CreateCategory(category);
+                        _userInteraction.DisplayMessage($"✓ Category '{category}' created");
+                    }
                 }
                 else
                 {
@@ -230,8 +240,17 @@ public class MagazineParsingService
 
         // ...existing code...
         // Issue existence is now checked above; insert new issue here
-        int issueId = _repository.InsertIssue(magazineId, volume, number, year);
-        _userInteraction.DisplayMessage($"\nIssue created: {magazineTitle} V{volume} N{number} Year: {year} (IssueId: {issueId})");
+        int issueId;
+        if (_noInsert)
+        {
+            _userInteraction.DisplayMessage($"\n[no-insert] Would create issue: {magazineTitle} V{volume} N{number} Year: {year}");
+            issueId = 0;
+        }
+        else
+        {
+            issueId = _repository.InsertIssue(magazineId, volume, number, year);
+            _userInteraction.DisplayMessage($"\nIssue created: {magazineTitle} V{volume} N{number} Year: {year} (IssueId: {issueId})");
+        }
 
         // Insert all content
         int successCount = 0;
@@ -343,16 +362,30 @@ public class MagazineParsingService
 
         if (response == "y" || response == "yes")
         {
-            _repository.DeleteContent(existingContent.ContentIds);
-            var result = InsertContentLine(0, _parser.ParseContentLine(line)!);
-            
-            if (result.Success)
+            if (_noInsert)
             {
-                _userInteraction.DisplayMessage($"    ✓ Database updated successfully");
-                return (true, false);
+                _userInteraction.DisplayMessage($"[no-insert] Would delete content ids: {string.Join(',', existingContent.ContentIds)} and re-insert from file");
+                var result = InsertContentLine(0, _parser.ParseContentLine(line)!);
+                if (result.Success)
+                {
+                    _userInteraction.DisplayMessage($"    ✓ Simulated database updated successfully (no-insert)");
+                    return (true, false);
+                }
+                _userInteraction.DisplayMessage($"    ✗ Simulation failed - {result.ErrorMessage}");
             }
-            
-            _userInteraction.DisplayMessage($"    ✗ Failed to update - {result.ErrorMessage}");
+            else
+            {
+                _repository.DeleteContent(existingContent.ContentIds);
+                var result = InsertContentLine(0, _parser.ParseContentLine(line)!);
+
+                if (result.Success)
+                {
+                    _userInteraction.DisplayMessage($"    ✓ Database updated successfully");
+                    return (true, false);
+                }
+
+                _userInteraction.DisplayMessage($"    ✗ Failed to update - {result.ErrorMessage}");
+            }
         }
         else
         {
@@ -404,8 +437,15 @@ public class MagazineParsingService
         switch (choice)
         {
             case 1: // Create category
-                _repository.CreateCategory(categoryName);
-                _userInteraction.DisplayMessage($"    ✓ Category '{categoryName}' created successfully");
+                if (_noInsert)
+                {
+                    _userInteraction.DisplayMessage($"    [no-insert] Would create category '{categoryName}'");
+                }
+                else
+                {
+                    _repository.CreateCategory(categoryName);
+                    _userInteraction.DisplayMessage($"    ✓ Category '{categoryName}' created successfully");
+                }
                 var retryResult = InsertContentLine(issueId, contentLine);
                 
                 if (retryResult.Success)
@@ -509,6 +549,14 @@ public class MagazineParsingService
                 return new InsertResult { Success = false, ErrorMessage = "Insert cancelled by user" };
             }
 
+            // If running in no-insert mode, simulate the insert and report success without touching the DB
+            if (_noInsert)
+            {
+                var pagesText = string.Join(',', contentLine.Pages);
+                _userInteraction.DisplayMessage($"[no-insert] Would insert Article: '{contentLine.Title}' Category: '{contentLine.Category}' Pages: {pagesText} Contributors: {contentLine.Contributor}");
+                return new InsertResult { Success = true };
+            }
+            
             // Insert article with title only
             var articleId = _repository.InsertArticle(
                 categoryId,
