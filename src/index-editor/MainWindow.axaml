@@ -45,13 +45,33 @@
         <Border x:Name="IndexOverlay" Grid.Row="0" Grid.ColumnSpan="3" Grid.RowSpan="2" Background="#80000000" IsVisible="False">
             <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
                 <Border Width="800" Height="600" Background="White" CornerRadius="6" Padding="12">
-                    <Grid RowDefinitions="Auto,*,Auto">
+                    <Grid RowDefinitions="Auto,Auto,*,Auto">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
                             <Button x:Name="IndexOverlaySaveBtn" Content="Save" />
                             <Button x:Name="IndexOverlayCloseBtn" Content="Close" />
                         </StackPanel>
-                        <TextBox x:Name="IndexOverlayTextBox" Grid.Row="1" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="False" FontFamily="'Ubuntu Mono', 'DejaVu Sans Mono', 'Courier New', monospace" FontSize="16" />
-                        <TextBlock Grid.Row="2" Text="Press 'i' to close" HorizontalAlignment="Right" FontSize="12" Foreground="#666" />
+                        <!-- Error line display (hidden unless parsing error) -->
+                        <Border Grid.Row="1" Background="#FFF5F5" Padding="6" CornerRadius="4" IsVisible="False" x:Name="IndexOverlayErrorBorder">
+                            <TextBlock x:Name="IndexOverlayErrorLine" FontFamily="'Ubuntu Mono', 'DejaVu Sans Mono', 'Courier New', monospace" Foreground="Red" TextWrapping="NoWrap" />
+                        </Border>
+                        <TextBox x:Name="IndexOverlayTextBox" Grid.Row="2" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="False" FontFamily="'Ubuntu Mono', 'DejaVu Sans Mono', 'Courier New', monospace" FontSize="16" />
+                        <TextBlock Grid.Row="3" Text="Press 'i' to close" HorizontalAlignment="Right" FontSize="12" Foreground="#666" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Delete article confirmation overlay (hidden by default) -->
+        <Border x:Name="DeleteArticleConfirmOverlay" Grid.Row="0" Grid.ColumnSpan="3" Grid.RowSpan="2" Background="#80000000" IsVisible="False">
+            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Border Width="420" Height="160" Background="White" CornerRadius="6" Padding="16">
+                    <Grid RowDefinitions="Auto,*,Auto">
+                        <TextBlock x:Name="DeleteArticleConfirmMessage" Grid.Row="0" Text="Delete the selected article?" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="1" Text="This action will remove the article from the index. You can undo by reopening the folder if needed." TextWrapping="Wrap" Foreground="#333" Margin="0,8,0,0" />
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                            <Button x:Name="DeleteArticleConfirmBtn" Content="Delete" />
+                            <Button x:Name="DeleteArticleCancelBtn" Content="Cancel" />
+                        </StackPanel>
                     </Grid>
                 </Border>
             </Grid>

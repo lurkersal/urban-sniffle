@@ -142,13 +142,84 @@ public partial class MainWindow : Window
         // Wire up overlay buttons if present
         try
         {
+            // Delete article confirmation buttons wiring
+            try
+            {
+                var delConfirm = this.FindControl<Button>("DeleteArticleConfirmBtn");
+                var delCancel = this.FindControl<Button>("DeleteArticleCancelBtn");
+                var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay");
+                if (delConfirm != null && delOverlay != null)
+                {
+                    delConfirm.Click += (s, e) =>
+                    {
+                        try
+                        {
+                            try { Console.WriteLine("[DEBUG] DeleteArticleConfirmBtn.Click invoked"); } catch {}
+                             // Perform deletion of selected article
+                             var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+                             Common.Shared.ArticleLine? toDelete = null;
+                             if (vm != null) toDelete = vm.SelectedArticle;
+                             if (toDelete == null) toDelete = IndexEditor.Shared.EditorState.ActiveArticle;
+                            try { Console.WriteLine($"[DEBUG] toDelete={(toDelete==null?"<null>":toDelete.Title)}"); } catch {}
+                             if (toDelete != null)
+                             {
+                                 try
+                                 {
+                                     // Compute selected index first so we can pick the next sensible selection
+                                     int oldIndex = -1;
+                                     try { if (vm != null) oldIndex = vm.Articles.IndexOf(toDelete); else if (IndexEditor.Shared.EditorState.Articles != null) oldIndex = IndexEditor.Shared.EditorState.Articles.IndexOf(toDelete); } catch { }
+                                     // Remove from shared state
+                                     IndexEditor.Shared.EditorState.Articles?.Remove(toDelete);
+                                     // Update VM list if present
+                                     if (vm != null)
+                                     {
+                                         try { vm.Articles.Remove(toDelete); } catch { }
+                                         // Choose next selection: prefer previous index if possible, otherwise clamp
+                                         if (vm.Articles.Count > 0)
+                                         {
+                                             int newIndex = Math.Min(Math.Max(0, oldIndex), vm.Articles.Count - 1);
+                                             vm.SelectedArticle = vm.Articles[newIndex];
+                                            try { Console.WriteLine($"[DEBUG] SelectedArticle changed to index {newIndex}: {vm.SelectedArticle?.Title}"); } catch {}
+                                         }
+                                         else vm.SelectedArticle = null;
+                                     }
+                                      // Clear active article/segment if it referred to deleted article
+                                      if (IndexEditor.Shared.EditorState.ActiveArticle == toDelete) IndexEditor.Shared.EditorState.ActiveArticle = null;
+                                      IndexEditor.Shared.EditorState.NotifyStateChanged();
+                                      IndexEditor.Shared.ToastService.Show("Article deleted");
+                                    try { Console.WriteLine("[DEBUG] Article deletion completed"); } catch {}
+                                 }
+                                 catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: delete", ex); }
+                             }
+                             try { delOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: hide overlay", ex); }
+                            try { Console.WriteLine("[DEBUG] Delete overlay hidden after confirm"); } catch {}
+                         }
+                         catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: outer", ex); }
+                     };
+                 }
+                 if (delCancel != null && delOverlay != null)
+                 {
+                    delCancel.Click += (s, e) => { try { delOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("DeleteArticleCancelBtn.Click", ex); } };
+                    delCancel.Click += (s, e) => { try { delOverlay.IsVisible = false; Console.WriteLine("[DEBUG] DeleteArticleCancelBtn.Click - overlay hidden"); } catch (Exception ex) { DebugLogger.LogException("DeleteArticleCancelBtn.Click", ex); } };
+                 }
+             }
+             catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire delete confirmation buttons", ex); }
+
             var closeBtn = this.FindControl<Button>("IndexOverlayCloseBtn");
             var saveBtn = this.FindControl<Button>("IndexOverlaySaveBtn");
             var overlay = this.FindControl<Border>("IndexOverlay");
             var textBox = this.FindControl<TextBox>("IndexOverlayTextBox");
             if (closeBtn != null && overlay != null)
             {
-                closeBtn.Click += (s, e) => { try { overlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("IndexOverlayCloseBtn.Click", ex); } };
+                closeBtn.Click += (s, e) => {
+                    try
+                    {
+                        // Clear any shown parse error state when closing
+                        try { var errBorder = this.FindControl<Border>("IndexOverlayErrorBorder"); var errLine = this.FindControl<TextBlock>("IndexOverlayErrorLine"); if (errBorder != null) errBorder.IsVisible = false; if (errLine != null) errLine.Text = string.Empty; } catch { }
+                        overlay.IsVisible = false;
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("IndexOverlayCloseBtn.Click", ex); }
+                };
             }
             // Help overlay close wiring
             try
@@ -359,6 +430,11 @@ public partial class MainWindow : Window
         try { Console.WriteLine($"[TRACE] OnMainWindowKeyDown: Key={e.Key} Modifiers={e.KeyModifiers} Handled={e.Handled}"); } catch {}
         try
         {
+            try { System.IO.File.AppendAllText("/tmp/indexeditor_keylog.txt", DateTime.Now.ToString("o") + " TRACE KeyDown: " + e.Key + " Modifiers:" + e.KeyModifiers + "\n"); } catch { }
+        }
+        catch {}
+        try
+        {
             // If the index overlay is visible, allow the overlay's TextBox to capture all key presses.
             // Only honor Ctrl+I (toggle overlay) and Esc (close overlay) here; everything else should go to the textbox.
             try
@@ -366,6 +442,7 @@ public partial class MainWindow : Window
                 var overlay = this.FindControl<Border>("IndexOverlay");
                 var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
                 var helpOverlay = this.FindControl<Border>("HelpOverlay");
+                var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay");
                 if (overlay != null && overlay.IsVisible)
                 {
                     // Ensure the textbox has focus so it receives typing input
@@ -374,15 +451,26 @@ public partial class MainWindow : Window
                     // Allow Ctrl+I (toggle overlay) while editing
                     if ((e.Key == Key.I) && (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta)))
                     {
-                        try { overlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("MainWindow: toggle overlay via Ctrl+I", ex); }
+                        try
+                        {
+                            // Clear any parse-error visuals when closing
+                            try { var eb = this.FindControl<Border>("IndexOverlayErrorBorder"); var el = this.FindControl<TextBlock>("IndexOverlayErrorLine"); if (eb != null) eb.IsVisible = false; if (el != null) el.Text = string.Empty; } catch { }
+                            overlay.IsVisible = false;
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("MainWindow: toggle overlay via Ctrl+I", ex); }
                         e.Handled = true;
                         return;
                     }
 
-                    // Allow Esc to close the overlay
+                    // Allow Esc to close the overlay and clear error visuals
                     if (e.Key == Key.Escape)
                     {
-                        try { overlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("MainWindow: close overlay via Esc", ex); }
+                        try
+                        {
+                            try { var eb2 = this.FindControl<Border>("IndexOverlayErrorBorder"); var el2 = this.FindControl<TextBlock>("IndexOverlayErrorLine"); if (eb2 != null) eb2.IsVisible = false; if (el2 != null) el2.Text = string.Empty; } catch { }
+                            overlay.IsVisible = false;
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("MainWindow: close overlay via Esc", ex); }
                         e.Handled = true;
                         return;
                     }
@@ -409,16 +497,40 @@ public partial class MainWindow : Window
                     // While help overlay visible we should not process other global shortcuts
                     return;
                 }
-            }
+                // If delete confirmation overlay is visible, handle Enter/Escape here
+                if (delOverlay != null && delOverlay.IsVisible)
+                {
+                    if (e.Key == Key.Enter)
+                    {
+                        try { DeleteSelectedArticleAndCloseOverlay(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: Confirm delete via Enter", ex); }
+                        e.Handled = true;
+                        return;
+                    }
+                    if (e.Key == Key.Escape)
+                    {
+                        try { delOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("MainWindow: Cancel delete via Esc", ex); }
+                        e.Handled = true;
+                        return;
+                    }
+                    // When delete overlay is visible, block other shortcuts to avoid accidental actions
+                    return;
+                }
+           }
             catch (Exception ex) { DebugLogger.LogException("MainWindow: overlay focus check", ex); }
 
             // Forward to the centralized shortcut service first
             try
             {
-                if (_shortcutService != null && _shortcutService.HandleKey(e))
+                if (_shortcutService != null)
                 {
-                    e.Handled = true;
-                    return;
+                    var handledByShortcut = false;
+                    try { handledByShortcut = _shortcutService.HandleKey(e); } catch (Exception ex) { DebugLogger.LogException("MainWindow: shortcut service.HandleKey threw", ex); }
+                    Console.WriteLine($"[DEBUG] ShortcutService.HandleKey returned={handledByShortcut}");
+                    if (handledByShortcut)
+                    {
+                        e.Handled = true;
+                        return;
+                    }
                 }
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindow: shortcut service handle", ex); }
@@ -837,32 +949,24 @@ public partial class MainWindow : Window
              {
                  var overlay = this.FindControl<Border>("IndexOverlay");
                  var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
+                 var errBorder = this.FindControl<Border>("IndexOverlayErrorBorder");
+                 var errLine = this.FindControl<TextBlock>("IndexOverlayErrorLine");
                  if (overlay != null && tb != null)
                  {
                     if (overlay.IsVisible)
                     {
+                        // Clearing error visuals when closing overlay
+                        try { if (errBorder != null) errBorder.IsVisible = false; if (errLine != null) errLine.Text = string.Empty; } catch { }
                         overlay.IsVisible = false;
                     }
                     else
                     {
                         // Load _index.txt from current folder into the editable overlay
                         var folder = IndexEditor.Shared.EditorState.CurrentFolder;
-                        if (string.IsNullOrWhiteSpace(folder))
-                        {
-                            tb.Text = "No folder open.";
-                        }
-                        else
-                        {
-                            var path = System.IO.Path.Combine(folder, "_index.txt");
-                            if (System.IO.File.Exists(path))
-                            {
-                                try { tb.Text = System.IO.File.ReadAllText(path); } catch (Exception ex) { tb.Text = $"Error reading file: {ex.Message}"; }
-                            }
-                            else
-                            {
-                                tb.Text = $"_index.txt not found in folder: {folder}";
-                            }
-                        }
+                        if (string.IsNullOrWhiteSpace(folder)) tb.Text = "No folder open.";
+                        else { var path = System.IO.Path.Combine(folder, "_index.txt"); tb.Text = System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : $"_index.txt not found in folder: {folder}"; }
+                        // Ensure any prior error visuals are cleared when opening
+                        try { if (errBorder != null) errBorder.IsVisible = false; if (errLine != null) errLine.Text = string.Empty; } catch { }
                         overlay.IsVisible = true;
                      }
                  }
@@ -873,6 +977,83 @@ public partial class MainWindow : Window
          }
         else if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt))
         {
+            // Delete key: if article list has focus and there's a selected article, ask to confirm deletion
+            if (e.Key == Key.Delete)
+            {
+                try
+                {
+                    Console.WriteLine($"[DEBUG] Delete key pressed. ActiveSegment present={IndexEditor.Shared.EditorState.ActiveSegment != null}");
+                     // Do not allow deletion while an active segment exists
+                     var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
+                     if (activeSeg != null && activeSeg.IsActive)
+                     {
+                         IndexEditor.Shared.ToastService.Show("End or cancel the active segment before deleting an article");
+                         e.Handled = true;
+                         return;
+                     }
+ 
+                     var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
+                    if (articleList != null)
+                    {
+                        var lb = articleList.FindControl<ListBox>("ArticlesListBox");
+                        if (lb != null && lb.IsFocused && lb.SelectedItem is Common.Shared.ArticleLine)
+                        {
+                            var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay");
+                            if (delOverlay != null) delOverlay.IsVisible = true;
+                            e.Handled = true;
+                            return;
+                        }
+                    }
+                    if (articleList != null)
+                    {
+                        var lb = articleList.FindControl<ListBox>("ArticlesListBox");
+                        try { Console.WriteLine($"[DEBUG] ArticleList found. ListBox present={(lb!=null)} SelectedIndex={(lb!=null?lb.SelectedIndex:-999)} SelectedItem={(lb!=null && lb.SelectedItem!=null? ((Common.Shared.ArticleLine)lb.SelectedItem).Title : "<null>")}"); } catch {}
+                        // Also check the VM's selected article (may be set even if the ListBox isn't focused)
+                        var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+                        Common.Shared.ArticleLine? vmSel = null;
+                        try { if (vm != null) vmSel = vm.SelectedArticle; } catch {}
+                        try { Console.WriteLine($"[DEBUG] VM.SelectedArticle={(vmSel!=null?vmSel.Title:"<null>")} EditorState.ActiveArticle={(IndexEditor.Shared.EditorState.ActiveArticle!=null?IndexEditor.Shared.EditorState.ActiveArticle.Title:"<null>")}" ); } catch {}
+
+                        if ((vmSel != null) || (IndexEditor.Shared.EditorState.ActiveArticle != null) || (lb != null && lb.SelectedItem is Common.Shared.ArticleLine))
+                        {
+                            var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay");
+                            if (delOverlay != null)
+                            {
+                                delOverlay.IsVisible = true;
+                                try { Console.WriteLine("[DEBUG] Showing DeleteArticleConfirmOverlay (vm/active/selection-based)"); } catch {}
+                                try { System.IO.File.AppendAllText("/tmp/indexeditor_keylog.txt", DateTime.Now.ToString("o") + " SHOW_DELETE_OVERLAY\n"); } catch {}
+                            }
+                            e.Handled = true;
+                            return;
+                        }
+                        // Fallback: if nothing is selected, but there are articles in the list, pick the first as a pragmatic fallback
+                        if (lb != null && (vmSel == null && IndexEditor.Shared.EditorState.ActiveArticle == null) && lb.ItemCount > 0)
+                        {
+                            try
+                            {
+                                var first = lb.Items[0] as Common.Shared.ArticleLine;
+                                if (first != null && vm != null)
+                                {
+                                    vm.SelectedArticle = first;
+                                    try { Console.WriteLine($"[DEBUG] Fallback: selected first article '{first.Title}' for deletion"); } catch {}
+                                    try { System.IO.File.AppendAllText("/tmp/indexeditor_keylog.txt", DateTime.Now.ToString("o") + " FALLBACK_SELECTED_FIRST\n"); } catch {}
+                                    var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay");
+                                    if (delOverlay != null) { delOverlay.IsVisible = true; try { Console.WriteLine("[DEBUG] Showing DeleteArticleConfirmOverlay (fallback-first)"); } catch {} }
+                                    e.Handled = true;
+                                    return;
+                                }
+                            }
+                            catch (Exception ex) { DebugLogger.LogException("MainWindow: fallback select first article", ex); }
+                        }
+                    }
+                    else
+                    {
+                        try { Console.WriteLine("[DEBUG] Delete key: ArticleListControl not found"); } catch {}
+                    }
+                 }
+                 catch (Exception ex) { DebugLogger.LogException("MainWindow: Delete key handler", ex); }
+             }
+
             // Navigation: Left/Right change page, Up/Down change selected article
             if (e.Key == Key.Left)
             {
@@ -1056,10 +1237,33 @@ public partial class MainWindow : Window
                         {
                             var overlay = this.FindControl<Border>("IndexOverlay");
                             var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
+                            var errBorder = this.FindControl<Border>("IndexOverlayErrorBorder");
+                            var errLine = this.FindControl<TextBlock>("IndexOverlayErrorLine");
                             if (overlay != null && tb != null)
                             {
-                                tb.Text = System.IO.File.ReadAllText(indexPath);
+                                var fullText = System.IO.File.ReadAllText(indexPath);
+                                tb.Text = fullText;
+                                // Show overlay
                                 overlay.IsVisible = true;
+                                // Display the errored line in the error border
+                                if (errBorder != null && errLine != null)
+                                {
+                                    errLine.Text = line?.Trim() ?? "";
+                                    errBorder.IsVisible = true;
+                                }
+                                // Select the line inside the textbox so user can jump to it
+                                try
+                                {
+                                    var pos = fullText.IndexOf(line ?? string.Empty, StringComparison.Ordinal);
+                                    if (pos < 0) pos = 0;
+                                    tb.SelectionStart = pos;
+                                    tb.SelectionEnd = pos + ((line != null) ? line.Length : 0);
+                                    tb.CaretIndex = pos;
+                                }
+                                catch (Exception ex)
+                                {
+                                    DebugLogger.LogException("LoadArticlesFromFolder: select errored line in overlay", ex);
+                                }
                             }
                         }
                         catch (Exception ex)
@@ -1126,5 +1330,41 @@ public partial class MainWindow : Window
             Console.WriteLine("[ERROR] LoadArticlesFromFolder failed: " + ex);
         }
     }
+
+    // Helper: delete currently selected article (VM selected or EditorState active) and close delete overlay
+    private void DeleteSelectedArticleAndCloseOverlay()
+    {
+        try
+        {
+            try { Console.WriteLine("[DEBUG] DeleteSelectedArticleAndCloseOverlay called"); } catch {}
+             var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+             Common.Shared.ArticleLine? toDelete = null;
+             if (vm != null) toDelete = vm.SelectedArticle;
+             if (toDelete == null) toDelete = IndexEditor.Shared.EditorState.ActiveArticle;
+             if (toDelete == null) return;
+
+            int oldIndex = -1;
+            try { if (vm != null) oldIndex = vm.Articles.IndexOf(toDelete); else if (IndexEditor.Shared.EditorState.Articles != null) oldIndex = IndexEditor.Shared.EditorState.Articles.IndexOf(toDelete); } catch { }
+            IndexEditor.Shared.EditorState.Articles?.Remove(toDelete);
+            if (vm != null)
+            {
+                try { vm.Articles.Remove(toDelete); } catch { }
+                if (vm.Articles.Count > 0)
+                {
+                    int newIndex = Math.Min(Math.Max(0, oldIndex), vm.Articles.Count - 1);
+                    vm.SelectedArticle = vm.Articles[newIndex];
+                }
+                else vm.SelectedArticle = null;
+            }
+
+            if (IndexEditor.Shared.EditorState.ActiveArticle == toDelete) IndexEditor.Shared.EditorState.ActiveArticle = null;
+            IndexEditor.Shared.EditorState.NotifyStateChanged();
+            IndexEditor.Shared.ToastService.Show("Article deleted");
+
+            try { var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay"); if (delOverlay != null) delOverlay.IsVisible = false; } catch { }
+        }
+        catch (Exception ex) { DebugLogger.LogException("DeleteSelectedArticleAndCloseOverlay", ex); }
+    }
 }
+
 
