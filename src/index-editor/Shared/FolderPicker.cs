@@ -34,9 +34,53 @@ namespace IndexEditor.Shared
                                 try
                                 {
                                     if (parameters.Length == 0)
+                                    {
                                         invokeResult = method.Invoke(storage, null);
+                                    }
                                     else
-                                        invokeResult = method.Invoke(storage, [null]);
+                                    {
+                                        // Build args array to match parameter types
+                                        var args = new object?[parameters.Length];
+                                        for (int pi = 0; pi < parameters.Length; pi++)
+                                        {
+                                            var pType = parameters[pi].ParameterType;
+                                            // If parameter expects a TopLevel/Window, pass top
+                                            if (typeof(TopLevel).IsAssignableFrom(pType) || typeof(Window).IsAssignableFrom(pType))
+                                            {
+                                                args[pi] = top;
+                                                continue;
+                                            }
+
+                                            // If parameter expects a string, pass start
+                                            if (pType == typeof(string) || pType == typeof(object))
+                                            {
+                                                args[pi] = start;
+                                                continue;
+                                            }
+
+                                            // Otherwise, attempt to create an instance (likely options object)
+                                            try
+                                            {
+                                                var inst = Activator.CreateInstance(pType);
+                                                // If we have a start path, try to set common property names to it
+                                                if (!string.IsNullOrWhiteSpace(start))
+                                                {
+                                                    var prop = pType.GetProperty("StartingDirectory") ?? pType.GetProperty("StartPath") ?? pType.GetProperty("InitialDirectory") ?? pType.GetProperty("SuggestedStartLocation") ?? pType.GetProperty("Directory") ?? pType.GetProperty("Path");
+                                                    if (prop != null && prop.PropertyType == typeof(string) && prop.CanWrite)
+                                                    {
+                                                        try { prop.SetValue(inst, start); } catch { }
+                                                    }
+                                                }
+                                                args[pi] = inst;
+                                            }
+                                            catch
+                                            {
+                                                args[pi] = null;
+                                            }
+                                        }
+
+                                        invokeResult = method.Invoke(storage, args);
+                                    }
                                 }
                                 catch (Exception ex) { DebugLogger.LogException("FolderPicker: invoke storage method", ex); try { invokeResult = method.Invoke(storage, null); } catch (Exception ex2) { DebugLogger.LogException("FolderPicker: invoke fallback", ex2); invokeResult = null; } }
 
@@ -61,21 +105,8 @@ namespace IndexEditor.Shared
             }
             catch (Exception ex) { DebugLogger.LogException("FolderPicker: storage provider attempt", ex); }
 
-            // Fallback: use the native OpenFolderDialog (preferred over custom UI)
-            try
-            {
-#pragma warning disable CS0618 // OpenFolderDialog is obsolete in newer Avalonia; keep for compatibility
-                var dlg = new OpenFolderDialog();
-                if (!string.IsNullOrWhiteSpace(start)) dlg.Directory = start;
-                var picked = await dlg.ShowAsync(parent).ConfigureAwait(false);
-#pragma warning restore CS0618
-                return picked;
-            }
-            catch (Exception ex)
-            {
-                DebugLogger.LogException("FolderPicker: OpenFolderDialog fallback", ex);
-                return null;
-            }
+            // No modern storage provider path succeeded; return null so caller may fall back.
+            return null;
         }
 
         private static string? ExtractPathFromStorageItem(object? item)
@@ -100,7 +131,8 @@ namespace IndexEditor.Shared
                     if (parameters.Length == 1 && parameters[0].ParameterType.IsByRef)
                     {
                         var args = new object?[] { null };
-                        var ok = (bool)m.Invoke(item, args);
+                        var resultObj = m.Invoke(item, args);
+                        var ok = resultObj is bool b && b;
                         if (ok && args[0] is string s && !string.IsNullOrWhiteSpace(s)) return s;
                     }
                 }

@@ -104,9 +104,21 @@ public partial class MainWindow : Window
                         }
                         else if (ke.Key == Key.Return && ke.KeyModifiers.HasFlag(KeyModifiers.Control))
                         {
-                            // Ctrl+Enter: focus Title textbox in ArticleEditor (global)
-                            try { IndexEditor.Shared.ToastService.Show("Ctrl+Enter: focus title"); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: toast Ctrl+Enter focus", ex); }
-                            try { IndexEditor.Shared.EditorActions.FocusArticleTitle(); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: FocusArticleTitle", ex); }
+                            // Ctrl+Enter: end active segment if present, otherwise focus Title textbox in ArticleEditor (global)
+                            try
+                            {
+                                var active = IndexEditor.Shared.EditorState.ActiveSegment;
+                                if (active != null && active.IsActive)
+                                {
+                                    try { IndexEditor.Shared.EditorActions.EndActiveSegment(); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: EndActiveSegment", ex); }
+                                }
+                                else
+                                {
+                                    try { IndexEditor.Shared.ToastService.Show("Ctrl+Enter: focus title"); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: toast Ctrl+Enter focus", ex); }
+                                    try { IndexEditor.Shared.EditorActions.FocusArticleTitle(); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: FocusArticleTitle", ex); }
+                                }
+                            }
+                            catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: KeyboardFocusHost.CtrlEnter", ex); }
                             ke.Handled = true;
                         }
                     }
@@ -158,13 +170,13 @@ public partial class MainWindow : Window
                     {
                         try
                         {
-                            try { Console.WriteLine("[DEBUG] DeleteArticleConfirmBtn.Click invoked"); } catch {}
+                            try { DebugLogger.Log("DeleteArticleConfirmBtn.Click invoked"); } catch {}
                              // Perform deletion of selected article
                              var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
                              Common.Shared.ArticleLine? toDelete = null;
                              if (vm != null) toDelete = vm.SelectedArticle;
                              if (toDelete == null) toDelete = IndexEditor.Shared.EditorState.ActiveArticle;
-                            try { Console.WriteLine($"[DEBUG] toDelete={(toDelete==null?"<null>":toDelete.Title)}"); } catch {}
+                            try { DebugLogger.Log($"toDelete={(toDelete==null?"<null>":toDelete.Title)}"); } catch {}
                              if (toDelete != null)
                              {
                                  try
@@ -183,7 +195,7 @@ public partial class MainWindow : Window
                                          {
                                              int newIndex = Math.Min(Math.Max(0, oldIndex), vm.Articles.Count - 1);
                                              vm.SelectedArticle = vm.Articles[newIndex];
-                                            try { Console.WriteLine($"[DEBUG] SelectedArticle changed to index {newIndex}: {vm.SelectedArticle?.Title}"); } catch {}
+                                            try { DebugLogger.Log($"SelectedArticle changed to index {newIndex}: {vm.SelectedArticle?.Title}"); } catch {}
                                          }
                                          else vm.SelectedArticle = null;
                                      }
@@ -191,12 +203,12 @@ public partial class MainWindow : Window
                                       if (IndexEditor.Shared.EditorState.ActiveArticle == toDelete) IndexEditor.Shared.EditorState.ActiveArticle = null;
                                       IndexEditor.Shared.EditorState.NotifyStateChanged();
                                       IndexEditor.Shared.ToastService.Show("Article deleted");
-                                    try { Console.WriteLine("[DEBUG] Article deletion completed"); } catch {}
+                                    try { DebugLogger.Log("Article deletion completed"); } catch {}
                                  }
                                  catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: delete", ex); }
                              }
                              try { delOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: hide overlay", ex); }
-                            try { Console.WriteLine("[DEBUG] Delete overlay hidden after confirm"); } catch {}
+                            try { DebugLogger.Log("Delete overlay hidden after confirm"); } catch {}
                          }
                          catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: outer", ex); }
                      };
@@ -204,7 +216,7 @@ public partial class MainWindow : Window
                  if (delCancel != null && delOverlay != null)
                  {
                     delCancel.Click += (s, e) => { try { delOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("DeleteArticleCancelBtn.Click", ex); } };
-                    delCancel.Click += (s, e) => { try { delOverlay.IsVisible = false; Console.WriteLine("[DEBUG] DeleteArticleCancelBtn.Click - overlay hidden"); } catch (Exception ex) { DebugLogger.LogException("DeleteArticleCancelBtn.Click", ex); } };
+                    delCancel.Click += (s, e) => { try { delOverlay.IsVisible = false; DebugLogger.Log("DeleteArticleCancelBtn.Click - overlay hidden"); } catch (Exception ex) { DebugLogger.LogException("DeleteArticleCancelBtn.Click", ex); } };
                  }
              }
              catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire delete confirmation buttons", ex); }
@@ -273,7 +285,7 @@ public partial class MainWindow : Window
                     catch (Exception ex)
                     {
                         IndexEditor.Shared.ToastService.Show("Failed to save _index.txt");
-                        Console.WriteLine("[ERROR] saving _index.txt: " + ex);
+                        DebugLogger.LogException("MainWindow.SaveIndex: saving _index.txt", ex);
                     }
                 };
             }
@@ -443,12 +455,8 @@ public partial class MainWindow : Window
     // Main window event handlers
     private void OnMainWindowKeyDown(object? sender, KeyEventArgs e)
     {
-        try { Console.WriteLine($"[TRACE] OnMainWindowKeyDown: Key={e.Key} Modifiers={e.KeyModifiers} Handled={e.Handled}"); } catch {}
-        try
-        {
-            try { System.IO.File.AppendAllText("/tmp/indexeditor_keylog.txt", DateTime.Now.ToString("o") + " TRACE KeyDown: " + e.Key + " Modifiers:" + e.KeyModifiers + "\n"); } catch { }
-        }
-        catch {}
+        try { DebugLogger.Log($"OnMainWindowKeyDown: Key={e.Key} Modifiers={e.KeyModifiers} Handled={e.Handled}"); } catch {}
+        try { DebugLogger.Log($"TRACE KeyDown: {e.Key} Modifiers:{e.KeyModifiers}"); } catch {}
         try
         {
             // If the index overlay is visible, allow the overlay's TextBox to capture all key presses.
@@ -541,7 +549,7 @@ public partial class MainWindow : Window
                 {
                     var handledByShortcut = false;
                     try { handledByShortcut = _shortcutService.HandleKey(e); } catch (Exception ex) { DebugLogger.LogException("MainWindow: shortcut service.HandleKey threw", ex); }
-                    Console.WriteLine($"[DEBUG] ShortcutService.HandleKey returned={handledByShortcut}");
+                    DebugLogger.Log($"ShortcutService.HandleKey returned={handledByShortcut}");
                     if (handledByShortcut)
                     {
                         e.Handled = true;
@@ -571,11 +579,24 @@ public partial class MainWindow : Window
              {
                 try
                 {
-                    // Ctrl+Enter: focus Title textbox in ArticleEditor (global)
-                    try { IndexEditor.Shared.ToastService.Show("Ctrl+Enter: focus title"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show Ctrl+Enter focus", ex); }
-                    try { IndexEditor.Shared.EditorActions.FocusArticleTitle(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: FocusArticleTitle", ex); }
+                    // Ctrl+Enter: end active segment if present, otherwise focus Title textbox in ArticleEditor (global)
+                    try
+                    {
+                        var active = IndexEditor.Shared.EditorState.ActiveSegment;
+                        if (active != null && active.IsActive)
+                        {
+                            try { IndexEditor.Shared.EditorActions.EndActiveSegment(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: EndActiveSegment via Ctrl+Enter", ex); }
+                            try { IndexEditor.Shared.ToastService.Show("Segment ended"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show on end via Ctrl+Enter", ex); }
+                        }
+                        else
+                        {
+                            try { IndexEditor.Shared.ToastService.Show("Ctrl+Enter: focus title"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show Ctrl+Enter focus", ex); }
+                            try { IndexEditor.Shared.EditorActions.FocusArticleTitle(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: FocusArticleTitle", ex); }
+                        }
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Enter handler", ex); }
                 }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Enter handler", ex); }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Enter outer", ex); }
                 e.Handled = true;
                 return;
             }
@@ -760,7 +781,7 @@ public partial class MainWindow : Window
                                     {
                                         try
                                         {
-                                            Console.WriteLine(
+                                            DebugLogger.Log(
                                                 "[TRACE] MainWindow.Esc: attempting to focus ArticlesListBox");
                                         }
                                         catch
@@ -771,7 +792,7 @@ public partial class MainWindow : Window
                                         // Skip detailed focused-control diagnostics and rely on EditorState.IsArticleEditorFocused instead.
                                         try
                                         {
-                                            Console.WriteLine(
+                                            DebugLogger.Log(
                                                 "[TRACE] MainWindow.Esc: focused control query skipped (editorFocused=" +
                                                 editorFocused + ")");
                                         }
@@ -808,7 +829,7 @@ public partial class MainWindow : Window
 
                                                 try
                                                 {
-                                                    Console.WriteLine(
+                                                    DebugLogger.Log(
                                                         $"[TRACE] MainWindow.Esc: focus attempt {attempt} succeeded? {lb.IsFocused}");
                                                 }
                                                 catch
@@ -825,7 +846,7 @@ public partial class MainWindow : Window
                                         {
                                             try
                                             {
-                                                Console.WriteLine(
+                                                DebugLogger.Log(
                                                     "[WARN] MainWindow.Esc: failed to focus ArticlesListBox after retries");
                                             }
                                             catch
@@ -848,7 +869,7 @@ public partial class MainWindow : Window
                                         {
                                             try
                                             {
-                                                Console.WriteLine(
+                                                DebugLogger.Log(
                                                     "[TRACE] MainWindow.Esc: ArticlesListBox is now focused");
                                             }
                                             catch
@@ -1003,13 +1024,13 @@ public partial class MainWindow : Window
                     {
                         if (IndexEditor.Shared.EditorState.IsArticleEditorFocused)
                         {
-                            try { Console.WriteLine("[DEBUG] Delete key pressed but ArticleEditor has focus; ignoring"); } catch {}
-                            try { System.IO.File.AppendAllText("/tmp/indexeditor_keylog.txt", DateTime.Now.ToString("o") + " DELETE_IGNORED_EDITOR_FOCUSED\n"); } catch {}
+                            try { DebugLogger.Log("Delete key pressed but ArticleEditor has focus; ignoring"); } catch {}
+                            try { DebugLogger.Log("DELETE_IGNORED_EDITOR_FOCUSED"); } catch {}
                             return;
                         }
                     }
                     catch (Exception ex) { DebugLogger.LogException("MainWindow: check IsArticleEditorFocused for Delete", ex); }
-                     Console.WriteLine($"[DEBUG] Delete key pressed. ActiveSegment present={IndexEditor.Shared.EditorState.ActiveSegment != null}");
+                     DebugLogger.Log($"Delete key pressed. ActiveSegment present={IndexEditor.Shared.EditorState.ActiveSegment != null}");
                      // Do not allow deletion while an active segment exists
                      var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
                      if (activeSeg != null && activeSeg.IsActive)
@@ -1034,12 +1055,12 @@ public partial class MainWindow : Window
                     if (articleList != null)
                     {
                         var lb = articleList.FindControl<ListBox>("ArticlesListBox");
-                        try { Console.WriteLine($"[DEBUG] ArticleList found. ListBox present={(lb!=null)} SelectedIndex={(lb!=null?lb.SelectedIndex:-999)} SelectedItem={(lb!=null && lb.SelectedItem!=null? ((Common.Shared.ArticleLine)lb.SelectedItem).Title : "<null>")}"); } catch {}
+                        try { DebugLogger.Log($"ArticleList found. ListBox present={(lb!=null)} SelectedIndex={(lb!=null?lb.SelectedIndex:-999)} SelectedItem={(lb!=null && lb.SelectedItem!=null? ((Common.Shared.ArticleLine)lb.SelectedItem).Title : "<null>")}"); } catch {}
                         // Also check the VM's selected article (may be set even if the ListBox isn't focused)
                         var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
                         Common.Shared.ArticleLine? vmSel = null;
                         try { if (vm != null) vmSel = vm.SelectedArticle; } catch {}
-                        try { Console.WriteLine($"[DEBUG] VM.SelectedArticle={(vmSel!=null?vmSel.Title:"<null>")} EditorState.ActiveArticle={(IndexEditor.Shared.EditorState.ActiveArticle!=null?IndexEditor.Shared.EditorState.ActiveArticle.Title:"<null>")}" ); } catch {}
+                        try { DebugLogger.Log($"VM.SelectedArticle={(vmSel!=null?vmSel.Title:"<null>")} EditorState.ActiveArticle={(IndexEditor.Shared.EditorState.ActiveArticle!=null?IndexEditor.Shared.EditorState.ActiveArticle.Title:"<null>")}" ); } catch {}
 
                         if ((vmSel != null) || (IndexEditor.Shared.EditorState.ActiveArticle != null) || (lb != null && lb.SelectedItem is Common.Shared.ArticleLine))
                         {
@@ -1047,8 +1068,7 @@ public partial class MainWindow : Window
                             if (delOverlay != null)
                             {
                                 delOverlay.IsVisible = true;
-                                try { Console.WriteLine("[DEBUG] Showing DeleteArticleConfirmOverlay (vm/active/selection-based)"); } catch {}
-                                try { System.IO.File.AppendAllText("/tmp/indexeditor_keylog.txt", DateTime.Now.ToString("o") + " SHOW_DELETE_OVERLAY\n"); } catch {}
+                                try { DebugLogger.Log("Showing DeleteArticleConfirmOverlay (vm/active/selection-based)"); } catch {}
                             }
                             e.Handled = true;
                             return;
@@ -1062,10 +1082,10 @@ public partial class MainWindow : Window
                                 if (first != null && vm != null)
                                 {
                                     vm.SelectedArticle = first;
-                                    try { Console.WriteLine($"[DEBUG] Fallback: selected first article '{first.Title}' for deletion"); } catch {}
-                                    try { System.IO.File.AppendAllText("/tmp/indexeditor_keylog.txt", DateTime.Now.ToString("o") + " FALLBACK_SELECTED_FIRST\n"); } catch {}
+                                    try { DebugLogger.Log($"Fallback: selected first article '{first.Title}' for deletion"); } catch {}
+                                    try { DebugLogger.Log("FALLBACK_SELECTED_FIRST"); } catch {}
                                     var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay");
-                                    if (delOverlay != null) { delOverlay.IsVisible = true; try { Console.WriteLine("[DEBUG] Showing DeleteArticleConfirmOverlay (fallback-first)"); } catch {} }
+                                    if (delOverlay != null) { delOverlay.IsVisible = true; try { DebugLogger.Log("Showing DeleteArticleConfirmOverlay (fallback-first)"); } catch {} }
                                     e.Handled = true;
                                     return;
                                 }
@@ -1075,7 +1095,7 @@ public partial class MainWindow : Window
                     }
                     else
                     {
-                        try { Console.WriteLine("[DEBUG] Delete key: ArticleListControl not found"); } catch {}
+                        try { DebugLogger.Log("Delete key: ArticleListControl not found"); } catch {}
                     }
                  }
                  catch (Exception ex) { DebugLogger.LogException("MainWindow: Delete key handler", ex); }
@@ -1450,7 +1470,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            try { Console.WriteLine("[DEBUG] DeleteSelectedArticleAndCloseOverlay called"); } catch {}
+            try { DebugLogger.Log("DeleteSelectedArticleAndCloseOverlay called"); } catch {}
              var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
              Common.Shared.ArticleLine? toDelete = null;
              if (vm != null) toDelete = vm.SelectedArticle;
@@ -1485,20 +1505,20 @@ public partial class MainWindow : Window
     {
         try
         {
-            Console.WriteLine("[DEBUG] Shortcut Ctrl+Up invoked");
-            if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) { Console.WriteLine("[DEBUG] ArticleEditor focused - ignoring Ctrl+Up"); return false; }
+            DebugLogger.Log("Shortcut Ctrl+Up invoked");
+            if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) { DebugLogger.Log("ArticleEditor focused - ignoring Ctrl+Up"); return false; }
             var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
             List<Common.Shared.ArticleLine>? list = null;
             if (vm != null) list = vm.Articles.ToList();
             else if (IndexEditor.Shared.EditorState.Articles != null) list = new List<Common.Shared.ArticleLine>(IndexEditor.Shared.EditorState.Articles);
-            if (list == null || list.Count == 0) { Console.WriteLine("[DEBUG] No articles to navigate"); return true; }
+            if (list == null || list.Count == 0) { DebugLogger.Log("No articles to navigate"); return true; }
             int curIndex = -1;
             if (vm != null && vm.SelectedArticle != null) curIndex = list.IndexOf(vm.SelectedArticle);
             if (curIndex == -1 && IndexEditor.Shared.EditorState.ActiveArticle != null) curIndex = list.IndexOf(IndexEditor.Shared.EditorState.ActiveArticle);
             if (curIndex == -1) curIndex = list.FindIndex(a => a.Pages != null && a.Pages.Contains(IndexEditor.Shared.EditorState.CurrentPage));
             if (curIndex == -1) curIndex = 0;
             int target = Math.Max(0, curIndex - 1);
-            if (target == curIndex) { Console.WriteLine("[DEBUG] Already at first article"); return true; }
+            if (target == curIndex) { DebugLogger.Log("Already at first article"); return true; }
             var targetArticle = list[target];
             if (vm != null)
             {
@@ -1510,7 +1530,7 @@ public partial class MainWindow : Window
                 try { IndexEditor.Shared.EditorState.ActiveArticle = targetArticle; } catch { }
                 try { int? pick = IndexEditor.Shared.ImageHelper.FindFirstImageInFolder(IndexEditor.Shared.EditorState.CurrentFolder ?? string.Empty, targetArticle.Pages != null && targetArticle.Pages.Count > 0 ? targetArticle.Pages.Min() : 1, 2000); if (pick.HasValue) IndexEditor.Shared.EditorState.CurrentPage = pick.Value; else if (targetArticle.Pages != null && targetArticle.Pages.Count > 0) IndexEditor.Shared.EditorState.CurrentPage = targetArticle.Pages.Min(); IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Up fallback navigation", ex); }
             }
-            Console.WriteLine($"[DEBUG] Ctrl+Up navigated to article index {target}");
+            DebugLogger.Log($"Ctrl+Up navigated to article index {target}");
         }
         catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Up handler", ex); }
         return true;
@@ -1521,20 +1541,20 @@ public partial class MainWindow : Window
     {
         try
         {
-            Console.WriteLine("[DEBUG] Shortcut Ctrl+Down invoked");
-            if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) { Console.WriteLine("[DEBUG] ArticleEditor focused - ignoring Ctrl+Down"); return false; }
+            DebugLogger.Log("Shortcut Ctrl+Down invoked");
+            if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) { DebugLogger.Log("ArticleEditor focused - ignoring Ctrl+Down"); return false; }
             var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
             List<Common.Shared.ArticleLine>? list = null;
             if (vm != null) list = vm.Articles.ToList();
             else if (IndexEditor.Shared.EditorState.Articles != null) list = new List<Common.Shared.ArticleLine>(IndexEditor.Shared.EditorState.Articles);
-            if (list == null || list.Count == 0) { Console.WriteLine("[DEBUG] No articles to navigate"); return true; }
+            if (list == null || list.Count == 0) { DebugLogger.Log("No articles to navigate"); return true; }
             int curIndex = -1;
             if (vm != null && vm.SelectedArticle != null) curIndex = list.IndexOf(vm.SelectedArticle);
             if (curIndex == -1 && IndexEditor.Shared.EditorState.ActiveArticle != null) curIndex = list.IndexOf(IndexEditor.Shared.EditorState.ActiveArticle);
             if (curIndex == -1) curIndex = list.FindIndex(a => a.Pages != null && a.Pages.Contains(IndexEditor.Shared.EditorState.CurrentPage));
             if (curIndex == -1) curIndex = 0;
             int target = Math.Min(list.Count - 1, curIndex + 1);
-            if (target == curIndex) { Console.WriteLine("[DEBUG] Already at last article"); return true; }
+            if (target == curIndex) { DebugLogger.Log("Already at last article"); return true; }
             var targetArticle = list[target];
             if (vm != null)
             {
@@ -1546,7 +1566,7 @@ public partial class MainWindow : Window
                 try { IndexEditor.Shared.EditorState.ActiveArticle = targetArticle; } catch { }
                 try { int? pick = IndexEditor.Shared.ImageHelper.FindFirstImageInFolder(IndexEditor.Shared.EditorState.CurrentFolder ?? string.Empty, targetArticle.Pages != null && targetArticle.Pages.Count > 0 ? targetArticle.Pages.Min() : 1, 2000); if (pick.HasValue) IndexEditor.Shared.EditorState.CurrentPage = pick.Value; else if (targetArticle.Pages != null && targetArticle.Pages.Count > 0) IndexEditor.Shared.EditorState.CurrentPage = targetArticle.Pages.Min(); IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Down fallback navigation", ex); }
             }
-            Console.WriteLine($"[DEBUG] Ctrl+Down navigated to article index {target}");
+            DebugLogger.Log($"Ctrl+Down navigated to article index {target}");
         }
         catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Down handler", ex); }
         return true;

@@ -146,7 +146,8 @@ namespace IndexEditor.Views
                     continue;
                 try
                 {
-                    var parsed = IndexEditor.Shared.IndexFileParser.ParseArticleLine(line);
+                    // Use the trimmed 'raw' string (non-null) for parsing to satisfy nullable analysis
+                    var parsed = IndexEditor.Shared.IndexFileParser.ParseArticleLine(raw!);
                     if (parsed != null)
                     {
                         // ParseArticleLine returns a fully-populated Common.Shared.ArticleLine
@@ -181,24 +182,26 @@ namespace IndexEditor.Views
                                 // Try to select the offending line in the TextBox so user can see it immediately
                                 try
                                 {
-                                    var pos = fileText.IndexOf(line, StringComparison.Ordinal);
-                                    if (pos >= 0)
+                                    // Use the trimmed 'raw' (non-null) when searching inside fileText
+                                    var pos = fileText.IndexOf(raw ?? line ?? string.Empty, StringComparison.Ordinal);
+                                    if (pos >= 0 && tb != null)
                                     {
-                                        // Select the error substring
+                                        // Select the error substring (use safe string for length)
                                         try
                                         {
+                                            var selectText = raw ?? line ?? string.Empty;
                                             tb.SelectionStart = pos;
-                                            tb.SelectionEnd = pos + line.Length;
+                                            tb.SelectionEnd = pos + selectText.Length;
                                             tb.CaretIndex = tb.SelectionEnd;
                                             // give focus so selection is visible
                                             tb.Focus();
                                         }
-                                        catch { }
+                                        catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: selectText set", ex); }
                                     }
                                     else
                                     {
-                                        // If line not found, just focus the textbox
-                                        tb.Focus();
+                                        // If line not found, just focus the textbox (if present)
+                                        try { tb?.Focus(); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: focus tb fallback", ex); }
                                     }
                                 }
                                 catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: select offending line", ex); }
@@ -208,25 +211,28 @@ namespace IndexEditor.Views
                                 // Clear highlight when user starts editing the overlay text
                                 try
                                 {
-                                    // Subscribe to text changes to clear the red highlight
-                                    var disp = tb.GetObservable(TextBox.TextProperty).Subscribe(new LambdaObserver<string>(_ =>
+                                    // Subscribe to text changes to clear the red highlight (if textbox present)
+                                    if (tb != null)
                                     {
-                                        try
+                                        var disp = tb.GetObservable(TextBox.TextProperty).Subscribe(new LambdaObserver<string?>(_ =>
                                         {
-                                            overlay.Background = Brushes.Transparent;
-                                            overlay.BorderBrush = Brushes.Gray;
-                                            overlay.BorderThickness = new Thickness(1);
-                                        }
-                                        catch { }
-                                    }));
-                                    // If the overlay is closed, dispose the subscription - hook into IsVisible property
-                                    overlay.GetObservable(Border.IsVisibleProperty).Subscribe(new LambdaObserver<bool>(visible =>
-                                    {
-                                        if (!visible)
+                                            try
+                                            {
+                                                overlay.Background = Brushes.Transparent;
+                                                overlay.BorderBrush = Brushes.Gray;
+                                                overlay.BorderThickness = new Thickness(1);
+                                            }
+                                            catch { }
+                                        }));
+                                        // If the overlay is closed, dispose the subscription - hook into IsVisible property
+                                        overlay.GetObservable(Border.IsVisibleProperty).Subscribe(new LambdaObserver<bool>(visible =>
                                         {
-                                            try { disp.Dispose(); } catch { }
-                                        }
-                                    }));
+                                            if (!visible)
+                                            {
+                                                try { disp.Dispose(); } catch { }
+                                            }
+                                        }));
+                                    }
                                 }
                                 catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: subscribe clear highlight", ex); }
                             }

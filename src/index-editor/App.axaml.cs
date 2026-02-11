@@ -37,7 +37,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             // Ensure any initialization errors are logged
-            try { DebugLogger.LogException("App.OnFrameworkInitializationCompleted: initialize logging", ex); } catch (Exception logEx) { Console.WriteLine("Failed to log during App init: " + logEx); }
+            try { DebugLogger.LogException("App.OnFrameworkInitializationCompleted: initialize logging", ex); } catch (Exception logEx) { try { DebugLogger.Log($"Failed to log during App init: {logEx}"); } catch {} }
         }
 
         // Setup DI
@@ -46,8 +46,8 @@ public partial class App : Application
         // Register ViewModels and other services
         services.AddSingleton<Views.EditorStateViewModel>();
         services.AddSingleton<Views.MainWindowViewModel>();
-        // PageControllerBridge will be set by the MainWindow when created; register factory placeholder
-        services.AddSingleton<Views.IPageControllerBridge?>(provider => null);
+        // Register a null/placeholder bridge; MainWindow will replace this with the real bridge at runtime.
+        services.AddSingleton<Views.IPageControllerBridge, Views.NullPageControllerBridge>();
         // Build provider
         var serviceProvider = services.BuildServiceProvider();
 

@@ -15,7 +15,15 @@ namespace IndexEditor.Views
         {
             _viewModel = viewModel;
         }
-        public event EventHandler? CanExecuteChanged;
+
+        // Implement explicit add/remove so the event exists but does not allocate observers by default.
+        // This avoids the 'never used' warning while keeping the ICommand contract.
+        public event EventHandler? CanExecuteChanged
+        {
+            add { /* intentionally no-op; command is always enabled via CanExecute */ }
+            remove { /* intentionally no-op */ }
+        }
+
         public bool CanExecute(object? parameter) => parameter is ArticleLine;
         public void Execute(object? parameter)
         {

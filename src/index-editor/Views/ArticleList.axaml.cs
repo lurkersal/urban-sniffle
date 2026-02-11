@@ -98,11 +98,11 @@ namespace IndexEditor.Views
                         listOnAttach.DoubleTapped += OnListDoubleTapped;
                         listOnAttach.KeyDown += OnListKeyDown;
                         _listHandlersAttached = true;
-                        try { Console.WriteLine("[TRACE] ArticleList: attached list handlers in AttachedToVisualTree"); } catch {}
+                        try { DebugLogger.Log("ArticleList: attached list handlers in AttachedToVisualTree"); } catch {}
                     }
                     else
                     {
-                        try { Console.WriteLine($"[TRACE] ArticleList: listOnAttach is {(listOnAttach==null?"null":"found but handlers attached already")}"); } catch {}
+                        try { DebugLogger.Log($"ArticleList: listOnAttach is {(listOnAttach==null?"null":"found but handlers attached already")}"); } catch {}
                     }
                 }
                 catch (Exception ex) { DebugLogger.LogException("ArticleList.AttachedToVisualTree: attach list handlers", ex); }
@@ -119,11 +119,11 @@ namespace IndexEditor.Views
                     list.DoubleTapped += OnListDoubleTapped;
                     list.KeyDown += OnListKeyDown;
                     _listHandlersAttached = true;
-                    try { Console.WriteLine("[TRACE] ArticleList: attached list handlers immediately in constructor"); } catch {}
+                    try { DebugLogger.Log("ArticleList: attached list handlers immediately in constructor"); } catch {}
                 }
                 else
                 {
-                    try { Console.WriteLine($"[TRACE] ArticleList: constructor immediate attach - list is {(list==null?"null":"found but already attached")}"); } catch {}
+                    try { DebugLogger.Log($"ArticleList: constructor immediate attach - list is {(list==null?"null":"found but already attached")}\n"); } catch {}
                 }
             }
             catch (Exception ex) { DebugLogger.LogException("ArticleList.constructor: immediate attach", ex); }
@@ -233,7 +233,11 @@ namespace IndexEditor.Views
                  Control? container = null;
                  if (idx >= 0)
                  {
-                     try { container = list.ItemContainerGenerator.ContainerFromIndex(idx) as Control; } catch (Exception ex) { DebugLogger.LogException("ArticleList.Article_PropertyChanged: ContainerFromIndex", ex); }
+                     try {
+                         #pragma warning disable CS0618 // use legacy ItemContainerGenerator.ContainerFromIndex as compatibility fallback
+                         container = list.ItemContainerGenerator.ContainerFromIndex(idx) as Control;
+                         #pragma warning restore CS0618
+                     } catch (Exception ex) { DebugLogger.LogException("ArticleList.Article_PropertyChanged: ContainerFromIndex", ex); }
                  }
                  if (container == null) return;
                  var overlay = container.FindControl<Border>("AutoHighlightOverlay");
@@ -292,7 +296,7 @@ namespace IndexEditor.Views
         // Handle pointer pressed on the article Border - select the clicked article
         public void OnArticlePointerPressed(object sender, Avalonia.Input.PointerPressedEventArgs e)
         {
-            try { Console.WriteLine($"[TRACE] OnArticlePointerPressed invoked: Source={e.Source} ClickCount={e.ClickCount}"); } catch {}
+            try { DebugLogger.Log($"OnArticlePointerPressed invoked: Source={e.Source} ClickCount={e.ClickCount}"); } catch {}
              try
              {
                 if (sender is Border b && b.Tag is Common.Shared.ArticleLine art)
@@ -418,10 +422,10 @@ namespace IndexEditor.Views
         {
             try
             {
-                try { Console.WriteLine($"[TRACE] OnListPointerPressed invoked: Source={e.Source} ClickCount={e.ClickCount}"); } catch {}
+                try { DebugLogger.Log($"OnListPointerPressed invoked: Source={e.Source} ClickCount={e.ClickCount}"); } catch {}
                  // Walk up the visual tree from the event source to find the nearest Border with a Tag (article or segment lozenge)
                  var v = e.Source as Avalonia.Visual;
-                 Avalonia.Visual foundBorder = null;
+                 Avalonia.Visual? foundBorder = null;
                  while (v != null)
                  {
                      if (v is Border vb && vb.Tag != null)
@@ -444,12 +448,12 @@ namespace IndexEditor.Views
 
         private void OnListDoubleTapped(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
         {
-            try { Console.WriteLine($"[TRACE] OnListDoubleTapped invoked: Source={e.Source}"); } catch {}
+            try { DebugLogger.Log($"OnListDoubleTapped invoked: Source={e.Source}"); } catch {}
             try
             {
                 // Find nearest Border with a Tag like pointer handler
                 var v = e.Source as Avalonia.Visual;
-                Avalonia.Visual found = null;
+                Avalonia.Visual? found = null;
                 while (v != null)
                 {
                     if (v is Border vb && vb.Tag != null)
@@ -472,7 +476,7 @@ namespace IndexEditor.Views
          {
              try
              {
-                 try { Console.WriteLine($"[TRACE] OnSegmentPointerPressed invoked: Source={sender} SegTag={(sender as Border)?.Tag}"); } catch {}
+                 try { DebugLogger.Log($"OnSegmentPointerPressed invoked: Source={sender} SegTag={(sender as Border)?.Tag}"); } catch {}
                  // Determine the segment and containing article
                  if (sender is Border b && b.Tag is Common.Shared.Segment seg)
                  {

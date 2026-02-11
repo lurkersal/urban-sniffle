@@ -182,7 +182,7 @@ namespace IndexEditor.Shared
                     var seg = new Common.Shared.Segment(EditorState.CurrentPage);
                     seg.End = EditorState.CurrentPage;
                     seg.WasNew = false;
-                    article.Segments.Add(seg);
+                    article.Segments?.Add(seg);
                 }
                 EditorState.NotifyStateChanged();
             }

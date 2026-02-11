@@ -117,7 +117,7 @@ namespace IndexEditor.Views
 
                 if (_selectedArticle != incoming)
                 {
-                    try { System.IO.File.AppendAllText("/tmp/index_editor_debug.txt", $"SelectedArticle changing. incoming.Title='{incoming?.Title}', Category='{incoming?.Category}', Contributor0='{incoming?.Contributor0}'\n"); } catch {}
+                    try { DebugLogger.Log($"SelectedArticle changing. incoming.Title='{incoming?.Title}', Category='{incoming?.Category}', Contributor0='{incoming?.Contributor0}'"); } catch {}
                      _selectedArticle = incoming;
                       // Update IsSelected flags on all articles so UI bindings reflect selection
                       try
@@ -137,7 +137,7 @@ namespace IndexEditor.Views
                       }
                       catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: set active article/notify", ex); }
                       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
-                    try { System.IO.File.AppendAllText("/tmp/index_editor_debug.txt", $"SelectedArticle set. current.Title='{_selectedArticle?.Title}', Category='{_selectedArticle?.Category}', Contributor0='{_selectedArticle?.Contributor0}'\n"); } catch {}
+                    try { DebugLogger.Log($"SelectedArticle set. current.Title='{_selectedArticle?.Title}', Category='{_selectedArticle?.Category}', Contributor0='{_selectedArticle?.Contributor0}'"); } catch {}
                       // Notify SelectedCategory so the editor ComboBox updates to the new article's category
                       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
                       // Also notify CurrentShownArticle which may change when SelectedArticle changes
@@ -209,7 +209,7 @@ namespace IndexEditor.Views
          {
              SelectArticleCommand = new SelectArticleCommand(this);
              // Initialize from static EditorState
-             foreach (var article in EditorState.Articles)
+             foreach (var article in EditorState.Articles ?? new System.Collections.Generic.List<Common.Shared.ArticleLine>())
                  Articles.Add(article);
 
              // IMPORTANT: Categories must come only from the database. Do not populate from Articles.
@@ -336,7 +336,7 @@ namespace IndexEditor.Views
                     catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: File.Exists check", ex); }
                 }
 
-                try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"LoadCategories: candidates={string.Join(";", candidates)} found={foundPath}\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append debug file", ex); }
+                try { DebugLogger.Log($"LoadCategories: candidates={string.Join(";", candidates)} found={foundPath}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append debug file", ex); }
 
                 if (string.IsNullOrWhiteSpace(foundPath))
                     return null;
@@ -354,7 +354,7 @@ namespace IndexEditor.Views
                 try
                 {
                     var cats = await IndexEditor.Shared.CategoryRepository.GetCategoriesAsync(connString);
-                    try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"DB returned {cats?.Count ?? 0} categories\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append DB count", ex); }
+                    try { DebugLogger.Log($"DB returned {cats?.Count ?? 0} categories"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append DB count", ex); }
                     if (cats != null && cats.Count > 0)
                     {
                         return cats;
@@ -362,7 +362,7 @@ namespace IndexEditor.Views
                 }
                 catch (Exception ex)
                 {
-                    try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"DB error: {ex}\n"); } catch (Exception ex2) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append DB error", ex2); }
+                    try { DebugLogger.Log($"DB error: {ex}"); } catch (Exception ex2) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append DB error", ex2); }
                     DebugLogger.LogException("EditorStateViewModel.LoadCategories: DB error", ex);
                 }
                 return null;
@@ -372,12 +372,13 @@ namespace IndexEditor.Views
 
         private void UpdateCategories(List<string> newCats, bool fromDatabase = false)
          {
+            if (newCats == null) newCats = new List<string>();
              // Ensure selected category is preserved
              var selectedCat = SelectedArticle?.Category;
             // If categories are already loaded from DB, ignore any non-DB updates
             if (!fromDatabase && _categoriesLoadedFromDb)
             {
-                try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", "UpdateCategories: skipped non-DB update because DB list already loaded\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append skipped non-DB", ex); }
+                try { DebugLogger.Log("UpdateCategories: skipped non-DB update because DB list already loaded"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append skipped non-DB", ex); }
                 return;
             }
 
@@ -395,7 +396,7 @@ namespace IndexEditor.Views
                     var newSet = new HashSet<string>(sorted);
                     if (newSet.SetEquals(currentSet))
                     {
-                        try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", "UpdateCategories: DB update identical to current set - ignored\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append identical", ex); }
+                        try { DebugLogger.Log("UpdateCategories: DB update identical to current set - ignored"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append identical", ex); }
                         return;
                     }
                     // Accept only if new set is a superset or strictly larger (new categories added)
@@ -404,12 +405,12 @@ namespace IndexEditor.Views
                         Categories.Clear();
                         foreach (var c in sorted)
                             Categories.Add(c);
-                        try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"Updated Categories (DB superset applied): {string.Join(",", sorted)}\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append superset", ex); }
+                        try { DebugLogger.Log($"Updated Categories (DB superset applied): {string.Join(",", sorted)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append superset", ex); }
                         return;
                     }
                     else
                     {
-                        try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"UpdateCategories: DB update skipped (would shrink/replace smaller set): {string.Join(",", sorted)}\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append skip shrink", ex); }
+                        try { DebugLogger.Log($"UpdateCategories: DB update skipped (would shrink/replace smaller set): {string.Join(",", sorted)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append skip shrink", ex); }
                         return;
                     }
                 }
@@ -419,25 +420,26 @@ namespace IndexEditor.Views
                 foreach (var c in sorted)
                     Categories.Add(c);
                 _categoriesLoadedFromDb = true;
-                try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"Updated Categories (DB preferred first load): {string.Join(",", sorted)}\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append first load", ex); }
+                try { DebugLogger.Log($"Updated Categories (DB preferred first load): {string.Join(",", sorted)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append first load", ex); }
                 return;
             }
 
             // Fallback: merge categories discovered from articles (existing behavior)
+            if (newCats == null) newCats = new List<string>();
             if (!string.IsNullOrWhiteSpace(selectedCat) && !newCats.Contains(selectedCat))
             {
                 newCats.Add(selectedCat);
             }
-            var union = new HashSet<string>(Categories);
+            var union = new HashSet<string>(Categories ?? new ObservableCollection<string>());
             foreach (var c in newCats)
-                union.Add(c);
+                if (!string.IsNullOrWhiteSpace(c)) union.Add(c);
             var merged = union.OrderBy(s => s).ToList();
             foreach (var c in merged)
             {
-                if (!Categories.Contains(c))
+                if (Categories != null && !Categories.Contains(c))
                     Categories.Add(c);
             }
-            try { System.IO.File.AppendAllText("/tmp/index_editor_categories_debug.txt", $"Updated Categories (merged): {string.Join(",", merged)}\n"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append merged", ex); }
+            try { DebugLogger.Log($"Updated Categories (merged): {string.Join(",", merged)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append merged", ex); }
          }
 
         private void SyncArticles()
@@ -447,7 +449,7 @@ namespace IndexEditor.Views
             // Perform an in-place minimal-diff update of the ObservableCollection to avoid
             // recreating item controls. This preserves control instances and their bindings
             // so TwoWay bindings (like Category) don't accidentally write into the wrong model.
-            var desired = EditorState.Articles ?? new List<Common.Shared.ArticleLine>();
+            var desired = EditorState.Articles ?? new System.Collections.Generic.List<Common.Shared.ArticleLine>();
 
             // Remove items not present in desired
             for (int i = Articles.Count - 1; i >= 0; i--)
@@ -506,7 +508,7 @@ namespace IndexEditor.Views
             // Suppress category writes while we reorder/move items to avoid transient writes
             _suppressCategorySet = true;
             // Compute ordered list (articles with no pages end up after those with pages)
-            var ordered = EditorState.Articles
+            var ordered = (EditorState.Articles ?? new System.Collections.Generic.List<Common.Shared.ArticleLine>())
                 .OrderBy(a => (a.Pages != null && a.Pages.Count > 0) ? a.Pages.Min() : int.MaxValue)
                 .ThenBy(a => a.Title)
                 .ToList();
@@ -551,3 +553,5 @@ namespace IndexEditor.Views
         }
     }
 }
+
+

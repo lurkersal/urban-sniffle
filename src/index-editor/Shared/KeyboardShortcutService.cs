@@ -95,7 +95,7 @@ namespace IndexEditor.Shared
                             continue;
                         }
                         // Handler returns true if it handled the event
-                        var handled = entry.Handler(e);
+                        var handled = entry.Handler != null && entry.Handler(e);
                         if (handled) return true;
                     }
                     catch (Exception ex)

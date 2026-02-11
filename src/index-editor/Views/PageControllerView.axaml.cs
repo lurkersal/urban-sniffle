@@ -406,18 +406,19 @@ namespace IndexEditor.Views
                     // Close immediately (single-page) and mark as not-new so it behaves like an existing segment
                     seg.End = EditorState.CurrentPage;
                     seg.WasNew = false;
+                    if (article.Segments == null) article.Segments = new System.Collections.ObjectModel.ObservableCollection<Common.Shared.Segment>();
                     article.Segments.Add(seg);
-                    System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: Added closed segment for page " + EditorState.CurrentPage);
+                    DebugLogger.Log($"PageController.CreateNewArticle: Added closed segment for page {EditorState.CurrentPage}");
                 }
                 else
                 {
-                    System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: Skipped adding duplicate segment for page " + EditorState.CurrentPage);
+                    DebugLogger.Log($"PageController.CreateNewArticle: Skipped adding duplicate segment for page {EditorState.CurrentPage}");
                 }
 
                 // Ensure the article pages include the page (article.Pages was already initialized to this page),
                 // then notify so view-models and UI update.
                 EditorState.NotifyStateChanged();
-                try { IndexEditor.Shared.EditorState.RequestArticleEditorFocus(); Console.WriteLine("[DEBUG] PageController.CreateNewArticle: requested ArticleEditor focus"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: RequestArticleEditorFocus", ex); }
+                try { IndexEditor.Shared.EditorState.RequestArticleEditorFocus(); DebugLogger.Log("PageController.CreateNewArticle: requested ArticleEditor focus"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: RequestArticleEditorFocus", ex); }
 
                 // Notify user of success
                 try { IndexEditor.Shared.ToastService.Show("New article created"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: toast", ex); }

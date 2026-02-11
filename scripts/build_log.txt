@@ -1,0 +1,3 @@
+MSBuild version 17.8.43+f0cbb1397 for .NET
+MSBUILD : error MSB1009: Project file does not exist.
+Switch: Magazine.sln
