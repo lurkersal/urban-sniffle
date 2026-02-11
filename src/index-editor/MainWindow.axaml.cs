@@ -70,6 +70,13 @@ public partial class MainWindow : Window
         // Also register a tunneling handler so key events (Enter) are seen before focused controls (like buttons)
         try { this.AddHandler<KeyEventArgs>(KeyDownEvent, OnMainWindowKeyDown, RoutingStrategies.Tunnel); } catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: AddHandler tunnel", ex); }
 
+        // Subscribe to EditorActions events to handle UI updates
+        try
+        {
+            IndexEditor.Shared.EditorActions.ArticleCreated += OnArticleCreated;
+        }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: subscribe to EditorActions events", ex); }
+
         // Immediate diagnostics (may run before Opened)
         try
         {
@@ -300,6 +307,38 @@ public partial class MainWindow : Window
         }
 
         // MainWindow constructor finished
+    }
+
+    // Event handler for when a new article is created via EditorActions
+    private void OnArticleCreated(Common.Shared.ArticleLine article)
+    {
+        try
+        {
+            // Select the new article in the ViewModel on UI thread
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+                    if (vm != null)
+                    {
+                        // Find the article in the VM's collection (it should match by reference or pages)
+                        var inList = vm.Articles.FirstOrDefault(a => object.ReferenceEquals(a, article))
+                                  ?? vm.Articles.FirstOrDefault(a => a.Pages != null && article.Pages != null && a.Pages.SequenceEqual(article.Pages));
+                        var toSelect = inList ?? article;
+                        
+                        // Select the article
+                        if (vm.SelectArticleCommand != null && vm.SelectArticleCommand.CanExecute(toSelect))
+                            vm.SelectArticleCommand.Execute(toSelect);
+                        vm.SelectedArticle = toSelect;
+                        
+                        DebugLogger.Log($"MainWindow.OnArticleCreated: Selected article in ViewModel");
+                    }
+                }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow.OnArticleCreated: select article in VM", ex); }
+            }, Avalonia.Threading.DispatcherPriority.Background);
+        }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow.OnArticleCreated: outer", ex); }
     }
 
     private void OnWindowOpened(object? sender, EventArgs e)
