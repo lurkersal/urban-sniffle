@@ -150,6 +150,17 @@ public partial class MainWindow : Window
             {
                 closeBtn.Click += (s, e) => { try { overlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("IndexOverlayCloseBtn.Click", ex); } };
             }
+            // Help overlay close wiring
+            try
+            {
+                var helpClose = this.FindControl<Button>("HelpOverlayCloseBtn");
+                var helpOverlay = this.FindControl<Border>("HelpOverlay");
+                if (helpClose != null && helpOverlay != null)
+                {
+                    helpClose.Click += (s, e) => { try { helpOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("HelpOverlayCloseBtn.Click", ex); } };
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire HelpOverlayCloseBtn", ex); }
             if (saveBtn != null && overlay != null && textBox != null)
             {
                 saveBtn.Click += (s, e) =>
@@ -354,6 +365,7 @@ public partial class MainWindow : Window
             {
                 var overlay = this.FindControl<Border>("IndexOverlay");
                 var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
+                var helpOverlay = this.FindControl<Border>("HelpOverlay");
                 if (overlay != null && overlay.IsVisible)
                 {
                     // Ensure the textbox has focus so it receives typing input
@@ -378,6 +390,25 @@ public partial class MainWindow : Window
                     // Let the textbox capture all other keys; do not run global shortcuts
                     return;
                 }
+                // If the help overlay is visible, allow Esc to close it (no textbox capture)
+                if (helpOverlay != null && helpOverlay.IsVisible)
+                {
+                    if (e.Key == Key.Escape)
+                    {
+                        try { helpOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("MainWindow: close help overlay via Esc", ex); }
+                        e.Handled = true;
+                        return;
+                    }
+                    // Also allow F1 to toggle help overlay; handled later, but we can shortcut here
+                    if (e.Key == Key.F1)
+                    {
+                        try { helpOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("MainWindow: toggle help overlay via F1", ex); }
+                        e.Handled = true;
+                        return;
+                    }
+                    // While help overlay visible we should not process other global shortcuts
+                    return;
+                }
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindow: overlay focus check", ex); }
 
@@ -392,8 +423,24 @@ public partial class MainWindow : Window
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindow: shortcut service handle", ex); }
 
-            if (e.Key == Key.Return && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            // F1 toggles the help overlay
+            if (e.Key == Key.F1)
             {
+                try
+                {
+                    var overlay = this.FindControl<Border>("HelpOverlay");
+                    if (overlay != null)
+                    {
+                        overlay.IsVisible = !overlay.IsVisible;
+                        e.Handled = true;
+                        return;
+                    }
+                }
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: F1 toggle help", ex); }
+            }
+
+             if (e.Key == Key.Return && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+             {
                 try
                 {
                     // Ctrl+Enter: focus Title textbox in ArticleEditor (global)

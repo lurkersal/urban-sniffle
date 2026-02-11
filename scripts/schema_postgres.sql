@@ -73,8 +73,7 @@ CREATE TABLE Content (
 CREATE TABLE Contributor (
     ContributorId SERIAL PRIMARY KEY,
     Name VARCHAR(255) NOT NULL,
-    Role VARCHAR(100),
-    UNIQUE(Name, Role)
+    UNIQUE(Name)
 );
 
 -- Junction table for many-to-many relationship between content and contributors

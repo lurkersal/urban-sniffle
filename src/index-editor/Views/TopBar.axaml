@@ -13,10 +13,7 @@
 
             <Button Name="OpenFolderBtn" Content="Open Folder" DockPanel.Dock="Right" Margin="8" Width="96" />
             <Button Name="SaveIndexBtn" Content="Save" DockPanel.Dock="Right" Margin="8" Width="72" />
-            <!-- Shortcut hints -->
-            <TextBlock Name="ShortcutHint" Text="Esc=Cancel • ←/→=Page • ↑/↓=Article • Ctrl+S Save • Ctrl+O Open • Ctrl+N New • E Editor" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8" FontSize="12" Foreground="#333"/>
-            <!-- Debug button for manual overlay flash during debugging -->
-            <Button x:Name="DebugFlashBtn" Content="Debug Flash" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,8,0" Width="96" />
+            <!-- Shortcut hints removed for production; debug flash button removed -->
             <!-- Add buttons and controls as needed -->
         </DockPanel>
     </Border>

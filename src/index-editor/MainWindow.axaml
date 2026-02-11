@@ -50,8 +50,41 @@
                             <Button x:Name="IndexOverlaySaveBtn" Content="Save" />
                             <Button x:Name="IndexOverlayCloseBtn" Content="Close" />
                         </StackPanel>
-                        <TextBox x:Name="IndexOverlayTextBox" Grid.Row="1" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="False" />
+                        <TextBox x:Name="IndexOverlayTextBox" Grid.Row="1" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="False" FontFamily="'Ubuntu Mono', 'DejaVu Sans Mono', 'Courier New', monospace" FontSize="16" />
                         <TextBlock Grid.Row="2" Text="Press 'i' to close" HorizontalAlignment="Right" FontSize="12" Foreground="#666" />
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Help overlay (F1) - shows keyboard shortcuts and brief workflow guidance -->
+        <Border x:Name="HelpOverlay" Grid.Row="0" Grid.ColumnSpan="3" Grid.RowSpan="2" Background="#80000000" IsVisible="False">
+            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Border Width="700" Height="520" Background="White" CornerRadius="6" Padding="16">
+                    <Grid RowDefinitions="Auto,*,Auto">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                            <Button x:Name="HelpOverlayCloseBtn" Content="Close" />
+                        </StackPanel>
+                        <ScrollViewer Grid.Row="1">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="Keyboard Shortcuts" FontWeight="Bold" FontSize="16" />
+                                <TextBlock Text="F1: Toggle this help overlay" />
+                                <TextBlock Text="Esc: Cancel active segment or close overlays / return focus" />
+                                <TextBlock Text="Ctrl+O: Open folder" />
+                                <TextBlock Text="Ctrl+S: Save _index.txt" />
+                                <TextBlock Text="Ctrl+N: New article" />
+                                <TextBlock Text="Ctrl+A: Add / open segment for current article" />
+                                <TextBlock Text="Enter / Ctrl+Enter: End active segment or focus first editor field" />
+                                <TextBlock Text="← / →: Move to previous / next available page (skip missing pages)" />
+                                <TextBlock Text="↑ / ↓: Change active article" />
+                                <TextBlock Text="E: focus category combo" />
+                                <TextBlock Text="Ctrl+I: Toggle editable _index.txt overlay" />
+                                <TextBlock Text="" />
+                                <TextBlock Text="Segments" FontWeight="Bold" FontSize="14" />
+                                <TextBlock TextWrapping="Wrap">A segment is a contiguous set of pages that belong to an article. Use Ctrl+A to start or open a segment for the current article on the current page. While a segment is active, selection of other articles is locked and page changes update the active segment end. End the segment with Enter or Ctrl+Enter, or cancel with Esc.</TextBlock>
+                            </StackPanel>
+                        </ScrollViewer>
+                        <TextBlock Grid.Row="2" Text="Press F1 to close or Esc" HorizontalAlignment="Right" FontSize="12" Foreground="#666" />
                     </Grid>
                 </Border>
             </Grid>

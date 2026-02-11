@@ -1,4 +1,4 @@
-    using Dapper;
+using Dapper;
 using Npgsql;
 using MagazineViewer.Models;
 namespace MagazineViewer.Services
@@ -251,7 +251,7 @@ namespace MagazineViewer.Services
                 mag.Name as MagazineName, mag.MagazineId, i.Volume, i.Number, i.Year,
                 (mag.Name || ' ' || i.Volume || '-' || LPAD(i.Number::text, 2, '0')) as IssueName,
                 c.Name as CategoryName, a.Title,
-                STRING_AGG(CASE WHEN cont.Role = 'Photographer' THEN cont.Name ELSE NULL END, ' | ') as Photographer,
+                STRING_AGG(DISTINCT cont.Name, ' | ') as Photographer,
                 m.Name as ModelName, cm.Age as ModelAge,
                 CASE WHEN m.BustSize IS NOT NULL 
                     THEN CAST(m.BustSize AS VARCHAR) || COALESCE(m.CupSize, '') || '-' || CAST(m.WaistSize AS VARCHAR) || '-' || CAST(m.HipSize AS VARCHAR) 
@@ -305,9 +305,9 @@ namespace MagazineViewer.Services
                 mag.Name as MagazineName, mag.MagazineId, i.Volume, i.Number, i.Year,
                 (mag.Name || ' ' || i.Volume || '-' || LPAD(i.Number::text, 2, '0')) as IssueName,
                 c.Name as CategoryName, a.Title,
-                STRING_AGG(DISTINCT CASE WHEN contrib_author.Role = 'Author' THEN contrib_author.Name END, ' | ') as Author,
-                STRING_AGG(DISTINCT CASE WHEN contrib_photo.Role = 'Photographer' THEN contrib_photo.Name END, ' | ') as Photographer,
-                STRING_AGG(DISTINCT CASE WHEN contrib_illust.Role = 'Illustrator' THEN contrib_illust.Name END, ' | ') as Illustrator,
+                STRING_AGG(DISTINCT contrib_author.Name, ' | ') as Author,
+                STRING_AGG(DISTINCT contrib_photo.Name, ' | ') as Photographer,
+                STRING_AGG(DISTINCT contrib_illust.Name, ' | ') as Illustrator,
                 STRING_AGG(DISTINCT m.Name, ' | ') as ModelNames,
                 MAX(cm.Age) as ModelAge,
                 CASE WHEN MAX(m.BustSize) IS NOT NULL 
@@ -321,11 +321,11 @@ namespace MagazineViewer.Services
             LEFT JOIN ContentModel cm ON a.ArticleId = cm.ArticleId
             LEFT JOIN Model m ON cm.ModelId = m.ModelId
             LEFT JOIN ContentContributor cc_author ON mc.ContentId = cc_author.ContentId
-            LEFT JOIN Contributor contrib_author ON cc_author.ContributorId = contrib_author.ContributorId AND contrib_author.Role = 'Author'
+            LEFT JOIN Contributor contrib_author ON cc_author.ContributorId = contrib_author.ContributorId
             LEFT JOIN ContentContributor cc_photo ON mc.ContentId = cc_photo.ContentId
-            LEFT JOIN Contributor contrib_photo ON cc_photo.ContributorId = contrib_photo.ContributorId AND contrib_photo.Role = 'Photographer'
+            LEFT JOIN Contributor contrib_photo ON cc_photo.ContributorId = contrib_photo.ContributorId
             LEFT JOIN ContentContributor cc_illust ON mc.ContentId = cc_illust.ContentId
-            LEFT JOIN Contributor contrib_illust ON cc_illust.ContributorId = contrib_illust.ContributorId AND contrib_illust.Role = 'Illustrator'
+            LEFT JOIN Contributor contrib_illust ON cc_illust.ContributorId = contrib_illust.ContributorId
             WHERE mc.IssueId = @IssueId
             GROUP BY mc.ContentId, mc.IssueId, mc.Page, mc.ArticleId, mc.ImagePath,
                         mag.Name, mag.MagazineId, i.Volume, i.Number, i.Year,

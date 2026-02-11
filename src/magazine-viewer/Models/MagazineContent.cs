@@ -19,8 +19,18 @@ public class MagazineContent
     public string IssueName { get; set; } = string.Empty;
     public string CategoryName { get; set; } = string.Empty;
     public string? Title { get; set; }
-    public string? Author { get; set; }
-    public string? Photographer { get; set; }
+    public string? Author => string.IsNullOrWhiteSpace(Contributors) ? null : Contributors;
+    public string? Photographer => string.IsNullOrWhiteSpace(Contributors) ? null : Contributors;
+    public string? Contributors
+    {
+        get => _contributors;
+        set
+        {
+            _contributors = value;
+            // keep Author/Photographer derived from Contributors for compatibility
+        }
+    }
+    private string? _contributors;
     public string? Illustrator { get; set; }
     public string? ModelName { get; set; }
     public string? ModelNames { get; set; }

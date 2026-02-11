@@ -38,7 +38,7 @@ namespace IndexEditor.Shared
             }
             else if (parts.Count >= 8)
             {
-                // Legacy 8-field lines are no longer supported — surface as a format error so UI shows overlay for correction
+                // Legacy 8-field lines are not supported — surface as a format error so UI shows overlay for correction
                 throw new FormatException($"Unsupported _index.txt line format: found {parts.Count} comma-separated fields (legacy 8-field format). Use the canonical 7-field format: pages,category,title,modelNames,ages,contributors,measurements. Line: '{line}'");
             }
 

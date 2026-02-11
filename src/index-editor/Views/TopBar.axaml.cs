@@ -131,39 +131,7 @@ namespace IndexEditor.Views
                     catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: Open button click handler outer", ex); }
                 };
             }
-            try
-            {
-                var debugBtn = this.FindControl<Button>("DebugFlashBtn");
-                if (debugBtn != null)
-                {
-                    debugBtn.Click += (s, e) =>
-                    {
-                        try
-                        {
-                            var wnd = this.VisualRoot as MainWindow;
-                            // Try to find the ArticleEditor instance and call its TriggerOverlayFlash
-                            var ae = wnd?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl") ?? wnd?.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
-                            if (ae != null)
-                            {
-                                System.Console.WriteLine("[DEBUG] TopBar.DebugFlashBtn: triggering persistent overlay on ArticleEditor");
-                                ae.TriggerOverlayFlash(true);
-                                try { ae.FocusEditor(); } catch (Exception ex) { DebugLogger.LogException("TopBar.DebugFlashBtn: ae.FocusEditor", ex); }
-                                return;
-                            }
-                            // As fallback, find any ArticleEditor in visual tree
-                            try
-                            {
-                                var any = this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
-                                if (any != null) { any.TriggerOverlayFlash(true); try { any.FocusEditor(); } catch (Exception ex) { DebugLogger.LogException("TopBar.DebugFlashBtn: any.FocusEditor", ex); } return; }
-                            }
-                            catch (Exception ex) { DebugLogger.LogException("TopBar.DebugFlashBtn: find any ArticleEditor", ex); }
-                            System.Console.WriteLine("[DEBUG] TopBar.DebugFlashBtn: ArticleEditor instance not found to trigger overlay");
-                        }
-                        catch (Exception ex) { DebugLogger.LogException("TopBar.DebugFlashBtn: exception on click", ex); }
-                    };
-                }
-            }
-            catch (Exception ex) { DebugLogger.LogException("TopBar ctor: debugBtn wiring", ex); }
+            // Debug button removed from XAML; no debug wiring required.
         }
     }
 }

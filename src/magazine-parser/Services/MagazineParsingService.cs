@@ -331,7 +331,7 @@ public class MagazineParsingService
         _userInteraction.DisplayMessage($"\n    ⚠ Differs from database:");
         _userInteraction.DisplayMessage($"    File:     {line}");
         _userInteraction.DisplayMessage($"    Database: {existingContent.DbRepresentation}");
-        _userInteraction.DisplayMessage("    Update database with file content? (y/n/s=skip all)");
+        _userInteraction.DisplayMessage("    Update database with file content? (y/n/s=skip)");
         
         var response = _userInteraction.PromptUser("")?.ToLowerInvariant();
 
@@ -500,7 +500,7 @@ public class MagazineParsingService
                 contentLine.ModelName,
                 contentLine.Age,
                 contentLine.ModelSize,
-                contentLine.Photographer,
+                contentLine.Contributor,
                 contentLine.Pages,
                 imagesFound);
 
@@ -571,22 +571,13 @@ public class MagazineParsingService
                     _userInteraction.DisplayMessage($"    ⚠ Warning: Image file for page {page} not found");
                 }
                 var contentId = _repository.InsertContent(issueId, page, articleId, relativePath);
-                // Link contributors to content
-                foreach (var photographer in contentLine.Photographers)
+                // Link contributors to content: use canonical Contributors list and include illustrators (legacy)
+                var contributorsToLink = new List<string>();
+                if (contentLine.Contributors != null) contributorsToLink.AddRange(contentLine.Contributors);
+                if (contentLine.Illustrators != null) contributorsToLink.AddRange(contentLine.Illustrators);
+                foreach (var contrib in contributorsToLink.Distinct())
                 {
-                    var contributorId = _repository.GetOrCreateContributorId(photographer, "Photographer");
-                    _repository.LinkContentToContributor(contentId, contributorId);
-                }
-                
-                foreach (var author in contentLine.Authors)
-                {
-                    var contributorId = _repository.GetOrCreateContributorId(author, "Author");
-                    _repository.LinkContentToContributor(contentId, contributorId);
-                }
-                
-                foreach (var illustrator in contentLine.Illustrators)
-                {
-                    var contributorId = _repository.GetOrCreateContributorId(illustrator, "Illustrator");
+                    var contributorId = _repository.GetOrCreateContributorId(contrib);
                     _repository.LinkContentToContributor(contentId, contributorId);
                 }
             }
@@ -759,23 +750,23 @@ public class MagazineParsingService
             .Select(c => new { 
                 Category = c.Category, 
                 Title = c.Title,
-                Photographer = c.Photographer
+                Contributors = c.Contributor
             })
             .ToList();
-        
-        if (articles.Any())
-        {
-            _userInteraction.DisplayMessage($"\n--- Articles ({articles.Count}) ---");
-            foreach (var article in articles.Take(10))
-            {
-                var info = $"{article.Category}: {article.Title}";
-                if (!string.IsNullOrEmpty(article.Photographer))
-                    info += $" (Photo: {article.Photographer})";
-                _userInteraction.DisplayMessage($"  • {info}");
-            }
-            if (articles.Count > 10)
-                _userInteraction.DisplayMessage($"  ... and {articles.Count - 10} more");
-        }
+         
+         if (articles.Any())
+         {
+             _userInteraction.DisplayMessage($"\n--- Articles ({articles.Count}) ---");
+             foreach (var article in articles.Take(10))
+             {
+                 var info = $"{article.Category}: {article.Title}";
+                if (!string.IsNullOrEmpty(article.Contributors))
+                    info += $" (Contrib: {article.Contributors})";
+                 _userInteraction.DisplayMessage($"  • {info}");
+             }
+             if (articles.Count > 10)
+                 _userInteraction.DisplayMessage($"  ... and {articles.Count - 10} more");
+         }
         
         // Count images
         var totalPages = contentLines.Sum(c => c.Pages.Count);
@@ -849,20 +840,13 @@ public class MagazineParsingService
                     _userInteraction.DisplayMessage($"    ⚠ Warning: Image file for page {page} not found");
                 }
                 var contentId = _repository.InsertContent(issueId, page, articleId, relativePath);
-                // Link contributors to content using canonical Contributors list
-                var contributors = contentLine.Contributors ?? new List<string>();
-                foreach (var contrib in contributors)
+                // Link contributors to content: use canonical Contributors list and include illustrators (legacy)
+                var contributorsToLink = new List<string>();
+                if (contentLine.Contributors != null) contributorsToLink.AddRange(contentLine.Contributors);
+                if (contentLine.Illustrators != null) contributorsToLink.AddRange(contentLine.Illustrators);
+                foreach (var contrib in contributorsToLink.Distinct())
                 {
-                    var role = (contentLine.Category.Equals("Model", StringComparison.OrdinalIgnoreCase) || contentLine.Category.Equals("Cover", StringComparison.OrdinalIgnoreCase))
-                        ? "Photographer"
-                        : "Author";
-                    var contributorId = _repository.GetOrCreateContributorId(contrib, role);
-                    _repository.LinkContentToContributor(contentId, contributorId);
-                }
-                
-                foreach (var illustrator in contentLine.Illustrators)
-                {
-                    var contributorId = _repository.GetOrCreateContributorId(illustrator, "Illustrator");
+                    var contributorId = _repository.GetOrCreateContributorId(contrib);
                     _repository.LinkContentToContributor(contentId, contributorId);
                 }
             }

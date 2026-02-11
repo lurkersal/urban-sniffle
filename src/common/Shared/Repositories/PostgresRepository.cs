@@ -149,31 +149,29 @@ public class PostgresRepository : IDatabaseRepository
         return (int)cmd.ExecuteScalar()!;
     }
     
-    public int GetOrCreateContributorId(string contributorName, string role)
+    public int GetOrCreateContributorId(string contributorName)
     {
         if (string.IsNullOrWhiteSpace(contributorName))
             return 0;
-            
-        // Check if contributor exists
+
+        // Check if contributor exists by name only (Role column removed)
         using var checkCmd = new NpgsqlCommand(
-            "SELECT ContributorId FROM Contributor WHERE Name = @name AND Role = @role",
+            "SELECT ContributorId FROM Contributor WHERE Name = @name",
             _connection);
         checkCmd.Parameters.AddWithValue("name", contributorName);
-        checkCmd.Parameters.AddWithValue("role", role);
         var existingId = checkCmd.ExecuteScalar();
-        
+
         if (existingId != null)
             return (int)existingId;
-            
-        // Insert new contributor
+
+        // Insert new contributor (Role column removed from schema)
         using var insCmd = new NpgsqlCommand(
-            "INSERT INTO Contributor (Name, Role) VALUES (@name, @role) RETURNING ContributorId",
+            "INSERT INTO Contributor (Name) VALUES (@name) RETURNING ContributorId",
             _connection);
         insCmd.Parameters.AddWithValue("name", contributorName);
-        insCmd.Parameters.AddWithValue("role", role);
         return (int)insCmd.ExecuteScalar()!;
     }
-    
+   
     public void LinkContentToContributor(int contentId, int contributorId)
     {
         if (contributorId == 0)
@@ -218,7 +216,8 @@ public class PostgresRepository : IDatabaseRepository
         try
         {
             using var cmd = new NpgsqlCommand(
-                "SELECT mc.ContentId, mc.Page, c.Name as Category, a.Title, m.Name as ModelName, m.Age, a.Photographer, " +
+                "SELECT mc.ContentId, mc.Page, c.Name as Category, a.Title, m.Name as ModelName, m.Age, " +
+                "COALESCE(STRING_AGG(DISTINCT cont.Name, ' | '), '') as Contributors, " +
                 "CASE WHEN m.BustSize IS NOT NULL THEN " +
                 "  CAST(m.BustSize AS VARCHAR) || COALESCE(m.CupSize, '') || '-' || CAST(m.WaistSize AS VARCHAR) || '-' || CAST(m.HipSize AS VARCHAR) " +
                 "ELSE '' END as ModelSize " +
@@ -227,12 +226,14 @@ public class PostgresRepository : IDatabaseRepository
                 "JOIN Category c ON a.CategoryId = c.CategoryId " +
                 "LEFT JOIN ContentModel cm ON a.ArticleId = cm.ArticleId " +
                 "LEFT JOIN Model m ON cm.ModelId = m.ModelId " +
-                "WHERE mc.IssueId = @issueid AND mc.Page = ANY(@pages) ORDER BY mc.Page",
+                "LEFT JOIN ContentContributor cc ON mc.ContentId = cc.ContentId " +
+                "LEFT JOIN Contributor cont ON cc.ContributorId = cont.ContributorId " +
+                "WHERE mc.IssueId = @issueid AND mc.Page = ANY(@pages) GROUP BY mc.ContentId, mc.Page, c.Name, a.Title, m.Name, m.Age, m.BustSize, m.CupSize, m.WaistSize, m.HipSize ORDER BY mc.Page",
                 _connection);
             cmd.Parameters.AddWithValue("issueid", issueId);
             cmd.Parameters.AddWithValue("pages", contentLine.Pages.ToArray());
 
-            var dbRows = new List<(int contentId, int page, string category, string title, string modelName, int? age, string photographer, string modelSize)>();
+            var dbRows = new List<(int contentId, int page, string category, string title, string modelName, int? age, string contributors, string modelSize)>();
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
@@ -261,30 +262,30 @@ public class PostgresRepository : IDatabaseRepository
                         row.title != contentLine.Title ||
                         row.modelName != contentLine.ModelName ||
                         row.age != contentLine.Age ||
-                        row.photographer != contentLine.Photographer ||
+                        row.contributors != contentLine.Contributor ||
                         row.modelSize != contentLine.ModelSize)
-                    {
-                        matches = false;
-                        break;
-                    }
-                }
-            }
+                     {
+                         matches = false;
+                         break;
+                     }
+                 }
+             }
 
-            var firstRow = dbRows[0];
-            string dbRepresentation = $"{string.Join("|", dbRows.Select(r => r.page))}, {firstRow.category}, {firstRow.title}, {firstRow.modelName}, {firstRow.age}, {firstRow.photographer}, {firstRow.modelSize}";
+             var firstRow = dbRows[0];
+             string dbRepresentation = $"{string.Join("|", dbRows.Select(r => r.page))}, {firstRow.category}, {firstRow.title}, {firstRow.modelName}, {firstRow.age}, {firstRow.contributors}, {firstRow.modelSize}";
 
-            return new ExistingContentMatch
-            {
-                Matches = matches,
-                DbRepresentation = dbRepresentation,
-                ContentIds = dbRows.Select(r => r.contentId).ToList()
-            };
-        }
-        catch
-        {
-            return null;
-        }
-    }
+             return new ExistingContentMatch
+             {
+                 Matches = matches,
+                 DbRepresentation = dbRepresentation,
+                 ContentIds = dbRows.Select(r => r.contentId).ToList()
+             };
+         }
+         catch
+         {
+             return null;
+         }
+     }
 
     public void DeleteContent(List<int> contentIds)
     {
