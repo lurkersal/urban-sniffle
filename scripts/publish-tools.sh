@@ -64,6 +64,7 @@ projects=(
     "src/magazine-parser/magazine-parser.csproj"
     "src/image-splitter/image-splitter.csproj"
     "src/find-links/find-links.csproj"
+    "src/index-editor/IndexEditor.csproj"
 )
 
 for p in "${projects[@]}"; do
