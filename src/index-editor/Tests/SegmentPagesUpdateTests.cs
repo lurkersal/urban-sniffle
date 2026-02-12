@@ -5,6 +5,8 @@ using IndexEditor.Shared;
 using System.Collections.Generic;
 using System.Linq;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Tests
 {
     public class SegmentPagesUpdateTests

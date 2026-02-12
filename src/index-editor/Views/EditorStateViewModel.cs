@@ -8,6 +8,8 @@ using IndexEditor.Shared;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
+
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
 using Avalonia.Threading;
 using System.Windows.Input;
 using System.Collections.Specialized;

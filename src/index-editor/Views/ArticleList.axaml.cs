@@ -10,6 +10,8 @@ using IndexEditor.Shared;
 
 namespace IndexEditor.Views
 {
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+    
     public partial class ArticleList : UserControl
     {
         // Helper: find the owning article for a given segment
@@ -236,7 +238,7 @@ namespace IndexEditor.Views
                      try {
                          #pragma warning disable CS0618 // use legacy ItemContainerGenerator.ContainerFromIndex as compatibility fallback
                          container = list.ItemContainerGenerator.ContainerFromIndex(idx) as Control;
-                         #pragma warning restore CS0618
+                         // Note: CS0618 remains disabled for EditorState static wrapper usage below
                      } catch (Exception ex) { DebugLogger.LogException("ArticleList.Article_PropertyChanged: ContainerFromIndex", ex); }
                  }
                  if (container == null) return;

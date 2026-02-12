@@ -42,17 +42,32 @@ public partial class App : Application
 
         // Setup DI
         var services = new ServiceCollection();
+        
+        // Core services
+        services.AddSingleton<IndexEditor.Shared.IEditorState, IndexEditor.Shared.EditorStateService>();
+        services.AddSingleton<IndexEditor.Shared.IEditorActions, IndexEditor.Shared.EditorActionsService>();
         services.AddSingleton<IndexEditor.Shared.IToastService, IndexEditor.Shared.DefaultToastService>();
+        
         // Register ViewModels and other services
         services.AddSingleton<Views.EditorStateViewModel>();
         services.AddSingleton<Views.MainWindowViewModel>();
+        
         // Register a null/placeholder bridge; MainWindow will replace this with the real bridge at runtime.
         services.AddSingleton<Views.IPageControllerBridge, Views.NullPageControllerBridge>();
+        
         // Build provider
         var serviceProvider = services.BuildServiceProvider();
 
-        // Set static provider for backwards-compatible static API
+        // Set static providers for backwards-compatible static API
         ToastService.Provider = serviceProvider.GetRequiredService<IndexEditor.Shared.IToastService>();
+        
+        // Set EditorState singleton instance for backward compatibility
+        var editorState = serviceProvider.GetRequiredService<IndexEditor.Shared.IEditorState>();
+        IndexEditor.Shared.EditorState.SetInstance(editorState);
+        
+        // Set EditorActions singleton instance for backward compatibility
+        var editorActions = serviceProvider.GetRequiredService<IndexEditor.Shared.IEditorActions>();
+        IndexEditor.Shared.EditorActions.SetInstance(editorActions);
 
         // App initialization completed
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)

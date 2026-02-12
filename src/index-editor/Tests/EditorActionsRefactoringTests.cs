@@ -5,6 +5,8 @@ using Xunit;
 using IndexEditor.Shared;
 using Common.Shared;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Tests
 {
     /// <summary>
@@ -18,11 +20,8 @@ namespace IndexEditor.Tests
     {
         public EditorActionsRefactoringTests()
         {
-            // Reset EditorState before each test
-            EditorState.Articles = new List<ArticleLine>();
-            EditorState.ActiveArticle = null;
-            EditorState.ActiveSegment = null;
-            EditorState.CurrentPage = 1;
+            // Initialize DI and reset EditorState before each test
+            TestDIHelper.ResetState();
         }
 
         public void Dispose()

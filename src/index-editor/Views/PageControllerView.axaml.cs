@@ -7,6 +7,8 @@ using System.Linq;
 using Avalonia.Media;
 using System.IO;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Views
 {
     public partial class PageControllerView : UserControl

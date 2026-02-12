@@ -8,6 +8,8 @@ using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using IndexEditor.Shared;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Views
 {
     public partial class ArticleEditor : UserControl

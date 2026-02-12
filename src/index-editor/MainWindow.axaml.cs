@@ -8,6 +8,8 @@ using Avalonia.Threading;
 using Avalonia.Interactivity;
 using IndexEditor.Shared;
 using IndexEditor.Views;
+
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers (EditorState, EditorActions)
 using WindowState = Avalonia.Controls.WindowState;
 
 namespace IndexEditor;

@@ -7,6 +7,8 @@ using Common.Shared;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Views
 {
     public partial class TopBar : UserControl

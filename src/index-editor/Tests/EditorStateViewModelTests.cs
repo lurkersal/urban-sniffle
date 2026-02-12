@@ -4,6 +4,8 @@ using Xunit;
 using IndexEditor.Views;
 using Common.Shared;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Tests
 {
     public class EditorStateViewModelTests : IDisposable
@@ -11,6 +13,7 @@ namespace IndexEditor.Tests
         private readonly string _tempDir;
         public EditorStateViewModelTests()
         {
+            TestDIHelper.ResetState();
             _tempDir = Path.Combine(Path.GetTempPath(), "indexeditor_test_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_tempDir);
         }

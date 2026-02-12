@@ -2,11 +2,16 @@ using System;
 using Xunit;
 using Common.Shared;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Tests
 {
-    public class EscapeCancelsActiveSegmentTests : IDisposable
+    public class EscapeCancelsActiveSegmentTests
     {
-        public EscapeCancelsActiveSegmentTests() { }
+        public EscapeCancelsActiveSegmentTests() 
+        { 
+            TestDIHelper.ResetState();
+        }
         public void Dispose() { }
 
         [Fact]

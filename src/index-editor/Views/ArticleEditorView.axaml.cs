@@ -10,6 +10,8 @@ using System.Threading.Tasks;
 using Avalonia.Media;
 using Avalonia;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Views
 {
     public partial class ArticleEditorView : UserControl

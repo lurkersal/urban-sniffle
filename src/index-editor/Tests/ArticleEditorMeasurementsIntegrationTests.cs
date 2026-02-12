@@ -11,6 +11,7 @@ namespace IndexEditor.Tests
         private readonly string _tempDir;
         public ArticleEditorMeasurementsIntegrationTests()
         {
+            TestDIHelper.ResetState();
             _tempDir = Path.Combine(Path.GetTempPath(), "idxedit_test_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_tempDir);
         }

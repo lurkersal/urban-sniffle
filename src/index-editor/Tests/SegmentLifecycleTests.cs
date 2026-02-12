@@ -3,11 +3,16 @@ using Xunit;
 using IndexEditor.Views;
 using Common.Shared;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Tests
 {
-    public class SegmentLifecycleTests : IDisposable
+    public class SegmentLifecycleTests
     {
-        public SegmentLifecycleTests() { }
+        public SegmentLifecycleTests() 
+        { 
+            TestDIHelper.ResetState();
+        }
         public void Dispose() { }
 
         [Fact]

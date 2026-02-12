@@ -4,11 +4,16 @@ using IndexEditor.Views;
 using IndexEditor.Shared;
 using Common.Shared;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Tests
 {
-    public class ActiveSegmentDisplayTests : IDisposable
+    public class ActiveSegmentDisplayTests
     {
-        public ActiveSegmentDisplayTests() { }
+        public ActiveSegmentDisplayTests() 
+        { 
+            TestDIHelper.ResetState();
+        }
         public void Dispose() { }
 
         [Fact]

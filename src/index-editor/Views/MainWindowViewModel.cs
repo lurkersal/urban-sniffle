@@ -3,6 +3,8 @@ using System.Linq;
 using System.Windows.Input;
 using IndexEditor.Shared;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Views
 {
     public class MainWindowViewModel

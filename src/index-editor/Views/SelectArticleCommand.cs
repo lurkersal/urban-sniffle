@@ -6,6 +6,8 @@ using System.Windows.Input;
 using Common.Shared;
 using System.Collections.ObjectModel;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Views
 {
     public class SelectArticleCommand : ICommand

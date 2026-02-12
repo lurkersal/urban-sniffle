@@ -5,10 +5,17 @@ using IndexEditor.Shared;
 using System.Collections.Generic;
 using System.Linq;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace Common.Tests
 {
     public class SegmentLifecycleTests
     {
+        public SegmentLifecycleTests()
+        {
+            TestDIHelper.ResetState();
+        }
+        
         [Fact]
         public void EndSegment_AddsPageRangeToArticlePages()
         {
