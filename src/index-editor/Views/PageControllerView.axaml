@@ -31,7 +31,9 @@
                         <!-- Bind MaxWidth to the Border's bounds so the image will never exceed the pane width; Stretch="Uniform" preserves aspect ratio.
                              StretchDirection="DownOnly" avoids upscaling so the image is only reduced to fit the width. Center horizontally. -->
                         <Image Name="PageImage" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center"
-                               MaxWidth="{Binding Path=Bounds.Width, ElementName=PageImageBorder}" />
+                               MaxWidth="{Binding Path=Bounds.Width, ElementName=PageImageBorder}" 
+                               DoubleTapped="OnImageDoubleTapped"
+                               Cursor="Hand" />
                         <TextBlock Name="ImageMissingText" Text="Page image not found" Foreground="Red" Background="#80FFFFFF" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False" Padding="8"/>
                     </Grid>
                 </Border>

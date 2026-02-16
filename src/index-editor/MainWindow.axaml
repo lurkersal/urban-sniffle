@@ -124,5 +124,38 @@
                 </Border>
             </Grid>
         </Border>
+
+        <!-- Fullscreen image viewer overlay (hidden by default) -->
+        <Border x:Name="FullscreenImageOverlay" Grid.Row="0" Grid.ColumnSpan="3" Grid.RowSpan="2" Background="#E6000000" IsVisible="False">
+            <Grid>
+                <!-- Close button -->
+                <Button x:Name="FullscreenCloseBtn" Content="Close (Esc)" 
+                        HorizontalAlignment="Right" VerticalAlignment="Top" 
+                        Margin="20" Padding="10" 
+                        Background="#E6FFFFFF" Foreground="Black" 
+                        FontSize="16" FontWeight="Bold" 
+                        CornerRadius="5" />
+                
+                <!-- Fullscreen image centered -->
+                <Image x:Name="FullscreenImage" 
+                       Stretch="Uniform" 
+                       HorizontalAlignment="Center" 
+                       VerticalAlignment="Center"
+                       Margin="40" />
+                       
+                <!-- Page counter -->
+                <Border HorizontalAlignment="Center" 
+                        VerticalAlignment="Bottom" 
+                        Margin="20" 
+                        Background="#CC000000" 
+                        CornerRadius="4" 
+                        Padding="8">
+                    <TextBlock x:Name="FullscreenPageNumber" 
+                               Foreground="White" 
+                               FontSize="16" 
+                               FontWeight="Bold" />
+                </Border>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

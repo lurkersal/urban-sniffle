@@ -269,6 +269,19 @@ public partial class MainWindow : Window
                 }
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire ParserOutputCloseBtn", ex); }
+
+            // Fullscreen image overlay close wiring
+            try
+            {
+                var fullscreenClose = this.FindControl<Button>("FullscreenCloseBtn");
+                var fullscreenOverlay = this.FindControl<Border>("FullscreenImageOverlay");
+                if (fullscreenClose != null && fullscreenOverlay != null)
+                {
+                    fullscreenClose.Click += (s, e) => { try { CloseFullscreenImage(); } catch (Exception ex) { DebugLogger.LogException("FullscreenCloseBtn.Click", ex); } };
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire FullscreenCloseBtn", ex); }
+
             if (saveBtn != null && overlay != null && textBox != null)
             {
                 saveBtn.Click += (s, e) =>
@@ -758,6 +771,19 @@ public partial class MainWindow : Window
         }
         else if (e.Key == Key.Escape)
         {
+            // If the fullscreen image overlay is visible, close it first
+            try
+            {
+                var fullscreenOverlay = this.FindControl<Border>("FullscreenImageOverlay");
+                if (fullscreenOverlay != null && fullscreenOverlay.IsVisible)
+                {
+                    CloseFullscreenImage();
+                    e.Handled = true;
+                    return;
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("MainWindow: Esc dismiss fullscreen image", ex); }
+
             // If the index overlay is visible, close it first (Esc should dismiss the overlay)
             try
             {
@@ -1329,11 +1355,74 @@ public partial class MainWindow : Window
         catch (Exception ex) { DebugLogger.LogException("MainWindow: OnOpenButtonClick", ex); }
     }
 
+    // Show fullscreen image overlay
+    private void ShowFullscreenImage(Avalonia.Media.IImage imageSource, int pageNumber)
+    {
+        try
+        {
+            DebugLogger.Log($"MainWindow.ShowFullscreenImage: showing page {pageNumber}");
+            
+            var overlay = this.FindControl<Border>("FullscreenImageOverlay");
+            var img = this.FindControl<Image>("FullscreenImage");
+            var pageText = this.FindControl<TextBlock>("FullscreenPageNumber");
+
+            if (overlay == null || img == null)
+            {
+                DebugLogger.Log("MainWindow.ShowFullscreenImage: overlay controls not found");
+                return;
+            }
+
+            img.Source = imageSource;
+            if (pageText != null)
+                pageText.Text = $"Page {pageNumber}";
+
+            overlay.IsVisible = true;
+            DebugLogger.Log("MainWindow.ShowFullscreenImage: overlay shown");
+        }
+        catch (Exception ex) 
+        { 
+            DebugLogger.LogException("MainWindow.ShowFullscreenImage", ex); 
+        }
+    }
+
+    // Close fullscreen image overlay
+    private void CloseFullscreenImage()
+    {
+        try
+        {
+            DebugLogger.Log("MainWindow.CloseFullscreenImage: closing overlay");
+            var overlay = this.FindControl<Border>("FullscreenImageOverlay");
+            if (overlay != null)
+            {
+                overlay.IsVisible = false;
+            }
+        }
+        catch (Exception ex) 
+        { 
+            DebugLogger.LogException("MainWindow.CloseFullscreenImage", ex); 
+        }
+    }
+
     private void LoadArticlesFromFolder(string folder)
     {
         try
         {
             if (string.IsNullOrWhiteSpace(folder)) return;
+            
+            DebugLogger.Log($"LoadArticlesFromFolder: Input folder: '{folder}'");
+            
+            // Normalize to absolute path to avoid issues with relative paths like './'
+            try
+            {
+                var originalFolder = folder;
+                folder = System.IO.Path.GetFullPath(folder);
+                DebugLogger.Log($"LoadArticlesFromFolder: Normalized '{originalFolder}' to '{folder}'");
+            }
+            catch (Exception ex) 
+            { 
+                DebugLogger.LogException("LoadArticlesFromFolder: GetFullPath", ex); 
+            }
+            
             // Parse folder basename for fallback metadata
             try
             {
@@ -1475,6 +1564,7 @@ public partial class MainWindow : Window
             }
             catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: update VM", ex); }
 
+            DebugLogger.Log($"LoadArticlesFromFolder: Setting CurrentFolder to '{folder}'");
             IndexEditor.Shared.EditorState.CurrentFolder = folder;
 
             // Choose first existing image page (prefer 1)
@@ -1502,6 +1592,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            DebugLogger.LogException("LoadArticlesFromFolder failed", ex);
             Console.WriteLine("[ERROR] LoadArticlesFromFolder failed: " + ex);
         }
     }

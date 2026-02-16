@@ -24,7 +24,25 @@ namespace IndexEditor.Shared
             }
             else
             {
-                DebugLogger.Log($"FolderPicker: Starting with path: {start}");
+                // Normalize to absolute path to prevent issues with relative paths like './'
+                try
+                {
+                    var originalStart = start;
+                    if (!System.IO.Path.IsPathRooted(start))
+                    {
+                        start = System.IO.Path.GetFullPath(start);
+                        DebugLogger.Log($"FolderPicker: Normalized relative path '{originalStart}' to '{start}'");
+                    }
+                    else
+                    {
+                        DebugLogger.Log($"FolderPicker: Starting with absolute path: {start}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    DebugLogger.LogException("FolderPicker: normalize start path", ex);
+                    DebugLogger.Log($"FolderPicker: Starting with path (normalization failed): {start}");
+                }
             }
 
             // Try modern StorageProvider API via reflection

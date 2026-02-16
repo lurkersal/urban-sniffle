@@ -691,6 +691,50 @@ namespace IndexEditor.Views
             catch (Exception ex) { DebugLogger.LogException("MoveRight", ex); }
         }
 
+        // Handle double-click on the page image to show fullscreen view
+        private void OnImageDoubleTapped(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                DebugLogger.Log("PageControllerView.OnImageDoubleTapped: opening fullscreen image viewer");
+                
+                // Find the MainWindow
+                var mainWindow = this.VisualRoot as MainWindow;
+                if (mainWindow == null)
+                {
+                    DebugLogger.Log("PageControllerView.OnImageDoubleTapped: MainWindow not found");
+                    return;
+                }
+
+                // Get the current image source
+                var img = this.FindControl<Image>("PageImage");
+                if (img?.Source == null)
+                {
+                    DebugLogger.Log("PageControllerView.OnImageDoubleTapped: No image to display");
+                    IndexEditor.Shared.ToastService.Show("No image to display in fullscreen");
+                    return;
+                }
+
+                // Call MainWindow method to show fullscreen overlay
+                var showMethod = typeof(MainWindow).GetMethod("ShowFullscreenImage", 
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                
+                if (showMethod != null)
+                {
+                    showMethod.Invoke(mainWindow, new object[] { img.Source, EditorState.CurrentPage });
+                    DebugLogger.Log($"PageControllerView.OnImageDoubleTapped: Invoked ShowFullscreenImage for page {EditorState.CurrentPage}");
+                }
+                else
+                {
+                    DebugLogger.Log("PageControllerView.OnImageDoubleTapped: ShowFullscreenImage method not found");
+                }
+            }
+            catch (Exception ex) 
+            { 
+                DebugLogger.LogException("PageControllerView.OnImageDoubleTapped", ex); 
+            }
+        }
+
         // Bridge will call the public methods defined on this view (AddSegmentAtCurrentPage, CreateNewArticle, EndActiveSegment, MoveLeft, MoveRight).
     }
 }
