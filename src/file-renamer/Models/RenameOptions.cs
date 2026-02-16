@@ -4,5 +4,6 @@ namespace FileRenamer.Models
     {
         public string? DirectoryPath { get; set; }
         public string? StringToRemove { get; set; }
+        public int? RenumberIncrement { get; set; }
     }
 }
