@@ -1,0 +1,106 @@
+.TH FILE-RENAMER 1 "February 2026" "file-renamer 1.0" "User Commands"
+.SH NAME
+file-renamer \- rename files by removing strings or renumbering numeric filenames
+.SH SYNOPSIS
+.B file-renamer
+[\fB\-d\fR|\fB\-\-folder\fR \fIDIRECTORY\fR]
+(\fB\-s\fR|\fB\-\-string\fR \fISTRING\fR | \fB\-r\fR|\fB\-\-renumber\fR \fIINCREMENT\fR)
+[\fB\-n\fR|\fB\-\-no\fR]
+.SH DESCRIPTION
+.B file-renamer
+is a utility for batch renaming files in a directory. It supports two modes of operation: removing a specified string from filenames, or incrementing numeric filenames by a specified value.
+.PP
+The tool processes all files in the specified directory (or current directory if not specified). In string removal mode, it replaces all occurrences of the specified string in each filename. In renumber mode, it only processes files whose names (excluding extension) are numeric.
+.PP
+A dry-run mode is available to preview changes before applying them.
+.SH OPTIONS
+.TP
+.BR \-d ", " \-\-folder " \fIDIRECTORY\fR"
+Specify the directory containing files to rename. If not provided, uses the current working directory.
+.TP
+.BR \-s ", " \-\-string " \fISTRING\fR"
+Remove all occurrences of \fISTRING\fR from filenames. Cannot be used with \fB\-r\fR.
+.TP
+.BR \-r ", " \-\-renumber " \fIINCREMENT\fR"
+Increment numeric filenames by \fIINCREMENT\fR. Only affects files whose names (without extension) are valid integers. Cannot be used with \fB\-s\fR. Negative values are allowed.
+.TP
+.BR \-n ", " \-\-no
+Dry-run mode. Show what would be done without actually renaming any files. Useful for previewing changes before applying them.
+.SH EXAMPLES
+.TP
+Remove "_old" from all filenames in /path/to/files:
+.B file-renamer \-d /path/to/files \-s "_old"
+.TP
+Increment all numeric filenames by 10 in the current directory:
+.B file-renamer \-r 10
+.TP
+Preview renumbering without making changes:
+.B file-renamer \-r 5 \-n
+.TP
+Decrement numeric filenames by 3:
+.B file-renamer \-\-renumber \-3
+.TP
+Remove "test_" prefix using current directory:
+.B file-renamer \-s "test_"
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 1
+Invalid arguments or usage error
+.SH BEHAVIOR
+.SS String Removal Mode
+In string removal mode (\fB\-s\fR), the tool:
+.IP \(bu 2
+Processes all files in the directory
+.IP \(bu 2
+Replaces all occurrences of the specified string (case-sensitive)
+.IP \(bu 2
+Skips files that don't contain the string
+.IP \(bu 2
+Preserves file extensions
+.SS Renumber Mode
+In renumber mode (\fB\-r\fR), the tool:
+.IP \(bu 2
+Only processes files whose names (without extension) are integers
+.IP \(bu 2
+Adds the increment value to the numeric filename
+.IP \(bu 2
+Skips non-numeric filenames
+.IP \(bu 2
+Preserves file extensions
+.IP \(bu 2
+Supports negative increments for decrementing
+.PP
+Example: With \fB\-r 10\fR, file "5.txt" becomes "15.txt", and "test.txt" is skipped.
+.SS Dry-Run Mode
+When \fB\-n\fR or \fB\-\-no\fR is specified:
+.IP \(bu 2
+No files are actually renamed
+.IP \(bu 2
+Output shows what would happen with "WOULD RENAME" and "WOULD SKIP" messages
+.IP \(bu 2
+Useful for verifying operations before executing them
+.SH NOTES
+.IP \(bu 2
+The \fB\-s\fR and \fB\-r\fR options are mutually exclusive. You must specify one, but not both.
+.IP \(bu 2
+String matching is case-sensitive.
+.IP \(bu 2
+If a directory is not specified, the current working directory is used.
+.IP \(bu 2
+Files are processed in alphabetical order in renumber mode.
+.IP \(bu 2
+The tool does not recurse into subdirectories.
+.SH AUTHOR
+Written for the urban-sniffle project.
+.SH REPORTING BUGS
+Report bugs to the project issue tracker.
+.SH COPYRIGHT
+Copyright \(co 2026. License: To be determined.
+.SH SEE ALSO
+.BR mv (1),
+.BR rename (1),
+.BR mmv (1)
+
