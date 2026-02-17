@@ -349,6 +349,14 @@ public partial class MainWindow : Window
                         vm.SelectedArticle = toSelect;
                         
                         DebugLogger.Log($"MainWindow.OnArticleCreated: Selected article in ViewModel");
+                        
+                        // Focus the title field so user can start typing immediately
+                        try
+                        {
+                            IndexEditor.Shared.EditorActions.FocusArticleTitle();
+                            DebugLogger.Log($"MainWindow.OnArticleCreated: Requested focus on title field");
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("MainWindow.OnArticleCreated: focus title", ex); }
                     }
                 }
                 catch (Exception ex) { DebugLogger.LogException("MainWindow.OnArticleCreated: select article in VM", ex); }
@@ -1240,7 +1248,10 @@ public partial class MainWindow : Window
             if (e.Key == Key.Left)
             {
                 // If the Article Editor has focus, let the editor handle the arrow key (do not change page)
-                if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) return;
+                // UNLESS there's an active segment — then we want to navigate pages even from editor fields
+                var hasActiveSegment = IndexEditor.Shared.EditorState.ActiveSegment != null 
+                                    && IndexEditor.Shared.EditorState.ActiveSegment.IsActive;
+                if (IndexEditor.Shared.EditorState.IsArticleEditorFocused && !hasActiveSegment) return;
                 try
                 {
                     if (MainViewModel != null) MainViewModel.MoveLeft();
@@ -1257,7 +1268,10 @@ public partial class MainWindow : Window
             else if (e.Key == Key.Right)
             {
                 // If the Article Editor has focus, let the editor handle the arrow key (do not change page)
-                if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) return;
+                // UNLESS there's an active segment — then we want to navigate pages even from editor fields
+                var hasActiveSegment = IndexEditor.Shared.EditorState.ActiveSegment != null 
+                                    && IndexEditor.Shared.EditorState.ActiveSegment.IsActive;
+                if (IndexEditor.Shared.EditorState.IsArticleEditorFocused && !hasActiveSegment) return;
                 try
                 {
                     if (MainViewModel != null) MainViewModel.MoveRight();
