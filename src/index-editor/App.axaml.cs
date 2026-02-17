@@ -62,6 +62,7 @@ public partial class App : Application
         ToastService.Provider = serviceProvider.GetRequiredService<IndexEditor.Shared.IToastService>();
         
         // Set EditorState singleton instance for backward compatibility
+#pragma warning disable CS0618 // Type or member is obsolete
         var editorState = serviceProvider.GetRequiredService<IndexEditor.Shared.IEditorState>();
         IndexEditor.Shared.EditorState.SetInstance(editorState);
         
@@ -79,6 +80,7 @@ public partial class App : Application
                 if (args.Contains("--no-images"))
                 {
                     IndexEditor.Shared.EditorState.ShowImages = false;
+#pragma warning restore CS0618 // Type or member is obsolete
                     args = args.Where(a => a != "--no-images").ToList();
                 }
                 if (args.Count > 0)

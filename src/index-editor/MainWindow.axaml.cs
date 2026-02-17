@@ -577,9 +577,12 @@ public partial class MainWindow : Window
                             var indexPath = System.IO.Path.Combine(folder, "_index.txt");
                             // Atomic write
                             var temp = indexPath + ".tmp";
-                            System.IO.File.WriteAllText(temp, tb.Text ?? string.Empty);
-                            if (System.IO.File.Exists(indexPath)) System.IO.File.Replace(temp, indexPath, null);
-                            else System.IO.File.Move(temp, indexPath);
+                            if (tb != null)
+                            {
+                                System.IO.File.WriteAllText(temp, tb.Text ?? string.Empty);
+                                if (System.IO.File.Exists(indexPath)) System.IO.File.Replace(temp, indexPath, null);
+                                else System.IO.File.Move(temp, indexPath);
+                            }
                             IndexEditor.Shared.ToastService.Show("_index.txt saved from overlay");
                             // Reload articles from folder to reflect edits
                             LoadArticlesFromFolder(folder);
