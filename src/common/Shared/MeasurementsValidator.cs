@@ -44,7 +44,7 @@ namespace Common.Shared
             return string.Join("-", parts.Where(p => !string.IsNullOrEmpty(p)));
         }
 
-        public static string FormatHint => "Format: bust(+cup)-waist-hip (integers only) — e.g. '36B-28-38' (separator must be '-')";
+        public static string FormatHint => "Format: bust(+cup) OR bust(+cup)-waist-hip (integers only) — e.g. '36B' or '36B-28-38' (separator must be '-')";
 
         // Acceptable patterns (common):
         //  - "36B-28-38"  -> bust with cup, waist, hip
@@ -80,16 +80,27 @@ namespace Common.Shared
             var parts = _splitRegex.Split(normalized);
             // Trim whitespace around each token so inputs like "34C - 22 - 34" still parse
             for (int i = 0; i < parts.Length; i++) parts[i] = parts[i].Trim();
-            if (parts.Length < 3)
+            
+            // Allow either:
+            // - 1 part: bust+cup only (e.g., "36B")
+            // - 3 parts: bust-waist-hip (e.g., "36B-28-38")
+            if (parts.Length < 1)
             {
-                error = $"Expected three parts separated by '-': bust(+cup)-waist-hip. Example: 36B-28-38. {FormatHint}";
+                error = $"Expected measurements. {FormatHint}";
+                return false;
+            }
+            
+            bool bustOnly = parts.Length == 1;
+            if (parts.Length != 1 && parts.Length < 3)
+            {
+                error = $"Expected either bust+cup only OR all three measurements (bust-waist-hip). Example: '36B' or '36B-28-38'. {FormatHint}";
                 return false;
             }
 
-            // Prefer first three tokens
+            // Prefer first three tokens (or just first if bust-only)
             var bustPart = parts[0];
-            var waistPart = parts[1];
-            var hipPart = parts[2];
+            var waistPart = parts.Length > 1 ? parts[1] : null;
+            var hipPart = parts.Length > 2 ? parts[2] : null;
 
             // Parse bust (number with optional cup letter)
             var m = _bustWithCupRegex.Match(bustPart);
@@ -113,8 +124,20 @@ namespace Common.Shared
             if (m.Groups["cup"].Success && !string.IsNullOrWhiteSpace(m.Groups["cup"].Value))
                 bustCup = m.Groups["cup"].Value.ToUpperInvariant();
 
-            // waist
-            var wm = _numberRegex.Match(waistPart);
+            // If bust-only mode, we're done - waist and hip remain 0
+            if (bustOnly)
+            {
+                // Only validate bust is plausible
+                if (!IsPlausible(bustValue))
+                {
+                    error = "Bust measurement is outside plausible range";
+                    return false;
+                }
+                return true;
+            }
+
+            // waist (required if not bust-only)
+            var wm = _numberRegex.Match(waistPart!);
             if (!wm.Success || !double.TryParse(wm.Groups["num"].Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var w))
             {
                 error = "Invalid waist number";
@@ -122,8 +145,8 @@ namespace Common.Shared
             }
             waistValue = w;
 
-            // hip
-            var hm = _numberRegex.Match(hipPart);
+            // hip (required if not bust-only)
+            var hm = _numberRegex.Match(hipPart!);
             if (!hm.Success || !double.TryParse(hm.Groups["num"].Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var h))
             {
                 error = "Invalid hip number";

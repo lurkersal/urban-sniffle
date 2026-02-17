@@ -115,7 +115,9 @@ namespace IndexEditor.Shared
                                                                     Uri pathUri;
                                                                     if (!Uri.TryCreate(start, UriKind.Absolute, out pathUri!))
                                                                     {
-                                                                        pathUri = new Uri("file://" + start);
+                                                                        // Create file URI - handle both Windows and Unix paths
+                                                                        var uriPath = start.StartsWith("/") ? "file://" + start : "file:///" + start.Replace("\\", "/");
+                                                                        pathUri = new Uri(uriPath);
                                                                     }
                                                                     var folderTask = tryGetMethod.Invoke(storage, new object[] { pathUri });
                                                                     var folder = await UnwrapTaskResult(folderTask).ConfigureAwait(false);
@@ -137,8 +139,9 @@ namespace IndexEditor.Shared
                                                                 }
                                                                 else
                                                                 {
-                                                                    // Try as file path
-                                                                    var fileUri = new Uri("file://" + start);
+                                                                    // Try as file path - handle both Windows and Unix paths
+                                                                    var uriPath = start.StartsWith("/") ? "file://" + start : "file:///" + start.Replace("\\", "/");
+                                                                    var fileUri = new Uri(uriPath);
                                                                     prop.SetValue(inst, fileUri);
                                                                     DebugLogger.Log($"FolderPicker: Set SuggestedStartLocation (Uri from file path) to {start}");
                                                                 }
@@ -182,8 +185,9 @@ namespace IndexEditor.Shared
                                                                     }
                                                                     else
                                                                     {
-                                                                        // Try as file path
-                                                                        var fileUri = new Uri("file://" + start);
+                                                                        // Try as file path - handle both Windows and Unix paths
+                                                                        var uriPath = start.StartsWith("/") ? "file://" + start : "file:///" + start.Replace("\\", "/");
+                                                                        var fileUri = new Uri(uriPath);
                                                                         prop.SetValue(inst, fileUri);
                                                                         DebugLogger.Log($"FolderPicker: Set {prop.Name} (Uri from file path) to {start}");
                                                                     }

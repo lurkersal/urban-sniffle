@@ -1,0 +1,19 @@
+[DEBUG] GetLinkedIssuesForArticleAsync: ArticleId=68, ContentIds=[158,159,160,161]
+[DEBUG] Final SQL: SELECT DISTINCT
+    il.linkedmagazineid AS LinkedMagazineId,
+    il.linkedvolume AS LinkedVolume,
+    il.linkednumber AS LinkedNumber,
+    il.page AS Page,
+    i.issueid AS IssueId,
+    m.name AS MagazineName,
+    i.year AS Year,
+    NULL AS CoverImagePath
+    FROM issuelink il
+    LEFT JOIN issue i ON
+        i.magazineid = il.linkedmagazineid
+        AND i.volume = il.linkedvolume
+        AND i.number = il.linkednumber
+    LEFT JOIN magazine m ON m.magazineid = il.linkedmagazineid
+    WHERE il.contentid IN (158,159,160,161)
+    ORDER BY il.linkedvolume, il.linkednumber, il.page
+[DEBUG] ArticleId: 68, LinkedIssues.Count: 0

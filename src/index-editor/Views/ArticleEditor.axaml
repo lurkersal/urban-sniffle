@@ -10,6 +10,7 @@
         <local:FieldLabelConverter x:Key="FieldLabelConverter" />
         <local:ShowPhotographerCategoryConverter x:Key="ShowPhotographer" />
         <local:ShowAuthorCategoryConverter x:Key="ShowAuthor" />
+        <local:ShowAgeCategoryConverter x:Key="ShowAge" />
         <local:ActiveSegmentToTextConverter x:Key="ActiveSegmentToTextConverter" />
         <local:ArticleActiveSegmentBrushConverter x:Key="ActiveSegmentBrushConverter" />
         <local:ShowMeasurementsConverter x:Key="ShowMeasurements" />
@@ -57,12 +58,12 @@
                                     <TextBox Text="{Binding ModelName0, Mode=TwoWay}" Width="360" />
                                 </StackPanel>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter=&quot;2&quot;}">
+                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowAge}}">
                                     <TextBlock Text="Age:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
                                     <TextBox Text="{Binding Age0, Mode=TwoWay}" Width="120" />
                                 </StackPanel>
 
-                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Path=., Converter={StaticResource ShowMeasurements}}">
+                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowMeasurements}}">
                                     <TextBlock Text="Measurements:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
                                     <TextBox Text="{Binding Measurements0, Mode=TwoWay}" Width="240" />
                                 </StackPanel>

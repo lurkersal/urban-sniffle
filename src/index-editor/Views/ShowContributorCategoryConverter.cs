@@ -10,7 +10,7 @@ namespace IndexEditor.Views
         private static readonly string[] ContributorCategories = new[]
         {
             // categories that use a contributor field (either author or photographer)
-            "humour", "feature", "fiction", "editorial", "interview", "model", "cover", "photographer", "cartoons", "illustration", "review", "motoring"
+            "humour", "feature", "fiction", "interview", "model", "cover", "photographer", "cartoons", "illustration", "review", "motoring"
         };
 
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)

@@ -13,9 +13,10 @@ namespace IndexEditor.Views
             {
                 if (category.Equals("Contents", StringComparison.OrdinalIgnoreCase) || category.Equals("Content", StringComparison.OrdinalIgnoreCase))
                     return 0;
-                if (category.Equals("Letters", StringComparison.OrdinalIgnoreCase))
-                    return 1;
-                if (category.Equals("Cover", StringComparison.OrdinalIgnoreCase) || category.Equals("Model", StringComparison.OrdinalIgnoreCase))
+                if (category.Equals("Cover", StringComparison.OrdinalIgnoreCase) || 
+                    category.Equals("Model", StringComparison.OrdinalIgnoreCase) ||
+                    category.Equals("Wives", StringComparison.OrdinalIgnoreCase) ||
+                    category.Equals("Letters", StringComparison.OrdinalIgnoreCase))
                     return 2;
                 if (category.Equals("Review", StringComparison.OrdinalIgnoreCase) ||
                     category.Equals("Fiction", StringComparison.OrdinalIgnoreCase) ||

@@ -69,8 +69,9 @@ public partial class MainWindow : Window
 
         // Global keyboard shortcuts: handle at window level
         this.KeyDown += OnMainWindowKeyDown;
-        // Also register a tunneling handler so key events (Enter) are seen before focused controls (like buttons)
-        try { this.AddHandler<KeyEventArgs>(KeyDownEvent, OnMainWindowKeyDown, RoutingStrategies.Tunnel); } catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: AddHandler tunnel", ex); }
+        // Also register a tunneling handler so key events are seen before focused controls
+        // handledEventsToo: true ensures we capture Ctrl-A even when TextBox handles it for "select all"
+        try { this.AddHandler<KeyEventArgs>(KeyDownEvent, OnMainWindowKeyDown, RoutingStrategies.Tunnel, handledEventsToo: true); } catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: AddHandler tunnel", ex); }
 
         // Subscribe to EditorActions events to handle UI updates
         try
@@ -553,6 +554,37 @@ public partial class MainWindow : Window
                         return;
                     }
 
+                    // Allow Ctrl+S to save the overlay content
+                    if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+                    {
+                        try
+                        {
+                            var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                            if (string.IsNullOrWhiteSpace(folder))
+                            {
+                                IndexEditor.Shared.ToastService.Show("No folder open; cannot save _index.txt");
+                                e.Handled = true;
+                                return;
+                            }
+                            var indexPath = System.IO.Path.Combine(folder, "_index.txt");
+                            // Atomic write
+                            var temp = indexPath + ".tmp";
+                            System.IO.File.WriteAllText(temp, tb.Text ?? string.Empty);
+                            if (System.IO.File.Exists(indexPath)) System.IO.File.Replace(temp, indexPath, null);
+                            else System.IO.File.Move(temp, indexPath);
+                            IndexEditor.Shared.ToastService.Show("_index.txt saved from overlay");
+                            // Reload articles from folder to reflect edits
+                            LoadArticlesFromFolder(folder);
+                        }
+                        catch (Exception ex)
+                        {
+                            IndexEditor.Shared.ToastService.Show("Failed to save _index.txt");
+                            DebugLogger.LogException("MainWindow: Ctrl+S save from overlay (early handler)", ex);
+                        }
+                        e.Handled = true;
+                        return;
+                    }
+
                     // Let the textbox capture all other keys; do not run global shortcuts
                     return;
                 }
@@ -730,6 +762,42 @@ public partial class MainWindow : Window
             {
                 try
                 {
+                    // Check if index overlay is visible - if so, save from overlay instead
+                    var overlay = this.FindControl<Border>("IndexOverlay");
+                    var textBox = this.FindControl<TextBox>("IndexOverlayTextBox");
+                    
+                    if (overlay != null && textBox != null && overlay.IsVisible)
+                    {
+                        // Save from overlay
+                        try
+                        {
+                            var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                            if (string.IsNullOrWhiteSpace(folder))
+                            {
+                                IndexEditor.Shared.ToastService.Show("No folder open; cannot save _index.txt");
+                                e.Handled = true;
+                                return;
+                            }
+                            var indexPath = System.IO.Path.Combine(folder, "_index.txt");
+                            // Atomic write
+                            var temp = indexPath + ".tmp";
+                            System.IO.File.WriteAllText(temp, textBox.Text ?? string.Empty);
+                            if (System.IO.File.Exists(indexPath)) System.IO.File.Replace(temp, indexPath, null);
+                            else System.IO.File.Move(temp, indexPath);
+                            IndexEditor.Shared.ToastService.Show("_index.txt saved from overlay");
+                            // Reload articles from folder to reflect edits
+                            LoadArticlesFromFolder(folder);
+                        }
+                        catch (Exception ex)
+                        {
+                            IndexEditor.Shared.ToastService.Show("Failed to save _index.txt");
+                            DebugLogger.LogException("MainWindow: Ctrl+S save from overlay", ex);
+                        }
+                        e.Handled = true;
+                        return;
+                    }
+                    
+                    // Normal save (overlay not visible)
                     var active = IndexEditor.Shared.EditorState.ActiveSegment;
                     if (active != null && active.IsActive)
                     {
@@ -1377,6 +1445,18 @@ public partial class MainWindow : Window
                 pageText.Text = $"Page {pageNumber}";
 
             overlay.IsVisible = true;
+            
+            // Enter fullscreen mode
+            try
+            {
+                this.WindowState = WindowState.FullScreen;
+                DebugLogger.Log("MainWindow.ShowFullscreenImage: entered fullscreen mode");
+            }
+            catch (Exception fsEx)
+            {
+                DebugLogger.LogException("MainWindow.ShowFullscreenImage: enter fullscreen", fsEx);
+            }
+            
             DebugLogger.Log("MainWindow.ShowFullscreenImage: overlay shown");
         }
         catch (Exception ex) 
@@ -1395,6 +1475,20 @@ public partial class MainWindow : Window
             if (overlay != null)
             {
                 overlay.IsVisible = false;
+            }
+            
+            // Exit fullscreen mode
+            try
+            {
+                if (this.WindowState == WindowState.FullScreen)
+                {
+                    this.WindowState = WindowState.Normal;
+                    DebugLogger.Log("MainWindow.CloseFullscreenImage: exited fullscreen mode");
+                }
+            }
+            catch (Exception fsEx)
+            {
+                DebugLogger.LogException("MainWindow.CloseFullscreenImage: exit fullscreen", fsEx);
             }
         }
         catch (Exception ex) 
