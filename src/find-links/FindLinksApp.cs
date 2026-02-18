@@ -116,27 +116,8 @@ namespace FindLinks
                     }
                     fullImagePath = System.IO.Path.Combine(imageRoot, imagePath);
                 }
-                
-                // Debug: Log the image path being processed
-                if (processedPages == 1)
-                {
-                    Console.WriteLine($"\n[DEBUG] Processing first page {page}:");
-                    Console.WriteLine($"[DEBUG]   Image path from DB: {imagePath}");
-                    Console.WriteLine($"[DEBUG]   Full image path: {fullImagePath}");
-                    Console.WriteLine($"[DEBUG]   File exists: {System.IO.File.Exists(fullImagePath)}");
-                }
-                
+               
                 var ocrText = _ocrService.ExtractText(fullImagePath);
-                
-                // Debug: Log OCR result for first page
-                if (processedPages == 1)
-                {
-                    Console.WriteLine($"[DEBUG]   OCR text length: {ocrText?.Length ?? 0} characters");
-                    if (!string.IsNullOrWhiteSpace(ocrText) && ocrText.Length > 0)
-                    {
-                        Console.WriteLine($"[DEBUG]   First 100 chars: {ocrText.Substring(0, Math.Min(100, ocrText.Length))}");
-                    }
-                }
                 
                 var entries = _contentParser.ParseContentsPage(ocrText);
                 var links = _linkParser.FindIssueLinks(ocrText);

@@ -6,6 +6,7 @@
         <local:CategoryToBrushConverter x:Key="CategoryToBrush"/>
         <local:CategoryDisplayModeMatchesConverter x:Key="CategoryModeMatches" />
         <local:ShowPhotographerCategoryConverter x:Key="ShowPhotographer" />
+        <local:ShowAgeCategoryConverter x:Key="ShowAge" />
         <local:FieldLabelConverter x:Key="FieldLabelConverter" />
         <local:ShowMeasurementsConverter x:Key="ShowMeasurements" />
         <local:ShowContributorCategoryConverter x:Key="ShowContributor" />
@@ -31,12 +32,12 @@
 
                     <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle.Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter='2'}">
                         <TextBlock Text="Model:" FontWeight="Bold" Width="120"/>
-                        <TextBox Text="{Binding SelectedArticle.ModelNames[0], Mode=TwoWay}" Width="240"/>
+                        <TextBox Text="{Binding SelectedArticle.ModelName0, Mode=TwoWay}" Width="240"/>
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle.Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter='2'}">
+                    <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle.Category, Converter={StaticResource ShowAge}}">
                         <TextBlock Text="Age:" FontWeight="Bold" Width="120"/>
-                        <TextBox Text="{Binding SelectedArticle.Ages[0], Mode=TwoWay}" Width="120"/>
+                        <TextBox Text="{Binding SelectedArticle.Age0, Mode=TwoWay}" Width="120"/>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle, Converter={StaticResource ShowMeasurements}}">

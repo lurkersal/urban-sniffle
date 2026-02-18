@@ -5,7 +5,7 @@ using Avalonia.Data.Converters;
 namespace IndexEditor.Views
 {
     // Returns true when the age field should be shown for the category.
-    // Model and Cover categories show age, but Wives does not.
+    // Model, Cover, and Group categories show age, but Wives does not.
     public class ShowAgeCategoryConverter : IValueConverter
     {
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
@@ -13,8 +13,8 @@ namespace IndexEditor.Views
             var cat = (value as string)?.Trim().ToLowerInvariant() ?? string.Empty;
             if (string.IsNullOrEmpty(cat)) return false;
             
-            // Only Model and Cover show age field
-            return cat == "model" || cat == "cover";
+            // Only Model, Cover, and Group show age field
+            return cat == "model" || cat == "cover" || cat == "group";
         }
 
         public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)

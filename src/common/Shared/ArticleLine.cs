@@ -270,15 +270,22 @@ namespace Common.Shared
         }
 
         // Helper properties so bindings to [0] are easier to two-way bind and notify
+        // Supports pipe-separated values (e.g., "Model1|Model2|Model3")
         public string ModelName0
         {
-            get => ModelNames.Count > 0 ? ModelNames[0] : string.Empty;
+            get => string.Join("|", ModelNames.Where(n => !string.IsNullOrWhiteSpace(n)));
             set
             {
-                if (ModelNames.Count == 0) ModelNames.Add(string.Empty);
-                if (ModelNames[0] != value)
+                var names = (value ?? string.Empty).Split('|', StringSplitOptions.TrimEntries)
+                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                    .ToList();
+                if (names.Count == 0) names.Add(string.Empty);
+                
+                // Only update if changed
+                if (!ModelNames.SequenceEqual(names))
                 {
-                    ModelNames[0] = value;
+                    ModelNames.Clear();
+                    ModelNames.AddRange(names);
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ModelNames)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ModelName0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
@@ -340,15 +347,23 @@ namespace Common.Shared
             }
         }
 
-        public int? Age0
+        // Supports pipe-separated values (e.g., "23|25|27")
+        public string Age0
         {
-            get => Ages.Count > 0 ? Ages[0] : null;
+            get => string.Join("|", Ages.Where(a => a.HasValue).Select(a => a.GetValueOrDefault().ToString()));
             set
             {
-                if (Ages.Count == 0) Ages.Add(null);
-                if (Ages[0] != value)
+                var ageStrings = (value ?? string.Empty).Split('|', StringSplitOptions.TrimEntries);
+                var ages = ageStrings
+                    .Select(s => int.TryParse(s, out var age) ? (int?)age : null)
+                    .ToList();
+                if (ages.Count == 0) ages.Add(null);
+                
+                // Only update if changed
+                if (!Ages.SequenceEqual(ages))
                 {
-                    Ages[0] = value;
+                    Ages.Clear();
+                    Ages.AddRange(ages);
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Ages)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Age0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
@@ -356,17 +371,23 @@ namespace Common.Shared
             }
         }
 
+        // Supports pipe-separated values (e.g., "36B-28-38|34C-24-34")
         public string Measurements0
         {
-            get => Measurements.Count > 0 ? Measurements[0] : string.Empty;
+            get => string.Join("|", Measurements.Where(m => !string.IsNullOrWhiteSpace(m)));
             set
             {
-                if (Measurements.Count == 0) Measurements.Add(string.Empty);
-                // Normalize user input to canonical form before storing (removes cm, normalizes dashes, trims, uppercases cup letters)
-                var normalized = MeasurementsValidator.NormalizeMeasurement(value);
-                if (Measurements[0] != normalized)
+                var measurementStrings = (value ?? string.Empty).Split('|', StringSplitOptions.TrimEntries)
+                    .Select(m => MeasurementsValidator.NormalizeMeasurement(m))
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .ToList();
+                if (measurementStrings.Count == 0) measurementStrings.Add(string.Empty);
+                
+                // Only update if changed
+                if (!Measurements.SequenceEqual(measurementStrings))
                 {
-                    Measurements[0] = normalized;
+                    Measurements.Clear();
+                    Measurements.AddRange(measurementStrings);
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Measurements)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Measurements0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
@@ -455,13 +476,13 @@ namespace Common.Shared
             if (cat == "cartoons")
                 return $"{categoryText}\n{pagesText}\nTitle: {Title}\nCartoonist: {string.Join(", ", Contributors)}";
 
-            // Model and Cover: show photographer, model, age, measurements (use Contributors if populated)
-            if (cat == "model" || cat == "cover")
-                return $"{categoryText}\n{pagesText}\nModel: {string.Join(", ", ModelNames)}\nAge: {string.Join(", ", Ages.Where(a => a.HasValue).Select(a => a.GetValueOrDefault().ToString()))}\nPhotographer: {string.Join(", ", Contributors)}\nMeasurements: {string.Join(", ", Measurements)}";
+            // Model, Cover, and Group: show photographer, model, age, measurements (use Contributors if populated)
+            if (cat == "model" || cat == "cover" || cat == "group")
+                return $"{categoryText}\n{pagesText}\nModel: {string.Join(" | ", ModelNames)}\nAge: {string.Join(" | ", Ages.Where(a => a.HasValue).Select(a => a.GetValueOrDefault().ToString()))}\nPhotographer: {string.Join(", ", Contributors)}\nMeasurements: {string.Join(" | ", Measurements)}";
 
             // Wives: show model name
             if (cat == "wives")
-                return $"{categoryText}\n{pagesText}\nModel: {string.Join(", ", ModelNames)}\nTitle: {Title}";
+                return $"{categoryText}\n{pagesText}\nModel: {string.Join(" | ", ModelNames)}\nTitle: {Title}";
 
             // Feature, Fiction, Review, Humour: show contributors as Author
             if (cat == "feature" || cat == "fiction" || cat == "review" || cat == "humour" || cat == "humor")
@@ -489,20 +510,29 @@ namespace Common.Shared
                 errors.Add("Pages");
             if (string.IsNullOrWhiteSpace(Category))
                 errors.Add("Category");
-            // Category-specific validation: Model/Cover measurements are optional; if provided, validate format
+            // Category-specific validation: Model/Cover/Group measurements are optional; if provided, validate format
             HasMeasurementsError = false;
             var cat = (Category ?? string.Empty).Trim().ToLowerInvariant();
-            if (cat == "model" || cat == "cover")
+            if (cat == "model" || cat == "cover" || cat == "group")
             {
-                // Use Measurements0 as the user-editable input (first measurement string)
-                if (!string.IsNullOrWhiteSpace(Measurements0))
+                // Validate each pipe-separated measurement
+                var measurementStrings = Measurements.Where(m => !string.IsNullOrWhiteSpace(m)).ToList();
+                if (measurementStrings.Count > 0)
                 {
-                    // If the user provided a measurements string, validate its format
-                    if (!Common.Shared.MeasurementsValidator.TryParseMeasurements(Measurements0, out var b, out var cup, out var w, out var h, out var mErr))
+                    var allErrors = new List<string>();
+                    for (int i = 0; i < measurementStrings.Count; i++)
+                    {
+                        if (!Common.Shared.MeasurementsValidator.TryParseMeasurements(measurementStrings[i], out var b, out var cup, out var w, out var h, out var mErr))
+                        {
+                            allErrors.Add($"Measurement {i + 1}: {mErr ?? "Invalid format"}");
+                        }
+                    }
+                    
+                    if (allErrors.Count > 0)
                     {
                         errors.Add("Measurements");
                         HasMeasurementsError = true;
-                        MeasurementsErrorMessage = mErr ?? "Invalid measurements format";
+                        MeasurementsErrorMessage = string.Join("; ", allErrors);
                     }
                     else
                     {
