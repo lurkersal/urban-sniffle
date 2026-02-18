@@ -64,7 +64,8 @@ class Program
 
         try
         {
-            var connectionString = "Host=localhost;Username=postgres;Password=Barnowl1;Database=magazines";
+            // Load connection string from secure configuration
+            var connectionString = Common.Shared.Configuration.ConnectionStringProvider.GetConnectionString();
             using var connection = new NpgsqlConnection(connectionString);
             connection.Open();
 

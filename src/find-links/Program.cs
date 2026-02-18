@@ -1,4 +1,4 @@
-﻿using FindLinks;
+﻿﻿using FindLinks;
 using FindLinks.Services;
 
 // Usage: find-links <magazineType> [<volume>] [<number>] [-f|--force]
@@ -40,8 +40,8 @@ else if (args.Length == 4)
 	force = args[3] == "-f" || args[3] == "--force";
 }
 
-// Dependency injection
-var connString = Environment.GetEnvironmentVariable("MAGAZINE_DB") ?? "Host=localhost;Username=postgres;Password=Barnowl1;Database=magazines";
+// Load connection string from secure configuration
+var connString = Common.Shared.Configuration.ConnectionStringProvider.GetConnectionString();
 using var conn = new Npgsql.NpgsqlConnection(connString);
 conn.Open();
 IDatabaseRepository dbRepo = new PostgresRepository(conn);

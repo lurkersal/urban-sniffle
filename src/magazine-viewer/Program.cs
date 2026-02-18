@@ -1,12 +1,13 @@
 using MagazineViewer.Services;
+using Common.Shared.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
-// Register database service
-var connectionString = "Host=localhost;Username=postgres;Password=Barnowl1;Database=magazines";
+// Register database service - load connection string from secure configuration
+var connectionString = ConnectionStringProvider.GetConnectionString();
 builder.Services.AddSingleton(new MagazineDatabase(connectionString));
 
 var app = builder.Build();
