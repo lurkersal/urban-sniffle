@@ -45,6 +45,9 @@ public partial class MainWindow : Window
     public MainWindow() : this(null) { }
 
     private IndexEditor.Shared.IKeyboardShortcutService? _shortcutService;
+    private Services.KeyboardHandlers.KeyboardShortcutDispatcher? _keyboardDispatcher;
+    private Services.FullscreenImageService? _fullscreenService;
+    private Services.OverlayManager? _overlayManager;
 
     public MainWindow(string? folderToOpen = null)
     {
@@ -52,6 +55,14 @@ public partial class MainWindow : Window
         FolderToOpen = folderToOpen;
 
         InitializeComponent();
+        
+        // Initialize services
+        try
+        {
+            _fullscreenService = new Services.FullscreenImageService(this);
+            _overlayManager = new Services.OverlayManager(this);
+        }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: init services", ex); }
         // After InitializeComponent, wire view-specific bridges
         try
         {
@@ -65,7 +76,19 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire PageControllerBridge", ex); }
 
-        // Note: InputBindings removed; rely on tunneling KeyDown handler to capture Ctrl+Key combinations.
+        // Initialize keyboard shortcut dispatcher with handlers
+        try
+        {
+            var handlers = new List<Services.KeyboardHandlers.IKeyboardShortcutHandler>
+            {
+                new Services.KeyboardHandlers.SegmentKeyboardHandler(this),
+                new Services.KeyboardHandlers.ArticleKeyboardHandler(this),
+                new Services.KeyboardHandlers.FileKeyboardHandler(this, LoadArticlesFromFolder, _overlayManager),
+                new Services.KeyboardHandlers.NavigationKeyboardHandler()
+            };
+            _keyboardDispatcher = new Services.KeyboardHandlers.KeyboardShortcutDispatcher(handlers);
+        }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: init keyboard dispatcher", ex); }
 
         // Global keyboard shortcuts: handle at window level
         this.KeyDown += OnMainWindowKeyDown;
@@ -80,80 +103,6 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: subscribe to EditorActions events", ex); }
 
-        // Immediate diagnostics (may run before Opened)
-        try
-        {
-            // Skip diagnostic screen logging in normal runs
-        }
-        catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: immediate diag", ex); }
-
-
-        // Hook the invisible focus host so it can handle keyboard shortcuts reliably
-        try
-        {
-            var host = this.FindControl<Border>("KeyboardFocusHost");
-            if (host != null)
-            {
-                host.KeyDown += (s, ke) =>
-                {
-                    try
-                    {
-                        if (ke.Key == Key.N && ke.KeyModifiers.HasFlag(KeyModifiers.Control))
-                        {
-                            try { IndexEditor.Shared.ToastService.Show("Ctrl+N: creating new article"); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: toast Ctrl+N", ex); }
-                            var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
-                            pc?.CreateNewArticle();
-                            ke.Handled = true;
-                        }
-                        else if (ke.Key == Key.A && ke.KeyModifiers.HasFlag(KeyModifiers.Control))
-                        {
-                            // Ctrl+A: add segment at current page
-                            try { IndexEditor.Shared.ToastService.Show("Ctrl+A: add segment"); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: toast Ctrl+A add", ex); }
-                            try { IndexEditor.Shared.EditorActions.AddSegmentAtCurrentPage(); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: AddSegmentAtCurrentPage", ex); }
-                            ke.Handled = true;
-                        }
-                        else if (ke.Key == Key.Return && ke.KeyModifiers.HasFlag(KeyModifiers.Control))
-                        {
-                            // Ctrl+Enter: end active segment if present, otherwise focus Title textbox in ArticleEditor (global)
-                            try
-                            {
-                                var active = IndexEditor.Shared.EditorState.ActiveSegment;
-                                if (active != null && active.IsActive)
-                                {
-                                    try { IndexEditor.Shared.EditorActions.EndActiveSegment(); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: EndActiveSegment", ex); }
-                                }
-                                else
-                                {
-                                    try { IndexEditor.Shared.ToastService.Show("Ctrl+Enter: focus title"); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: toast Ctrl+Enter focus", ex); }
-                                    try { IndexEditor.Shared.EditorActions.FocusArticleTitle(); } catch (Exception ex) { DebugLogger.LogException("MainWindow.Host.KeyDown: FocusArticleTitle", ex); }
-                                }
-                            }
-                            catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: KeyboardFocusHost.CtrlEnter", ex); }
-                            ke.Handled = true;
-                        }
-                    }
-                    catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: KeyboardFocusHost.KeyDown", ex); }
-                };
-            }
-
-            // Initialize centralized keyboard shortcut service and register the shortcuts
-            try
-            {
-                _shortcutService = new KeyboardShortcutService();
-                _shortcutService.Register(Key.Return, KeyModifiers.Control, (ke) => { IndexEditor.Shared.EditorActions.FocusArticleTitle(); return true; }, null, "FocusTitle");
-                _shortcutService.Register(Key.A, KeyModifiers.Control, (ke) => { IndexEditor.Shared.EditorActions.AddSegmentAtCurrentPage(); return true; }, () => { var s = EditorState.ActiveSegment; return s == null || !s.IsActive; }, "AddSegment");
-                _shortcutService.Register(Key.N, KeyModifiers.Control, (ke) => { if (MainViewModel != null) MainViewModel.NewArticle(); else { var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl"); pc?.CreateNewArticle(); } return true; }, null, "NewArticle");
-                _shortcutService.Register(Key.S, KeyModifiers.Control, (ke) => { if (MainViewModel != null) MainViewModel.SaveIndex(); else { var folder = EditorState.CurrentFolder; if (string.IsNullOrWhiteSpace(folder)) { IndexEditor.Shared.ToastService.Show("No folder open; cannot save _index.txt"); return true; } IndexEditor.Shared.IndexSaver.SaveIndex(folder); } return true; }, () => { var s = EditorState.ActiveSegment; return s == null || !s.IsActive; }, "SaveIndex");
-                _shortcutService.Register(Key.O, KeyModifiers.Control, (ke) => { var s = EditorState.ActiveSegment; if (s != null && s.IsActive) { IndexEditor.Shared.ToastService.Show("End or cancel the active segment before opening a new folder"); return true; } var wnd = this.VisualRoot as Window ?? this; var start = IndexEditor.Shared.EditorState.CurrentFolder; Dispatcher.UIThread.Post(async () => { try { var path = await IndexEditor.Shared.FolderPicker.PickFolderAsync(wnd, start); if (!string.IsNullOrWhiteSpace(path)) LoadArticlesFromFolder(path); } catch (Exception ex) { IndexEditor.Shared.ToastService.Show("Open folder dialog failed: " + ex.Message); } }); return true; }, null, "OpenFolder");
-                _shortcutService.Register(Key.I, KeyModifiers.Control, (ke) => { var overlay = this.FindControl<Border>("IndexOverlay"); var tb = this.FindControl<TextBox>("IndexOverlayTextBox"); if (overlay != null && tb != null) { if (overlay.IsVisible) overlay.IsVisible = false; else { var folder = IndexEditor.Shared.EditorState.CurrentFolder; if (string.IsNullOrWhiteSpace(folder)) tb.Text = "No folder open."; else { var path = System.IO.Path.Combine(folder, "_index.txt"); tb.Text = System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : $"_index.txt not found in folder: {folder}"; } overlay.IsVisible = true; } } return true; }, null, "ToggleIndexOverlay");
-                // Ctrl+Up / Ctrl+Down: previous/next article navigation
-                _shortcutService.Register(Key.Up, KeyModifiers.Control, (ke) => { return HandleCtrlUpShortcut(ke); }, null, "CtrlUp");
-
-                _shortcutService.Register(Key.Down, KeyModifiers.Control, (ke) => { return HandleCtrlDownShortcut(ke); }, null, "CtrlDown");
-            }
-            catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: init shortcut service", ex); }
-        }
-        catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: hook KeyboardFocusHost", ex); }
 
         // Configure startup and Opened handler
         try
@@ -516,905 +465,179 @@ public partial class MainWindow : Window
     }
 
     // Main window event handlers
+    // Main window keyboard event handler - delegates to specialized handlers
     private void OnMainWindowKeyDown(object? sender, KeyEventArgs e)
     {
-        try { DebugLogger.Log($"OnMainWindowKeyDown: Key={e.Key} Modifiers={e.KeyModifiers} Handled={e.Handled}"); } catch {}
-        try { DebugLogger.Log($"TRACE KeyDown: {e.Key} Modifiers:{e.KeyModifiers}"); } catch {}
         try
         {
-            // If the index overlay is visible, allow the overlay's TextBox to capture all key presses.
-            // Only honor Ctrl+I (toggle overlay) and Esc (close overlay) here; everything else should go to the textbox.
-            try
+            // Special handling for overlays that capture all input
+            if (HandleOverlayKeyboard(e))
             {
-                var overlay = this.FindControl<Border>("IndexOverlay");
-                var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
-                var helpOverlay = this.FindControl<Border>("HelpOverlay");
-                var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay");
-                if (overlay != null && overlay.IsVisible)
-                {
-                    // Ensure the textbox has focus so it receives typing input
-                    try { if (tb != null && !tb.IsFocused) tb.Focus(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: bring overlay textbox focus", ex); }
+                return;
+            }
 
-                    // Allow Ctrl+I (toggle overlay) while editing
-                    if ((e.Key == Key.I) && (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta)))
-                    {
-                        try
-                        {
-                            // Clear any parse-error visuals when closing
-                            try { var eb = this.FindControl<Border>("IndexOverlayErrorBorder"); var el = this.FindControl<TextBlock>("IndexOverlayErrorLine"); if (eb != null) eb.IsVisible = false; if (el != null) el.Text = string.Empty; } catch { }
-                            overlay.IsVisible = false;
-                        }
-                        catch (Exception ex) { DebugLogger.LogException("MainWindow: toggle overlay via Ctrl+I", ex); }
-                        e.Handled = true;
-                        return;
-                    }
-
-                    // Allow Esc to close the overlay and clear error visuals
-                    if (e.Key == Key.Escape)
-                    {
-                        try
-                        {
-                            try { var eb2 = this.FindControl<Border>("IndexOverlayErrorBorder"); var el2 = this.FindControl<TextBlock>("IndexOverlayErrorLine"); if (eb2 != null) eb2.IsVisible = false; if (el2 != null) el2.Text = string.Empty; } catch { }
-                            overlay.IsVisible = false;
-                        }
-                        catch (Exception ex) { DebugLogger.LogException("MainWindow: close overlay via Esc", ex); }
-                        e.Handled = true;
-                        return;
-                    }
-
-                    // Allow Ctrl+S to save the overlay content
-                    if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control))
-                    {
-                        try
-                        {
-                            var folder = IndexEditor.Shared.EditorState.CurrentFolder;
-                            if (string.IsNullOrWhiteSpace(folder))
-                            {
-                                IndexEditor.Shared.ToastService.Show("No folder open; cannot save _index.txt");
-                                e.Handled = true;
-                                return;
-                            }
-                            var indexPath = System.IO.Path.Combine(folder, "_index.txt");
-                            // Atomic write
-                            var temp = indexPath + ".tmp";
-                            if (tb != null)
-                            {
-                                System.IO.File.WriteAllText(temp, tb.Text ?? string.Empty);
-                                if (System.IO.File.Exists(indexPath)) System.IO.File.Replace(temp, indexPath, null);
-                                else System.IO.File.Move(temp, indexPath);
-                            }
-                            IndexEditor.Shared.ToastService.Show("_index.txt saved from overlay");
-                            // Reload articles from folder to reflect edits
-                            LoadArticlesFromFolder(folder);
-                        }
-                        catch (Exception ex)
-                        {
-                            IndexEditor.Shared.ToastService.Show("Failed to save _index.txt");
-                            DebugLogger.LogException("MainWindow: Ctrl+S save from overlay (early handler)", ex);
-                        }
-                        e.Handled = true;
-                        return;
-                    }
-
-                    // Let the textbox capture all other keys; do not run global shortcuts
-                    return;
-                }
-                // If the help overlay is visible, allow Esc to close it (no textbox capture)
-                if (helpOverlay != null && helpOverlay.IsVisible)
-                {
-                    if (e.Key == Key.Escape)
-                    {
-                        try { helpOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("MainWindow: close help overlay via Esc", ex); }
-                        e.Handled = true;
-                        return;
-                    }
-                    // Also allow F1 to toggle help overlay; handled later, but we can shortcut here
-                    if (e.Key == Key.F1)
-                    {
-                        try { helpOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("MainWindow: toggle help overlay via F1", ex); }
-                        e.Handled = true;
-                        return;
-                    }
-                    // While help overlay visible we should not process other global shortcuts
-                    return;
-                }
-                // If delete confirmation overlay is visible, handle Enter/Escape here
-                if (delOverlay != null && delOverlay.IsVisible)
-                {
-                    if (e.Key == Key.Enter)
-                    {
-                        try { DeleteSelectedArticleAndCloseOverlay(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: Confirm delete via Enter", ex); }
-                        e.Handled = true;
-                        return;
-                    }
-                    if (e.Key == Key.Escape)
-                    {
-                        try { delOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("MainWindow: Cancel delete via Esc", ex); }
-                        e.Handled = true;
-                        return;
-                    }
-                    // When delete overlay is visible, block other shortcuts to avoid accidental actions
-                    return;
-                }
-           }
-            catch (Exception ex) { DebugLogger.LogException("MainWindow: overlay focus check", ex); }
-
-            // Forward to the centralized shortcut service first
-            try
+            // Dispatch to keyboard handlers
+            if (_keyboardDispatcher != null)
             {
-                if (_shortcutService != null)
+                try
                 {
-                    var handledByShortcut = false;
-                    try { handledByShortcut = _shortcutService.HandleKey(e); } catch (Exception ex) { DebugLogger.LogException("MainWindow: shortcut service.HandleKey threw", ex); }
-                    DebugLogger.Log($"ShortcutService.HandleKey returned={handledByShortcut}");
-                    if (handledByShortcut)
+                    if (_keyboardDispatcher.Dispatch(e))
                     {
-                        e.Handled = true;
-                        return;
+                        return; // Handler processed the event
                     }
+                }
+                catch (Exception ex)
+                {
+                    DebugLogger.LogException("MainWindow: keyboard dispatcher", ex);
                 }
             }
-            catch (Exception ex) { DebugLogger.LogException("MainWindow: shortcut service handle", ex); }
 
-            // F1 toggles the help overlay
+            // Handle F1 for help overlay (not in handlers to avoid dependency on overlay)
             if (e.Key == Key.F1)
             {
-                try
-                {
-                    var overlay = this.FindControl<Border>("HelpOverlay");
-                    if (overlay != null)
-                    {
-                        overlay.IsVisible = !overlay.IsVisible;
-                        e.Handled = true;
-                        return;
-                    }
-                }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: F1 toggle help", ex); }
+                _overlayManager?.ToggleHelpOverlay();
+                e.Handled = true;
             }
 
-             if (e.Key == Key.Return && e.KeyModifiers.HasFlag(KeyModifiers.Control))
-             {
-                try
-                {
-                    // Ctrl+Enter: end active segment if present, otherwise focus Title textbox in ArticleEditor (global)
-                    try
-                    {
-                        var active = IndexEditor.Shared.EditorState.ActiveSegment;
-                        if (active != null && active.IsActive)
-                        {
-                            try { IndexEditor.Shared.EditorActions.EndActiveSegment(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: EndActiveSegment via Ctrl+Enter", ex); }
-                            try { IndexEditor.Shared.ToastService.Show("Segment ended"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show on end via Ctrl+Enter", ex); }
-                        }
-                        else
-                        {
-                            try { IndexEditor.Shared.ToastService.Show("Ctrl+Enter: focus title"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show Ctrl+Enter focus", ex); }
-                            try { IndexEditor.Shared.EditorActions.FocusArticleTitle(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: FocusArticleTitle", ex); }
-                        }
-                    }
-                    catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Enter handler", ex); }
-                }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Enter outer", ex); }
-                e.Handled = true;
-                return;
-            }
-            // Ctrl+A: add segment at current page (global)
-            if (e.Key == Key.A && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            // Handle Delete key for article deletion
+            if (e.Key == Key.Delete && !e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt))
             {
-                try
-                {
-                    try { IndexEditor.Shared.ToastService.Show("Ctrl+A: add segment"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show Ctrl+A add", ex); }
-                    try { IndexEditor.Shared.EditorActions.AddSegmentAtCurrentPage(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: AddSegmentAtCurrentPage", ex); }
-                }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+A handler", ex); }
-                e.Handled = true;
-                return;
-            }
-            // Ctrl+N: create new article
-            if (e.Key == Key.N && e.KeyModifiers.HasFlag(KeyModifiers.Control))
-            {
-                try
-                {
-                    try { IndexEditor.Shared.ToastService.Show("Ctrl+N pressed: creating new article"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show Ctrl+N", ex); }
-                    if (MainViewModel != null) MainViewModel.NewArticle();
-                    else { var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl"); pc?.CreateNewArticle(); }
-                }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+N handler", ex); }
-                e.Handled = true;
-                return;
-            }
-            // Ctrl+O: open folder (start at current folder); block if active segment exists
-            if (e.Key == Key.O && e.KeyModifiers.HasFlag(KeyModifiers.Control))
-            {
-                try
-                {
-                    var active = IndexEditor.Shared.EditorState.ActiveSegment;
-                    if (active != null && active.IsActive)
-                    {
-                        IndexEditor.Shared.ToastService.Show("End or cancel the active segment before opening a new folder");
-                    }
-                    else
-                    {
-                        var wnd = this.VisualRoot as Window ?? this;
-                        var start = IndexEditor.Shared.EditorState.CurrentFolder;
-                        // Dispatch an async folder picker so we don't block the UI thread
-                        Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
-                        {
-                            try
-                            {
-                                // Open the native folder picker via FolderPicker helper (StorageProvider preferred)
-                                string? path = null;
-                                try
-                                {
-                                    path = await IndexEditor.Shared.FolderPicker.PickFolderAsync(wnd, start);
-                                }
-                                catch (Exception ex)
-                                {
-                                    try { IndexEditor.Shared.ToastService.Show("Open folder dialog failed: " + ex.Message); } catch (Exception logEx) { DebugLogger.LogException("MainWindow: ToastService.Show open folder failed", logEx); }
-                                    return;
-                                }
-                                if (string.IsNullOrWhiteSpace(path))
-                                    return;
-                                IndexEditor.Shared.EditorState.CurrentFolder = path;
-                                LoadArticlesFromFolder(path);
-                            }
-                            catch (Exception exOuter)
-                            {
-                                try { IndexEditor.Shared.ToastService.Show("Failed to open folder: " + exOuter.Message); } catch (Exception logEx) { DebugLogger.LogException("MainWindow: ToastService.Show failed to open folder", logEx); }
-                            }
-                        });
-                    }
-                }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+O handler", ex); }
-                e.Handled = true;
-                return;
-            }
-            // Ctrl+S: save index file
-            if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control))
-            {
-                try
-                {
-                    // Check if index overlay is visible - if so, save from overlay instead
-                    var overlay = this.FindControl<Border>("IndexOverlay");
-                    var textBox = this.FindControl<TextBox>("IndexOverlayTextBox");
-                    
-                    if (overlay != null && textBox != null && overlay.IsVisible)
-                    {
-                        // Save from overlay
-                        try
-                        {
-                            var folder = IndexEditor.Shared.EditorState.CurrentFolder;
-                            if (string.IsNullOrWhiteSpace(folder))
-                            {
-                                IndexEditor.Shared.ToastService.Show("No folder open; cannot save _index.txt");
-                                e.Handled = true;
-                                return;
-                            }
-                            var indexPath = System.IO.Path.Combine(folder, "_index.txt");
-                            // Atomic write
-                            var temp = indexPath + ".tmp";
-                            System.IO.File.WriteAllText(temp, textBox.Text ?? string.Empty);
-                            if (System.IO.File.Exists(indexPath)) System.IO.File.Replace(temp, indexPath, null);
-                            else System.IO.File.Move(temp, indexPath);
-                            IndexEditor.Shared.ToastService.Show("_index.txt saved from overlay");
-                            // Reload articles from folder to reflect edits
-                            LoadArticlesFromFolder(folder);
-                        }
-                        catch (Exception ex)
-                        {
-                            IndexEditor.Shared.ToastService.Show("Failed to save _index.txt");
-                            DebugLogger.LogException("MainWindow: Ctrl+S save from overlay", ex);
-                        }
-                        e.Handled = true;
-                        return;
-                    }
-                    
-                    // Normal save (overlay not visible)
-                    var active = IndexEditor.Shared.EditorState.ActiveSegment;
-                    if (active != null && active.IsActive)
-                    {
-                        IndexEditor.Shared.ToastService.Show("End or cancel the active segment before saving");
-                        e.Handled = true;
-                        return;
-                    }
-
-                    if (MainViewModel != null)
-                    {
-                        MainViewModel.SaveIndex();
-                    }
-                    else
-                    {
-                        var folder = IndexEditor.Shared.EditorState.CurrentFolder;
-                        if (string.IsNullOrWhiteSpace(folder))
-                        {
-                            IndexEditor.Shared.ToastService.Show("No folder open; cannot save _index.txt");
-                            e.Handled = true;
-                            return;
-                        }
-                        // Fallback: same save logic in MainWindow (kept for compatibility)
-                        try { var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl"); /* no-op */ } catch { }
-                        try { var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel; /* no-op */ } catch { }
-                        try { IndexEditor.Shared.ToastService.Show("Saving via fallback"); } catch { }
-                    }
-                }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+S handler", ex); }
-                e.Handled = true;
-                return;
+                HandleDeleteKey(e);
             }
         }
-        catch (Exception ex) { DebugLogger.LogException("MainWindow: global key handler", ex); }
-
-        if (e.Key == Key.F11)
+        catch (Exception ex)
         {
-            this.WindowState = this.WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Escape)
-        {
-            // If the fullscreen image overlay is visible, close it first
-            try
-            {
-                var fullscreenOverlay = this.FindControl<Border>("FullscreenImageOverlay");
-                if (fullscreenOverlay != null && fullscreenOverlay.IsVisible)
-                {
-                    CloseFullscreenImage();
-                    e.Handled = true;
-                    return;
-                }
-            }
-            catch (Exception ex) { DebugLogger.LogException("MainWindow: Esc dismiss fullscreen image", ex); }
-
-            // If the index overlay is visible, close it first (Esc should dismiss the overlay)
-            try
-            {
-                var overlay = this.FindControl<Border>("IndexOverlay");
-                if (overlay != null && overlay.IsVisible)
-                {
-                    overlay.IsVisible = false;
-                    e.Handled = true;
-                    return;
-                }
-            }
-            catch (Exception ex) { DebugLogger.LogException("MainWindow: Esc dismiss overlay", ex); }
-
-            // If the ArticleEditor (or one of its child controls) has focus, pressing Escape should
-            // move focus back to the article list (unless an active segment exists, in which case
-            // the Esc semantics remain to cancel the segment).
-            try
-            {
-                // Determine whether focus is currently inside the ArticleEditor.
-                // Rely on the ArticleEditor focus tracking (GotFocus/LostFocus) for now.
-                // TODO: If we need to detect the focused descendant more precisely, use the Avalonia API
-                // that exposes the currently focused element on the proper FocusManager for the runtime version in use.
-                var editorFocused = IndexEditor.Shared.EditorState.IsArticleEditorFocused;
-                var hadActive = IndexEditor.Shared.EditorState.ActiveSegment != null && IndexEditor.Shared.EditorState.ActiveSegment.IsActive;
-
-                // If the editor has focus, ask it to end any inner editing (close dropdowns etc.) so Esc always stops editing.
-                if (editorFocused)
-                {
-                    try
-                    {
-                        var aeCtrl = this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl") ?? this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
-                        if (aeCtrl != null) { try { aeCtrl.EndEdit(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: EndEdit on Esc", ex); } }
-                    }
-                    catch (Exception ex) { DebugLogger.LogException("MainWindow: EndEdit lookup on Esc", ex); }
-                }
-
-                if (editorFocused && !hadActive)
-                {
-                    try
-                    {
-                        // Ask the ArticleEditor to end any active editing (close dropdowns, clear flags)
-                        try
-                        {
-                            var aeCtrl = this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl") ?? this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
-                            if (aeCtrl != null)
-                            {
-                                try { aeCtrl.EndEdit(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: call ArticleEditor.EndEdit", ex); }
-                            }
-                        }
-                        catch (Exception ex) { DebugLogger.LogException("MainWindow: EndEdit lookup", ex); }
-                       
-                        var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
-                        if (articleList != null)
-                        {
-                            var lb = articleList.FindControl<ListBox>("ArticlesListBox");
-                            if (lb != null)
-                            {
-                                // Defer focus to the UI thread to avoid focus race conditions
-                                Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
-                                {
-                                    try
-                                    {
-                                        try
-                                        {
-                                            DebugLogger.Log(
-                                                "[TRACE] MainWindow.Esc: attempting to focus ArticlesListBox");
-                                        }
-                                        catch
-                                        {
-                                        }
-
-                                        // Focus querying via FocusManager.Instance is not portable across Avalonia versions used here.
-                                        // Skip detailed focused-control diagnostics and rely on EditorState.IsArticleEditorFocused instead.
-                                        try
-                                        {
-                                            DebugLogger.Log(
-                                                "[TRACE] MainWindow.Esc: focused control query skipped (editorFocused=" +
-                                                editorFocused + ")");
-                                        }
-                                        catch
-                                        {
-                                        }
-
-                                        // Ensure the list is enabled (it may have been disabled previously when an active segment existed)
-                                        if (!lb.IsEnabled) lb.IsEnabled = true;
-                                        // Ensure there is a selected item so focus lands predictably
-                                        if (lb.SelectedIndex < 0 && lb.ItemCount > 0) lb.SelectedIndex = 0;
-                                        // Clear editor-focused flag since focus is about to move
-                                        try
-                                        {
-                                            IndexEditor.Shared.EditorState.IsArticleEditorFocused = false;
-                                        }
-                                        catch
-                                        {
-                                        }
-
-                                        // Retry loop: try several times to set focus (handles race conditions where other handlers reassert focus)
-                                        bool focused = false;
-                                        for (int attempt = 0; attempt < 6; attempt++)
-                                        {
-                                            try
-                                            {
-                                                lb.Focus();
-                                                await System.Threading.Tasks.Task.Delay(40);
-                                                if (lb.IsFocused)
-                                                {
-                                                    focused = true;
-                                                    break;
-                                                }
-
-                                                try
-                                                {
-                                                    DebugLogger.Log(
-                                                        $"[TRACE] MainWindow.Esc: focus attempt {attempt} succeeded? {lb.IsFocused}");
-                                                }
-                                                catch
-                                                {
-                                                }
-                                            }
-                                            catch (Exception ex)
-                                            {
-                                                DebugLogger.LogException("MainWindow: Esc focus attempt", ex);
-                                            }
-                                        }
-
-                                        if (!focused)
-                                        {
-                                            try
-                                            {
-                                                DebugLogger.Log(
-                                                    "[WARN] MainWindow.Esc: failed to focus ArticlesListBox after retries");
-                                            }
-                                            catch
-                                            {
-                                            }
-
-                                            ;
-                                            // As a fallback, try focusing the ArticleList control itself
-                                            try
-                                            {
-                                                articleList.Focus();
-                                            }
-                                            catch (Exception ex)
-                                            {
-                                                DebugLogger.LogException(
-                                                    "MainWindow: Esc focus articleList fallback", ex);
-                                            }
-                                        }
-                                        else
-                                        {
-                                            try
-                                            {
-                                                DebugLogger.Log(
-                                                    "[TRACE] MainWindow.Esc: ArticlesListBox is now focused");
-                                            }
-                                            catch
-                                            {
-                                            }
-                                        }
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        DebugLogger.LogException("MainWindow: Esc focus ArticleList (UIThread)", ex);
-                                    }
-
-                                    e.Handled = true;
-                                    return;
-
-                                });
-                            }
-                        }
-                    }
-                    catch (Exception ex) { DebugLogger.LogException("MainWindow: Esc focus ArticleList", ex); }
-                }
-
-                // Use shared helper to cancel active segment if present, otherwise preserve existing fullscreen behavior
-                if (hadActive)
-                {
-                    try
-                    {
-                        // Ensure editing has been ended in the editor (close dropdowns) before cancelling the segment
-                        try
-                        {
-                            var aeCtrl2 = this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl") ?? this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
-                            if (aeCtrl2 != null) { try { aeCtrl2.EndEdit(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: EndEdit before CancelActiveSegment", ex); } }
-                        }
-                        catch (Exception ex) { DebugLogger.LogException("MainWindow: EndEdit lookup before cancel", ex); }
-                        IndexEditor.Shared.EditorActions.CancelActiveSegment();
-                        try { IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: NotifyStateChanged", ex); }
-                        try { IndexEditor.Shared.ToastService.Show("Segment cancelled"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show on cancel", ex); }
-                    }
-                    catch (Exception ex) { DebugLogger.LogException("MainWindow: cancel active segment", ex); }
-                    e.Handled = true;
-                }
-                else
-                {
-                    if (this.WindowState == WindowState.FullScreen)
-                    {
-                        this.WindowState = WindowState.Normal;
-                        e.Handled = true;
-                    }
-                }
-            }
-            catch (Exception ex) { DebugLogger.LogException("MainWindow: Esc overall", ex); }
-        }
-        else if (e.Key == Key.Enter && !e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt))
-        {
-            // If an active segment exists, end it here and prevent focused buttons from receiving Enter.
-            var seg = IndexEditor.Shared.EditorState.ActiveSegment;
-            if (seg != null && seg.IsActive)
-            {
-                try
-                {
-                    // Capture start and intended end for user feedback
-                    var start = seg.Start;
-                    var end = IndexEditor.Shared.EditorState.CurrentPage;
-                    if (end < start) (start, end) = (end, start);
-
-                    // Use EditorActions (UI-agnostic) to end the active segment and update pages
-                    try { IndexEditor.Shared.EditorActions.EndActiveSegment(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: EditorActions.EndActiveSegment", ex); }
-
-                    // User feedback
-                    try { IndexEditor.Shared.ToastService.Show($"Segment ended ({start}-{end})"); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ToastService.Show on end segment", ex); }
-                }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: EndActiveSegment", ex); }
-                e.Handled = true;
-                return;
-            }
-
-            // No active segment: focus the first editable field in the article editor (Title textbox)
-            try
-            {
-                // Ask ArticleEditor instances to focus via the EditorState focus request counter
-                try { IndexEditor.Shared.EditorState.RequestArticleEditorFocus(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: RequestArticleEditorFocus", ex); }
-
-                var ae = this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditorControl") ?? this.FindControl<IndexEditor.Views.ArticleEditor>("ArticleEditor");
-                if (ae != null)
-                {
-                    try { ae.FocusTitle(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: ae.FocusTitle", ex); }
-                    e.Handled = true;
-                    return;
-                }
-
-                // As a fallback, try to focus TitleTextBox directly inside the EditorContent host if present
-                try
-                {
-                    var host = this.FindControl<ContentControl>("EditorContentHost") ?? this.FindControl<ContentControl>("EditorContent");
-                    if (host?.Content is Avalonia.Controls.Control hostContent)
-                    {
-                        var tb = hostContent.FindControl<TextBox>("TitleTextBox");
-                        if (tb != null) { try { tb.Focus(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: tb.Focus fallback", ex); } e.Handled = true; return; }
-                        var cb = hostContent.FindControl<ComboBox>("CategoryComboBox");
-                        if (cb != null) { try { cb.Focus(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: cb.Focus fallback", ex); } e.Handled = true; return; }
-                    }
-                }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: fallback focus search", ex); }
-
-                // Final fallback: trigger a state notify so listeners may react
-                try { IndexEditor.Shared.EditorState.NotifyStateChanged(); e.Handled = true; return; } catch (Exception ex) { DebugLogger.LogException("MainWindow: NotifyStateChanged fallback", ex); }
-            }
-            catch (Exception ex) { DebugLogger.LogException("MainWindow: focus Title", ex); }
-        }
-        // Toggle index overlay with Ctrl+I (or Cmd+I on mac via Meta)
-        else if (e.Key == Key.I && (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta)) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt) && !e.KeyModifiers.HasFlag(KeyModifiers.Shift))
-         {
-             try
-             {
-                 var overlay = this.FindControl<Border>("IndexOverlay");
-                 var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
-                 var errBorder = this.FindControl<Border>("IndexOverlayErrorBorder");
-                 var errLine = this.FindControl<TextBlock>("IndexOverlayErrorLine");
-                 if (overlay != null && tb != null)
-                 {
-                    if (overlay.IsVisible)
-                    {
-                        // Clearing error visuals when closing overlay
-                        try { if (errBorder != null) errBorder.IsVisible = false; if (errLine != null) errLine.Text = string.Empty; } catch { }
-                        overlay.IsVisible = false;
-                    }
-                    else
-                    {
-                        // Load _index.txt from current folder into the editable overlay
-                        var folder = IndexEditor.Shared.EditorState.CurrentFolder;
-                        if (string.IsNullOrWhiteSpace(folder)) tb.Text = "No folder open.";
-                        else { var path = System.IO.Path.Combine(folder, "_index.txt"); tb.Text = System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : $"_index.txt not found in folder: {folder}"; }
-                        // Ensure any prior error visuals are cleared when opening
-                        try { if (errBorder != null) errBorder.IsVisible = false; if (errLine != null) errLine.Text = string.Empty; } catch { }
-                        overlay.IsVisible = true;
-                     }
-                 }
-             }
-             catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+I toggle overlay", ex); }
-             e.Handled = true;
-             return;
-         }
-        else if (!e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt))
-        {
-            // Delete key: if article list has focus and there's a selected article, ask to confirm deletion
-            if (e.Key == Key.Delete)
-            {
-                 try
-                 {
-                    // If the user is editing fields in the ArticleEditor, do not treat Delete as 'delete article'
-                    try
-                    {
-                        if (IndexEditor.Shared.EditorState.IsArticleEditorFocused)
-                        {
-                            try { DebugLogger.Log("Delete key pressed but ArticleEditor has focus; ignoring"); } catch {}
-                            try { DebugLogger.Log("DELETE_IGNORED_EDITOR_FOCUSED"); } catch {}
-                            return;
-                        }
-                    }
-                    catch (Exception ex) { DebugLogger.LogException("MainWindow: check IsArticleEditorFocused for Delete", ex); }
-                     DebugLogger.Log($"Delete key pressed. ActiveSegment present={IndexEditor.Shared.EditorState.ActiveSegment != null}");
-                     // Do not allow deletion while an active segment exists
-                     var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
-                     if (activeSeg != null && activeSeg.IsActive)
-                     {
-                         IndexEditor.Shared.ToastService.Show("End or cancel the active segment before deleting an article");
-                         e.Handled = true;
-                         return;
-                     }
- 
-                     var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
-                    if (articleList != null)
-                    {
-                        var lb = articleList.FindControl<ListBox>("ArticlesListBox");
-                        if (lb != null && lb.IsFocused && lb.SelectedItem is Common.Shared.ArticleLine)
-                        {
-                            var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay");
-                            if (delOverlay != null) delOverlay.IsVisible = true;
-                            e.Handled = true;
-                            return;
-                        }
-                    }
-                    if (articleList != null)
-                    {
-                        var lb = articleList.FindControl<ListBox>("ArticlesListBox");
-                        try { DebugLogger.Log($"ArticleList found. ListBox present={(lb!=null)} SelectedIndex={(lb!=null?lb.SelectedIndex:-999)} SelectedItem={(lb!=null && lb.SelectedItem!=null? ((Common.Shared.ArticleLine)lb.SelectedItem).Title : "<null>")}"); } catch {}
-                        // Also check the VM's selected article (may be set even if the ListBox isn't focused)
-                        var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-                        Common.Shared.ArticleLine? vmSel = null;
-                        try { if (vm != null) vmSel = vm.SelectedArticle; } catch {}
-                        try { DebugLogger.Log($"VM.SelectedArticle={(vmSel!=null?vmSel.Title:"<null>")} EditorState.ActiveArticle={(IndexEditor.Shared.EditorState.ActiveArticle!=null?IndexEditor.Shared.EditorState.ActiveArticle.Title:"<null>")}" ); } catch {}
-
-                        if ((vmSel != null) || (IndexEditor.Shared.EditorState.ActiveArticle != null) || (lb != null && lb.SelectedItem is Common.Shared.ArticleLine))
-                        {
-                            var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay");
-                            if (delOverlay != null)
-                            {
-                                delOverlay.IsVisible = true;
-                                try { DebugLogger.Log("Showing DeleteArticleConfirmOverlay (vm/active/selection-based)"); } catch {}
-                            }
-                            e.Handled = true;
-                            return;
-                        }
-                        // Fallback: if nothing is selected, but there are articles in the list, pick the first as a pragmatic fallback
-                        if (lb != null && (vmSel == null && IndexEditor.Shared.EditorState.ActiveArticle == null) && lb.ItemCount > 0)
-                        {
-                            try
-                            {
-                                var first = lb.Items[0] as Common.Shared.ArticleLine;
-                                if (first != null && vm != null)
-                                {
-                                    vm.SelectedArticle = first;
-                                    try { DebugLogger.Log($"Fallback: selected first article '{first.Title}' for deletion"); } catch {}
-                                    try { DebugLogger.Log("FALLBACK_SELECTED_FIRST"); } catch {}
-                                    var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay");
-                                    if (delOverlay != null) { delOverlay.IsVisible = true; try { DebugLogger.Log("Showing DeleteArticleConfirmOverlay (fallback-first)"); } catch {} }
-                                    e.Handled = true;
-                                    return;
-                                }
-                            }
-                            catch (Exception ex) { DebugLogger.LogException("MainWindow: fallback select first article", ex); }
-                        }
-                    }
-                    else
-                    {
-                        try { DebugLogger.Log("Delete key: ArticleListControl not found"); } catch {}
-                    }
-                 }
-                 catch (Exception ex) { DebugLogger.LogException("MainWindow: Delete key handler", ex); }
-             }
-
-            // Navigation: Left/Right change page, Up/Down change selected article
-            if (e.Key == Key.Left)
-            {
-                // If the Article Editor has focus, let the editor handle the arrow key (do not change page)
-                // UNLESS there's an active segment — then we want to navigate pages even from editor fields
-                var hasActiveSegment = IndexEditor.Shared.EditorState.ActiveSegment != null 
-                                    && IndexEditor.Shared.EditorState.ActiveSegment.IsActive;
-                if (IndexEditor.Shared.EditorState.IsArticleEditorFocused && !hasActiveSegment) return;
-                try
-                {
-                    if (MainViewModel != null) MainViewModel.MoveLeft();
-                    else
-                    {
-                        var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
-                        if (pc != null) pc.MoveLeft();
-                        else { IndexEditor.Shared.EditorState.CurrentPage = Math.Max(1, IndexEditor.Shared.EditorState.CurrentPage - 1); IndexEditor.Shared.EditorState.NotifyStateChanged(); }
-                    }
-                    e.Handled = true;
-                }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: Left arrow", ex); }
-            }
-            else if (e.Key == Key.Right)
-            {
-                // If the Article Editor has focus, let the editor handle the arrow key (do not change page)
-                // UNLESS there's an active segment — then we want to navigate pages even from editor fields
-                var hasActiveSegment = IndexEditor.Shared.EditorState.ActiveSegment != null 
-                                    && IndexEditor.Shared.EditorState.ActiveSegment.IsActive;
-                if (IndexEditor.Shared.EditorState.IsArticleEditorFocused && !hasActiveSegment) return;
-                try
-                {
-                    if (MainViewModel != null) MainViewModel.MoveRight();
-                    else
-                    {
-                        var pc = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
-                        if (pc != null) pc.MoveRight();
-                        else { IndexEditor.Shared.EditorState.CurrentPage = IndexEditor.Shared.EditorState.CurrentPage + 1; IndexEditor.Shared.EditorState.NotifyStateChanged(); }
-                    }
-                    e.Handled = true;
-                }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: Right arrow", ex); }
-            }
-            // Ctrl+Up / Ctrl+Down: jump to previous/next article and set current page to its first available page
-            else if ((e.Key == Key.Up || e.Key == Key.Down) && e.KeyModifiers.HasFlag(KeyModifiers.Control))
-            {
-                try
-                {
-                    // If the Article Editor has focus, let the editor handle the shortcut
-                    if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) return;
-
-                    var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-                    List<Common.Shared.ArticleLine>? list = null;
-                    if (vm != null) list = vm.Articles.ToList();
-                    else if (IndexEditor.Shared.EditorState.Articles != null) list = new List<Common.Shared.ArticleLine>(IndexEditor.Shared.EditorState.Articles);
-
-                    if (list == null || list.Count == 0)
-                    {
-                        e.Handled = true;
-                        return;
-                    }
-
-                    // Determine current selection index
-                    int curIndex = -1;
-                    Common.Shared.ArticleLine? curArticle = null;
-                    if (vm != null)
-                    {
-                        curArticle = vm.SelectedArticle;
-                        if (curArticle != null) curIndex = list.IndexOf(curArticle);
-                    }
-                    if (curIndex == -1 && IndexEditor.Shared.EditorState.ActiveArticle != null)
-                    {
-                        curIndex = list.IndexOf(IndexEditor.Shared.EditorState.ActiveArticle);
-                        curArticle = IndexEditor.Shared.EditorState.ActiveArticle;
-                    }
-                    // If still -1, try to find article containing current page
-                    if (curIndex == -1)
-                    {
-                        curIndex = list.FindIndex(a => a.Pages != null && a.Pages.Contains(IndexEditor.Shared.EditorState.CurrentPage));
-                        if (curIndex != -1) curArticle = list[curIndex];
-                    }
-                    // Fallback to first article
-                    if (curIndex == -1) { curIndex = 0; curArticle = list[0]; }
-
-                    int targetIndex = curIndex;
-                    if (e.Key == Key.Up) targetIndex = Math.Max(0, curIndex - 1);
-                    else targetIndex = Math.Min(list.Count - 1, curIndex + 1);
-
-                    if (targetIndex == curIndex)
-                    {
-                        // nothing to do
-                        e.Handled = true;
-                        return;
-                    }
-
-                    var targetArticle = list[targetIndex];
-
-                    // Use VM navigation helper if available (it will set CurrentPage and notify)
-                    if (vm != null)
-                    {
-                        try
-                        {
-                            // Select the article in VM so bindings update
-                            vm.SelectedArticle = targetArticle;
-                        }
-                        catch { }
-                        try { vm.NavigateToArticle(targetArticle); } catch (Exception ex) { DebugLogger.LogException("MainWindow: NavigateToArticle", ex); }
-                    }
-                    else
-                    {
-                        // Set shared active article and compute first page with image
-                        try { IndexEditor.Shared.EditorState.ActiveArticle = targetArticle; } catch { }
-                        try
-                        {
-                            int? pick = null;
-                            try { pick = IndexEditor.Shared.ImageHelper.FindFirstImageInFolder(IndexEditor.Shared.EditorState.CurrentFolder ?? string.Empty, targetArticle.Pages != null && targetArticle.Pages.Count > 0 ? targetArticle.Pages.Min() : 1, 2000); } catch { }
-                            if (pick.HasValue) IndexEditor.Shared.EditorState.CurrentPage = pick.Value;
-                            else if (targetArticle.Pages != null && targetArticle.Pages.Count > 0) IndexEditor.Shared.EditorState.CurrentPage = targetArticle.Pages.Min();
-                            IndexEditor.Shared.EditorState.NotifyStateChanged();
-                        }
-                        catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Up/Down fallback navigation", ex); }
-                    }
-
-                    // Ensure UI updates and image loads
-                    try { IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch { }
-                }
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Up/Down handler", ex); }
-                e.Handled = true;
-                return;
-            }
-             else if (e.Key == Key.Up || e.Key == Key.Down)
-             {
-                 try
-                 {
-                     // If the user is typing / navigating inside the ArticleEditor (e.g., a ComboBox has focus),
-                     // let the editor control handle the arrow keys rather than changing the article selection.
-                     if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) return;
-                     var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
-                     if (articleList != null)
-                     {
-                         var lb = articleList.FindControl<ListBox>("ArticlesListBox");
-                         if (lb != null)
-                         {
-                             var cur = lb.SelectedIndex;
-                             int next = cur;
-                             if (e.Key == Key.Up) next = Math.Max(0, cur - 1);
-                             else next = Math.Min((lb.ItemCount > 0 ? lb.ItemCount - 1 : 0), cur + 1);
-                             if (next != cur && lb.ItemCount > 0)
-                             {
-                                 lb.SelectedIndex = next;
-                                 try { lb.Focus(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: lb.Focus on Up/Down", ex); }
-                                 // Execute selection command on VM
-                                 try
-                                 {
-                                     var item = lb.SelectedItem as Common.Shared.ArticleLine;
-                                     var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-                                     if (vm != null && item != null && vm.SelectArticleCommand.CanExecute(item))
-                                         vm.SelectArticleCommand.Execute(item);
-                                 }
-                                 catch (Exception ex) { DebugLogger.LogException("MainWindow: article list selection", ex); }
-                             }
-                             e.Handled = true;
-                         }
-                     }
-                 }
-                 catch (Exception ex) { DebugLogger.LogException("MainWindow: Up/Down arrow", ex); }
-             }
+            DebugLogger.LogException("MainWindow: OnMainWindowKeyDown", ex);
         }
     }
 
+    // Handle keyboard input when overlays are visible
+    private bool HandleOverlayKeyboard(KeyEventArgs e)
+    {
+        try
+        {
+            var overlay = this.FindControl<Border>("IndexOverlay");
+            var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
+
+            // Index overlay: capture all keys except Ctrl+I, Esc, and Ctrl+S
+            if (overlay != null && overlay.IsVisible)
+            {
+                try { if (tb != null && !tb.IsFocused) tb.Focus(); } 
+                catch (Exception ex) { DebugLogger.LogException("MainWindow: overlay textbox focus", ex); }
+
+                // Ctrl+I: Toggle overlay
+                if (e.Key == Key.I && (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta)))
+                {
+                    _overlayManager?.CloseIndexOverlay();
+                    e.Handled = true;
+                    return true;
+                }
+
+                // Esc: Close overlay
+                if (e.Key == Key.Escape)
+                {
+                    _overlayManager?.CloseIndexOverlay();
+                    e.Handled = true;
+                    return true;
+                }
+
+                // Ctrl+S: Save overlay content (handled by FileKeyboardHandler but needs early return)
+                if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+                {
+                    // Let the FileKeyboardHandler handle this
+                    return false;
+                }
+
+                // All other keys go to the textbox
+                return true;
+            }
+
+            // Help overlay: Esc or F1 to close
+            if (_overlayManager?.IsHelpOverlayVisible() ?? false)
+            {
+                if (e.Key == Key.Escape || e.Key == Key.F1)
+                {
+                    _overlayManager?.CloseHelpOverlay();
+                    e.Handled = true;
+                    return true;
+                }
+                return true; // Block other shortcuts while help is visible
+            }
+
+            // Delete confirmation overlay: Enter to confirm, Esc to cancel
+            if (_overlayManager?.IsDeleteConfirmationVisible() ?? false)
+            {
+                if (e.Key == Key.Enter)
+                {
+                    try { DeleteSelectedArticleAndCloseOverlay(); }
+                    catch (Exception ex) { DebugLogger.LogException("MainWindow: confirm delete", ex); }
+                    e.Handled = true;
+                    return true;
+                }
+                if (e.Key == Key.Escape)
+                {
+                    _overlayManager?.CloseDeleteConfirmation();
+                    e.Handled = true;
+                    return true;
+                }
+                return true; // Block other shortcuts while delete confirmation is visible
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException("MainWindow: HandleOverlayKeyboard", ex);
+        }
+
+        return false;
+    }
+
+    // Handle Delete key for article deletion
+    private void HandleDeleteKey(KeyEventArgs e)
+    {
+        try
+        {
+            // Don't delete if ArticleEditor has focus
+            if (IndexEditor.Shared.EditorState.IsArticleEditorFocused)
+            {
+                return;
+            }
+
+            // Don't allow deletion while active segment exists
+            var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
+            if (activeSeg != null && activeSeg.IsActive)
+            {
+                IndexEditor.Shared.ToastService.Show("End or cancel the active segment before deleting an article");
+                e.Handled = true;
+                return;
+            }
+
+            // Show delete confirmation if article is selected
+            var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+            var hasSelection = vm?.SelectedArticle != null || IndexEditor.Shared.EditorState.ActiveArticle != null;
+
+            if (hasSelection)
+            {
+                var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay");
+                if (delOverlay != null)
+                {
+                    // Update delete confirmation text
+                    var article = vm?.SelectedArticle ?? IndexEditor.Shared.EditorState.ActiveArticle;
+                    var titleLbl = this.FindControl<TextBlock>("DeleteArticleTitleLabel");
+                    if (titleLbl != null && article != null)
+                    {
+                        titleLbl.Text = article.DisplayTitle ?? "(no title)";
+                    }
+                    
+                    delOverlay.IsVisible = true;
+                    e.Handled = true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException("MainWindow: HandleDeleteKey", ex);
+        }
+    }
     private async void OnOpenButtonClick(object sender, RoutedEventArgs e)
     {
         // Open folder using FolderBrowserWindow.ShowDialogAsync and update EditorState on UI thread
@@ -1443,75 +666,13 @@ public partial class MainWindow : Window
     // Show fullscreen image overlay
     private void ShowFullscreenImage(Avalonia.Media.IImage imageSource, int pageNumber)
     {
-        try
-        {
-            DebugLogger.Log($"MainWindow.ShowFullscreenImage: showing page {pageNumber}");
-            
-            var overlay = this.FindControl<Border>("FullscreenImageOverlay");
-            var img = this.FindControl<Image>("FullscreenImage");
-            var pageText = this.FindControl<TextBlock>("FullscreenPageNumber");
-
-            if (overlay == null || img == null)
-            {
-                DebugLogger.Log("MainWindow.ShowFullscreenImage: overlay controls not found");
-                return;
-            }
-
-            img.Source = imageSource;
-            if (pageText != null)
-                pageText.Text = $"Page {pageNumber}";
-
-            overlay.IsVisible = true;
-            
-            // Enter fullscreen mode
-            try
-            {
-                this.WindowState = WindowState.FullScreen;
-                DebugLogger.Log("MainWindow.ShowFullscreenImage: entered fullscreen mode");
-            }
-            catch (Exception fsEx)
-            {
-                DebugLogger.LogException("MainWindow.ShowFullscreenImage: enter fullscreen", fsEx);
-            }
-            
-            DebugLogger.Log("MainWindow.ShowFullscreenImage: overlay shown");
-        }
-        catch (Exception ex) 
-        { 
-            DebugLogger.LogException("MainWindow.ShowFullscreenImage", ex); 
-        }
+        _fullscreenService?.ShowFullscreen(imageSource, pageNumber);
     }
 
     // Close fullscreen image overlay
     private void CloseFullscreenImage()
     {
-        try
-        {
-            DebugLogger.Log("MainWindow.CloseFullscreenImage: closing overlay");
-            var overlay = this.FindControl<Border>("FullscreenImageOverlay");
-            if (overlay != null)
-            {
-                overlay.IsVisible = false;
-            }
-            
-            // Exit fullscreen mode
-            try
-            {
-                if (this.WindowState == WindowState.FullScreen)
-                {
-                    this.WindowState = WindowState.Normal;
-                    DebugLogger.Log("MainWindow.CloseFullscreenImage: exited fullscreen mode");
-                }
-            }
-            catch (Exception fsEx)
-            {
-                DebugLogger.LogException("MainWindow.CloseFullscreenImage: exit fullscreen", fsEx);
-            }
-        }
-        catch (Exception ex) 
-        { 
-            DebugLogger.LogException("MainWindow.CloseFullscreenImage", ex); 
-        }
+        _fullscreenService?.CloseFullscreen();
     }
 
     private void LoadArticlesFromFolder(string folder)
@@ -1608,38 +769,12 @@ public partial class MainWindow : Window
                     {
                         // Show error and open index overlay with full file contents for user correction
                         try { IndexEditor.Shared.ToastService.Show("_index.txt format error: " + fx.Message); } catch { }
+                        
+                        // Use overlay manager to show the error
                         try
                         {
-                            var overlay = this.FindControl<Border>("IndexOverlay");
-                            var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
-                            var errBorder = this.FindControl<Border>("IndexOverlayErrorBorder");
-                            var errLine = this.FindControl<TextBlock>("IndexOverlayErrorLine");
-                            if (overlay != null && tb != null)
-                            {
-                                var fullText = System.IO.File.ReadAllText(indexPath);
-                                tb.Text = fullText;
-                                // Show overlay
-                                overlay.IsVisible = true;
-                                // Display the errored line in the error border
-                                if (errBorder != null && errLine != null)
-                                {
-                                    errLine.Text = line?.Trim() ?? "";
-                                    errBorder.IsVisible = true;
-                                }
-                                // Select the line inside the textbox so user can jump to it
-                                try
-                                {
-                                    var pos = fullText.IndexOf(line ?? string.Empty, StringComparison.Ordinal);
-                                    if (pos < 0) pos = 0;
-                                    tb.SelectionStart = pos;
-                                    tb.SelectionEnd = pos + ((line != null) ? line.Length : 0);
-                                    tb.CaretIndex = pos;
-                                }
-                                catch (Exception ex)
-                                {
-                                    DebugLogger.LogException("LoadArticlesFromFolder: select errored line in overlay", ex);
-                                }
-                            }
+                            var fullText = System.IO.File.ReadAllText(indexPath);
+                            _overlayManager?.ShowIndexOverlayError(line ?? string.Empty, fullText);
                         }
                         catch (Exception ex)
                         {
