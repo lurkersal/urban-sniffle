@@ -84,7 +84,7 @@ public partial class MainWindow : Window
                 new Services.KeyboardHandlers.SegmentKeyboardHandler(this),
                 new Services.KeyboardHandlers.ArticleKeyboardHandler(this),
                 new Services.KeyboardHandlers.FileKeyboardHandler(this, LoadArticlesFromFolder, _overlayManager),
-                new Services.KeyboardHandlers.NavigationKeyboardHandler()
+                new Services.KeyboardHandlers.NavigationKeyboardHandler(this)
             };
             _keyboardDispatcher = new Services.KeyboardHandlers.KeyboardShortcutDispatcher(handlers);
         }

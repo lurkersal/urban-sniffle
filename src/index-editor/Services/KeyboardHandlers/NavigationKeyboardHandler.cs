@@ -1,6 +1,8 @@
 using System;
+using Avalonia.Controls;
 using Avalonia.Input;
 using IndexEditor.Shared;
+using IndexEditor.Views;
 
 namespace IndexEditor.Services.KeyboardHandlers;
 
@@ -11,6 +13,13 @@ namespace IndexEditor.Services.KeyboardHandlers;
 /// </summary>
 public class NavigationKeyboardHandler : IKeyboardShortcutHandler
 {
+    private readonly Window? _window;
+
+    public NavigationKeyboardHandler(Window? window = null)
+    {
+        _window = window;
+    }
+
     public int Priority => 50; // Lower priority than article/segment operations
 
     public bool TryHandle(KeyEventArgs e)
@@ -44,7 +53,19 @@ public class NavigationKeyboardHandler : IKeyboardShortcutHandler
                 return; // Let the textbox handle it
             }
 
-            // Simple decrement with minimum of 1
+            // Use PageController's MoveLeft if available (respects available pages list)
+            if (_window != null)
+            {
+                var pageController = _window.FindControl<PageControllerView>("PageControllerControl");
+                if (pageController != null)
+                {
+                    pageController.MoveLeft();
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            // Fallback: Simple decrement with minimum of 1
             EditorState.CurrentPage = Math.Max(1, EditorState.CurrentPage - 1);
             EditorState.NotifyStateChanged();
             
@@ -70,7 +91,19 @@ public class NavigationKeyboardHandler : IKeyboardShortcutHandler
                 return; // Let the textbox handle it
             }
 
-            // Simple increment
+            // Use PageController's MoveRight if available (respects available pages list)
+            if (_window != null)
+            {
+                var pageController = _window.FindControl<PageControllerView>("PageControllerControl");
+                if (pageController != null)
+                {
+                    pageController.MoveRight();
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            // Fallback: Simple increment
             EditorState.CurrentPage = EditorState.CurrentPage + 1;
             EditorState.NotifyStateChanged();
             

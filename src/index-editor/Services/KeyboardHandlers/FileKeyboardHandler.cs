@@ -159,22 +159,24 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
                 return;
             }
 
-            var mainViewModel = _window.DataContext as MainWindowViewModel;
-            if (mainViewModel != null)
+            // Save the index file directly
+            var saveFolder = EditorState.CurrentFolder;
+            if (string.IsNullOrWhiteSpace(saveFolder))
             {
-                mainViewModel.SaveIndex();
+                ToastService.Show("No folder open; cannot save _index.txt");
+                e.Handled = true;
+                return;
             }
-            else
+
+            try
             {
-                var folder = EditorState.CurrentFolder;
-                if (string.IsNullOrWhiteSpace(folder))
-                {
-                    ToastService.Show("No folder open; cannot save _index.txt");
-                    e.Handled = true;
-                    return;
-                }
-                
-                try { ToastService.Show("Saving via fallback"); } catch { }
+                IndexSaver.SaveIndex(saveFolder);
+                ToastService.Show("_index.txt saved");
+            }
+            catch (Exception saveEx)
+            {
+                ToastService.Show("Failed to save _index.txt");
+                DebugLogger.LogException("FileKeyboardHandler: Save index", saveEx);
             }
         }
         catch (Exception ex)

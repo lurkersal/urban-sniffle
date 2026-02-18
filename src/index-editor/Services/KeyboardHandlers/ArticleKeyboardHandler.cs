@@ -40,6 +40,20 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
             return true;
         }
 
+        // Ctrl+Up: Navigate to previous article
+        if (e.Key == Key.Up && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            HandleCtrlUp(e);
+            return true;
+        }
+
+        // Ctrl+Down: Navigate to next article
+        if (e.Key == Key.Down && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            HandleCtrlDown(e);
+            return true;
+        }
+
         // Up/Down arrows: Navigate article list (when article list has focus)
         if (e.Key == Key.Up || e.Key == Key.Down)
         {
@@ -245,6 +259,177 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
         {
             DebugLogger.LogException("ArticleKeyboardHandler: Up/Down arrow", ex);
             return false;
+        }
+    }
+
+    private void HandleCtrlUp(KeyEventArgs e)
+    {
+        try
+        {
+            DebugLogger.Log("Ctrl+Up: Navigate to previous article");
+
+            // Don't handle if article editor has focus
+            if (EditorState.IsArticleEditorFocused)
+            {
+                DebugLogger.Log("Article editor focused - ignoring Ctrl+Up");
+                return;
+            }
+
+            var vm = _window.DataContext as EditorStateViewModel;
+            var articles = vm?.Articles?.ToList() ?? EditorState.Articles?.ToList();
+            
+            if (articles == null || articles.Count == 0)
+            {
+                DebugLogger.Log("No articles to navigate");
+                e.Handled = true;
+                return;
+            }
+
+            // Find current article index
+            int currentIndex = -1;
+            if (vm?.SelectedArticle != null)
+            {
+                currentIndex = articles.IndexOf(vm.SelectedArticle);
+            }
+            else if (EditorState.ActiveArticle != null)
+            {
+                currentIndex = articles.IndexOf(EditorState.ActiveArticle);
+            }
+
+            // If no article selected, find article containing current page
+            if (currentIndex == -1)
+            {
+                currentIndex = articles.FindIndex(a => 
+                    a.Pages != null && a.Pages.Contains(EditorState.CurrentPage));
+            }
+
+            if (currentIndex <= 0)
+            {
+                DebugLogger.Log("Already at first article");
+                e.Handled = true;
+                return;
+            }
+
+            // Navigate to previous article
+            var targetArticle = articles[currentIndex - 1];
+            NavigateToArticle(vm, targetArticle);
+            
+            DebugLogger.Log($"Navigated to previous article (index {currentIndex - 1})");
+            e.Handled = true;
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException("ArticleKeyboardHandler: Ctrl+Up", ex);
+        }
+    }
+
+    private void HandleCtrlDown(KeyEventArgs e)
+    {
+        try
+        {
+            DebugLogger.Log("Ctrl+Down: Navigate to next article");
+
+            // Don't handle if article editor has focus
+            if (EditorState.IsArticleEditorFocused)
+            {
+                DebugLogger.Log("Article editor focused - ignoring Ctrl+Down");
+                return;
+            }
+
+            var vm = _window.DataContext as EditorStateViewModel;
+            var articles = vm?.Articles?.ToList() ?? EditorState.Articles?.ToList();
+            
+            if (articles == null || articles.Count == 0)
+            {
+                DebugLogger.Log("No articles to navigate");
+                e.Handled = true;
+                return;
+            }
+
+            // Find current article index
+            int currentIndex = -1;
+            if (vm?.SelectedArticle != null)
+            {
+                currentIndex = articles.IndexOf(vm.SelectedArticle);
+            }
+            else if (EditorState.ActiveArticle != null)
+            {
+                currentIndex = articles.IndexOf(EditorState.ActiveArticle);
+            }
+
+            // If no article selected, find article containing current page
+            if (currentIndex == -1)
+            {
+                currentIndex = articles.FindIndex(a => 
+                    a.Pages != null && a.Pages.Contains(EditorState.CurrentPage));
+            }
+
+            if (currentIndex >= articles.Count - 1)
+            {
+                DebugLogger.Log("Already at last article");
+                e.Handled = true;
+                return;
+            }
+
+            // Navigate to next article
+            var targetArticle = articles[currentIndex + 1];
+            NavigateToArticle(vm, targetArticle);
+            
+            DebugLogger.Log($"Navigated to next article (index {currentIndex + 1})");
+            e.Handled = true;
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException("ArticleKeyboardHandler: Ctrl+Down", ex);
+        }
+    }
+
+    private void NavigateToArticle(EditorStateViewModel? vm, Common.Shared.ArticleLine article)
+    {
+        try
+        {
+            if (vm != null)
+            {
+                // Use ViewModel
+                vm.SelectedArticle = article;
+                try
+                {
+                    vm.NavigateToArticle(article);
+                }
+                catch (Exception ex)
+                {
+                    DebugLogger.LogException("ArticleKeyboardHandler: NavigateToArticle", ex);
+                }
+            }
+            else
+            {
+                // Fallback to EditorState
+                EditorState.ActiveArticle = article;
+                
+                // Set current page to first page of article
+                if (article.Pages != null && article.Pages.Count > 0)
+                {
+                    var firstPage = article.Pages.Min();
+                    var folder = EditorState.CurrentFolder;
+                    
+                    if (!string.IsNullOrWhiteSpace(folder))
+                    {
+                        // Find first image in the article's page range
+                        var pick = ImageHelper.FindFirstImageInFolder(folder, firstPage, 2000);
+                        EditorState.CurrentPage = pick ?? firstPage;
+                    }
+                    else
+                    {
+                        EditorState.CurrentPage = firstPage;
+                    }
+                }
+                
+                EditorState.NotifyStateChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException("ArticleKeyboardHandler: NavigateToArticle inner", ex);
         }
     }
 }

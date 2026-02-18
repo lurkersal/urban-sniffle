@@ -14,10 +14,104 @@ namespace IndexEditor.Views
     public partial class PageControllerView : UserControl
     {
         private IPageControllerBridge? _assignedBridge;
+        private List<int> _availablePages = new List<int>();
+        private string? _lastScannedFolder = null;
 
         public void SetBridge(IPageControllerBridge bridge)
         {
             _assignedBridge = bridge;
+        }
+
+        /// <summary>
+        /// Scans the current folder and builds a list of available page numbers from image files.
+        /// Only includes files with integer names (e.g., "42.jpg", "003.png").
+        /// </summary>
+        private void ScanAvailablePages()
+        {
+            _availablePages.Clear();
+            
+            var folder = EditorState.CurrentFolder;
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+            {
+                _lastScannedFolder = null;
+                UpdateNavigationButtons();
+                return;
+            }
+
+            try
+            {
+                var imageExtensions = new[] { ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp" };
+                var files = Directory.GetFiles(folder)
+                    .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                    .ToList();
+
+                foreach (var file in files)
+                {
+                    var nameWithoutExt = Path.GetFileNameWithoutExtension(file);
+                    // Try to parse the filename as an integer (handles "42", "003", etc.)
+                    if (int.TryParse(nameWithoutExt, out var pageNum) && pageNum > 0)
+                    {
+                        if (!_availablePages.Contains(pageNum))
+                        {
+                            _availablePages.Add(pageNum);
+                        }
+                    }
+                }
+
+                _availablePages.Sort();
+                _lastScannedFolder = folder;
+                
+                DebugLogger.Log($"PageControllerView: Scanned {folder}, found {_availablePages.Count} pages");
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("PageControllerView.ScanAvailablePages", ex);
+            }
+
+            UpdateNavigationButtons();
+        }
+
+        /// <summary>
+        /// Updates the enabled/disabled state of prev/next buttons based on current position in available pages.
+        /// </summary>
+        private void UpdateNavigationButtons()
+        {
+            try
+            {
+                var prevBtn = this.FindControl<Button>("PrevPageBtn");
+                var nextBtn = this.FindControl<Button>("NextPageBtn");
+
+                if (prevBtn == null || nextBtn == null) return;
+
+                if (_availablePages.Count == 0)
+                {
+                    // No pages available, disable both
+                    prevBtn.IsEnabled = false;
+                    nextBtn.IsEnabled = false;
+                    return;
+                }
+
+                var currentPage = EditorState.CurrentPage;
+                var currentIndex = _availablePages.IndexOf(currentPage);
+
+                if (currentIndex < 0)
+                {
+                    // Current page not in list, enable both to allow navigation
+                    prevBtn.IsEnabled = true;
+                    nextBtn.IsEnabled = true;
+                }
+                else
+                {
+                    // Enable prev if not at first page
+                    prevBtn.IsEnabled = currentIndex > 0;
+                    // Enable next if not at last page
+                    nextBtn.IsEnabled = currentIndex < _availablePages.Count - 1;
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("PageControllerView.UpdateNavigationButtons", ex);
+            }
         }
 
         public int Page
@@ -26,20 +120,66 @@ namespace IndexEditor.Views
             set
             {
                 var desired = value;
-                // If images are enabled, prefer an existing image page; if desired page has no image, find nearest existing one.
+                var pageInput = this.FindControl<TextBox>("PageInput");
+                
+                // Ensure we have scanned available pages for the current folder
+                var folder = EditorState.CurrentFolder;
+                if (!string.IsNullOrWhiteSpace(folder) && folder != _lastScannedFolder)
+                {
+                    ScanAvailablePages();
+                }
+                
+                // If images are enabled, only allow navigation to pages that exist in our scanned list
                 try
                 {
                     if (IndexEditor.Shared.EditorState.ShowImages)
                     {
-                        var folder = EditorState.CurrentFolder;
-                        if (!string.IsNullOrWhiteSpace(folder))
+                        if (!string.IsNullOrWhiteSpace(folder) && _availablePages.Count > 0)
                         {
-                            var candidate = IndexEditor.Shared.ImageHelper.FindImagePath(folder, desired);
-                            if (candidate == null)
+                            // Check if the desired page is in our available pages list
+                            if (!_availablePages.Contains(desired))
                             {
-                                var nearest = IndexEditor.Shared.ImageHelper.FindNearestExistingPageBothDirections(folder, desired);
-                                if (nearest.HasValue)
-                                    desired = nearest.Value;
+                                // Find nearest available page
+                                var nearest = _availablePages
+                                    .OrderBy(p => Math.Abs(p - desired))
+                                    .FirstOrDefault();
+
+                                if (nearest > 0)
+                                {
+                                    desired = nearest;
+                                    // Notify user that we jumped to nearest page
+                                    if (nearest != value)
+                                    {
+                                        try 
+                                        { 
+                                            IndexEditor.Shared.ToastService.Show($"Page {value} not found, showing nearest page {nearest}"); 
+                                        } 
+                                        catch (Exception toastEx) 
+                                        { 
+                                            DebugLogger.LogException("PageControllerView.Page: toast notification", toastEx); 
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    // No pages available
+                                    DebugLogger.Log($"PageControllerView.Page: No available pages in folder");
+                                    try 
+                                    { 
+                                        IndexEditor.Shared.ToastService.Show($"Page {value} not found"); 
+                                    } 
+                                    catch (Exception toastEx) 
+                                    { 
+                                        DebugLogger.LogException("PageControllerView.Page: toast notification (no pages)", toastEx); 
+                                    }
+                                    
+                                    // Reset the textbox to show the actual current page
+                                    if (pageInput != null)
+                                    {
+                                        pageInput.Text = EditorState.CurrentPage.ToString();
+                                    }
+                                    return;
+                                }
                             }
                         }
                     }
@@ -47,9 +187,12 @@ namespace IndexEditor.Views
                 catch (Exception ex) { DebugLogger.LogException("PageControllerView.Page: image lookup", ex); }
 
                 EditorState.CurrentPage = desired;
-                var pageInput = this.FindControl<TextBox>("PageInput");
                 if (pageInput != null)
                     pageInput.Text = EditorState.CurrentPage.ToString();
+                    
+                // Update button states
+                UpdateNavigationButtons();
+                    
                 // If an active segment exists, update its preview end so UI displays Start → CurrentPage
                 try
                 {
@@ -117,10 +260,39 @@ namespace IndexEditor.Views
                 {
                     try
                     {
+                        // Ensure pages are scanned
                         var folder = EditorState.CurrentFolder;
-                        if (string.IsNullOrWhiteSpace(folder)) { if (Page > 1) Page--; return; }
-                        var found = FindNearestExistingPage(folder, EditorState.CurrentPage - 1, -1);
-                        if (found.HasValue) Page = found.Value;
+                        if (!string.IsNullOrWhiteSpace(folder) && folder != _lastScannedFolder)
+                        {
+                            ScanAvailablePages();
+                        }
+
+                        if (_availablePages.Count == 0)
+                        {
+                            // No available pages, do nothing
+                            return;
+                        }
+
+                        var currentPage = EditorState.CurrentPage;
+                        var currentIndex = _availablePages.IndexOf(currentPage);
+
+                        if (currentIndex > 0)
+                        {
+                            // Go to previous page in the list
+                            Page = _availablePages[currentIndex - 1];
+                        }
+                        else if (currentIndex < 0)
+                        {
+                            // Current page not in list, find closest page before it
+                            var prevPage = _availablePages
+                                .Where(p => p < currentPage)
+                                .OrderByDescending(p => p)
+                                .FirstOrDefault();
+                            if (prevPage > 0)
+                            {
+                                Page = prevPage;
+                            }
+                        }
                     }
                     catch (Exception ex) { DebugLogger.LogException("PageControllerView.PrevBtn.Click", ex); }
                 };
@@ -129,10 +301,39 @@ namespace IndexEditor.Views
                 {
                     try
                     {
+                        // Ensure pages are scanned
                         var folder = EditorState.CurrentFolder;
-                        if (string.IsNullOrWhiteSpace(folder)) { Page++; return; }
-                        var found = FindNearestExistingPage(folder, EditorState.CurrentPage + 1, 1);
-                        if (found.HasValue) Page = found.Value;
+                        if (!string.IsNullOrWhiteSpace(folder) && folder != _lastScannedFolder)
+                        {
+                            ScanAvailablePages();
+                        }
+
+                        if (_availablePages.Count == 0)
+                        {
+                            // No available pages, do nothing
+                            return;
+                        }
+
+                        var currentPage = EditorState.CurrentPage;
+                        var currentIndex = _availablePages.IndexOf(currentPage);
+
+                        if (currentIndex >= 0 && currentIndex < _availablePages.Count - 1)
+                        {
+                            // Go to next page in the list
+                            Page = _availablePages[currentIndex + 1];
+                        }
+                        else if (currentIndex < 0)
+                        {
+                            // Current page not in list, find closest page after it
+                            var nextPage = _availablePages
+                                .Where(p => p > currentPage)
+                                .OrderBy(p => p)
+                                .FirstOrDefault();
+                            if (nextPage > 0)
+                            {
+                                Page = nextPage;
+                            }
+                        }
                     }
                     catch (Exception ex) { DebugLogger.LogException("PageControllerView.NextBtn.Click", ex); }
                 };
@@ -154,8 +355,16 @@ namespace IndexEditor.Views
             {
                 try
                 {
+                    // Check if folder changed and rescan if needed
+                    var currentFolder = EditorState.CurrentFolder;
+                    if (currentFolder != _lastScannedFolder)
+                    {
+                        ScanAvailablePages();
+                    }
+                    
                     if (pageInput != null) pageInput.Text = EditorState.CurrentPage.ToString();
                     UpdateUi();
+                    UpdateNavigationButtons();
                     LoadCurrentPageImage();
                 }
                 catch (Exception ex) { DebugLogger.LogException("PageControllerView.StateChanged handler", ex); }
@@ -163,6 +372,8 @@ namespace IndexEditor.Views
 
             // Initial sync
             UpdateUi();
+            // Scan available pages on initialization
+            ScanAvailablePages();
             // Load initial page image
             try { LoadCurrentPageImage(); } catch (Exception ex) { DebugLogger.LogException("PageControllerView ctor: LoadCurrentPageImage", ex); }
 
@@ -660,8 +871,35 @@ namespace IndexEditor.Views
                 var folder = EditorState.CurrentFolder;
                 if (!string.IsNullOrWhiteSpace(folder) && IndexEditor.Shared.EditorState.ShowImages)
                 {
-                    var found = FindNearestExistingPage(folder, EditorState.CurrentPage - 1, -1);
-                    if (found.HasValue) Page = found.Value;
+                    // Ensure pages are scanned
+                    if (folder != _lastScannedFolder)
+                    {
+                        ScanAvailablePages();
+                    }
+
+                    if (_availablePages.Count > 0)
+                    {
+                        var currentPage = EditorState.CurrentPage;
+                        var currentIndex = _availablePages.IndexOf(currentPage);
+
+                        if (currentIndex > 0)
+                        {
+                            // Go to previous page in the list
+                            Page = _availablePages[currentIndex - 1];
+                        }
+                        else if (currentIndex < 0)
+                        {
+                            // Current page not in list, find closest page before it
+                            var prevPage = _availablePages
+                                .Where(p => p < currentPage)
+                                .OrderByDescending(p => p)
+                                .FirstOrDefault();
+                            if (prevPage > 0)
+                            {
+                                Page = prevPage;
+                            }
+                        }
+                    }
                 }
                 else
                 {
@@ -679,8 +917,35 @@ namespace IndexEditor.Views
                 var folder = EditorState.CurrentFolder;
                 if (!string.IsNullOrWhiteSpace(folder) && IndexEditor.Shared.EditorState.ShowImages)
                 {
-                    var found = FindNearestExistingPage(folder, EditorState.CurrentPage + 1, 1);
-                    if (found.HasValue) Page = found.Value;
+                    // Ensure pages are scanned
+                    if (folder != _lastScannedFolder)
+                    {
+                        ScanAvailablePages();
+                    }
+
+                    if (_availablePages.Count > 0)
+                    {
+                        var currentPage = EditorState.CurrentPage;
+                        var currentIndex = _availablePages.IndexOf(currentPage);
+
+                        if (currentIndex >= 0 && currentIndex < _availablePages.Count - 1)
+                        {
+                            // Go to next page in the list
+                            Page = _availablePages[currentIndex + 1];
+                        }
+                        else if (currentIndex < 0)
+                        {
+                            // Current page not in list, find closest page after it
+                            var nextPage = _availablePages
+                                .Where(p => p > currentPage)
+                                .OrderBy(p => p)
+                                .FirstOrDefault();
+                            if (nextPage > 0)
+                            {
+                                Page = nextPage;
+                            }
+                        }
+                    }
                 }
                 else
                 {
