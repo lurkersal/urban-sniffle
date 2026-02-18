@@ -66,6 +66,9 @@ nunit-*.xml
 # User secrets
 secrets.json
 
+# Local launch settings with credentials (user-specific)
+**/launchSettings.local.json
+
 # Configuration with credentials
 appsettings.Development.json
 appsettings.Production.json
@@ -77,3 +80,5 @@ appsettings.*.json
 # Documentation (keep markdown files)
 # ============================================
 # Removed: *.md - we want to track documentation
+
+*.log
