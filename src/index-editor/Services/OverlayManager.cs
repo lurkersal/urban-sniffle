@@ -11,11 +11,16 @@ namespace IndexEditor.Services;
 /// </summary>
 public class OverlayManager
 {
-    private readonly Window _window;
+    private readonly IControlFinder _controlFinder;
 
     public OverlayManager(Window window)
+        : this(new WindowControlFinder(window))
     {
-        _window = window ?? throw new ArgumentNullException(nameof(window));
+    }
+
+    public OverlayManager(IControlFinder controlFinder)
+    {
+        _controlFinder = controlFinder ?? throw new ArgumentNullException(nameof(controlFinder));
     }
 
     /// <summary>
@@ -26,10 +31,10 @@ public class OverlayManager
     {
         try
         {
-            var overlay = _window.FindControl<Border>("IndexOverlay");
-            var textBox = _window.FindControl<TextBox>("IndexOverlayTextBox");
-            var errBorder = _window.FindControl<Border>("IndexOverlayErrorBorder");
-            var errLine = _window.FindControl<TextBlock>("IndexOverlayErrorLine");
+            var overlay = _controlFinder.FindControl<Border>("IndexOverlay");
+            var textBox = _controlFinder.FindControl<TextBox>("IndexOverlayTextBox");
+            var errBorder = _controlFinder.FindControl<Border>("IndexOverlayErrorBorder");
+            var errLine = _controlFinder.FindControl<TextBlock>("IndexOverlayErrorLine");
 
             if (overlay == null || textBox == null)
             {
@@ -68,9 +73,9 @@ public class OverlayManager
     {
         try
         {
-            var overlay = _window.FindControl<Border>("IndexOverlay");
-            var errBorder = _window.FindControl<Border>("IndexOverlayErrorBorder");
-            var errLine = _window.FindControl<TextBlock>("IndexOverlayErrorLine");
+            var overlay = _controlFinder.FindControl<Border>("IndexOverlay");
+            var errBorder = _controlFinder.FindControl<Border>("IndexOverlayErrorBorder");
+            var errLine = _controlFinder.FindControl<TextBlock>("IndexOverlayErrorLine");
 
             // Clear error visuals when closing
             if (errBorder != null) errBorder.IsVisible = false;
@@ -96,10 +101,10 @@ public class OverlayManager
     {
         try
         {
-            var overlay = _window.FindControl<Border>("IndexOverlay");
-            var textBox = _window.FindControl<TextBox>("IndexOverlayTextBox");
-            var errBorder = _window.FindControl<Border>("IndexOverlayErrorBorder");
-            var errLine = _window.FindControl<TextBlock>("IndexOverlayErrorLine");
+            var overlay = _controlFinder.FindControl<Border>("IndexOverlay");
+            var textBox = _controlFinder.FindControl<TextBox>("IndexOverlayTextBox");
+            var errBorder = _controlFinder.FindControl<Border>("IndexOverlayErrorBorder");
+            var errLine = _controlFinder.FindControl<TextBlock>("IndexOverlayErrorLine");
 
             if (overlay == null || textBox == null)
             {
@@ -146,7 +151,7 @@ public class OverlayManager
     {
         try
         {
-            var overlay = _window.FindControl<Border>("IndexOverlay");
+            var overlay = _controlFinder.FindControl<Border>("IndexOverlay");
             if (overlay == null)
             {
                 return;
@@ -174,7 +179,7 @@ public class OverlayManager
     {
         try
         {
-            var overlay = _window.FindControl<Border>("HelpOverlay");
+            var overlay = _controlFinder.FindControl<Border>("HelpOverlay");
             if (overlay != null)
             {
                 overlay.IsVisible = true;
@@ -193,7 +198,7 @@ public class OverlayManager
     {
         try
         {
-            var overlay = _window.FindControl<Border>("HelpOverlay");
+            var overlay = _controlFinder.FindControl<Border>("HelpOverlay");
             if (overlay != null)
             {
                 overlay.IsVisible = false;
@@ -212,7 +217,7 @@ public class OverlayManager
     {
         try
         {
-            var overlay = _window.FindControl<Border>("HelpOverlay");
+            var overlay = _controlFinder.FindControl<Border>("HelpOverlay");
             if (overlay != null)
             {
                 overlay.IsVisible = !overlay.IsVisible;
@@ -232,8 +237,8 @@ public class OverlayManager
     {
         try
         {
-            var overlay = _window.FindControl<Border>("DeleteArticleConfirmOverlay");
-            var titleLabel = _window.FindControl<TextBlock>("DeleteArticleTitleLabel");
+            var overlay = _controlFinder.FindControl<Border>("DeleteArticleConfirmOverlay");
+            var titleLabel = _controlFinder.FindControl<TextBlock>("DeleteArticleTitleLabel");
 
             if (overlay != null)
             {
@@ -257,7 +262,7 @@ public class OverlayManager
     {
         try
         {
-            var overlay = _window.FindControl<Border>("DeleteArticleConfirmOverlay");
+            var overlay = _controlFinder.FindControl<Border>("DeleteArticleConfirmOverlay");
             if (overlay != null)
             {
                 overlay.IsVisible = false;
@@ -276,7 +281,7 @@ public class OverlayManager
     {
         try
         {
-            var overlay = _window.FindControl<Border>("IndexOverlay");
+            var overlay = _controlFinder.FindControl<Border>("IndexOverlay");
             return overlay?.IsVisible ?? false;
         }
         catch
@@ -292,7 +297,7 @@ public class OverlayManager
     {
         try
         {
-            var overlay = _window.FindControl<Border>("HelpOverlay");
+            var overlay = _controlFinder.FindControl<Border>("HelpOverlay");
             return overlay?.IsVisible ?? false;
         }
         catch
@@ -308,7 +313,7 @@ public class OverlayManager
     {
         try
         {
-            var overlay = _window.FindControl<Border>("DeleteArticleConfirmOverlay");
+            var overlay = _controlFinder.FindControl<Border>("DeleteArticleConfirmOverlay");
             return overlay?.IsVisible ?? false;
         }
         catch

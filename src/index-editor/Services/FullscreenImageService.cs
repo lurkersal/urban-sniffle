@@ -11,11 +11,18 @@ namespace IndexEditor.Services;
 /// </summary>
 public class FullscreenImageService
 {
-    private readonly Window _window;
+    private readonly IWindowStateManager _windowStateManager;
+    private readonly IControlFinder _controlFinder;
 
     public FullscreenImageService(Window window)
+        : this(new WindowStateManager(window), new WindowControlFinder(window))
     {
-        _window = window ?? throw new ArgumentNullException(nameof(window));
+    }
+
+    public FullscreenImageService(IWindowStateManager windowStateManager, IControlFinder controlFinder)
+    {
+        _windowStateManager = windowStateManager ?? throw new ArgumentNullException(nameof(windowStateManager));
+        _controlFinder = controlFinder ?? throw new ArgumentNullException(nameof(controlFinder));
     }
 
     /// <summary>
@@ -29,9 +36,9 @@ public class FullscreenImageService
         {
             DebugLogger.Log($"FullscreenImageService.ShowFullscreen: showing page {pageNumber}");
 
-            var overlay = _window.FindControl<Border>("FullscreenImageOverlay");
-            var img = _window.FindControl<Image>("FullscreenImage");
-            var pageText = _window.FindControl<TextBlock>("FullscreenPageNumber");
+            var overlay = _controlFinder.FindControl<Border>("FullscreenImageOverlay");
+            var img = _controlFinder.FindControl<Image>("FullscreenImage");
+            var pageText = _controlFinder.FindControl<TextBlock>("FullscreenPageNumber");
 
             if (overlay == null || img == null)
             {
@@ -50,7 +57,7 @@ public class FullscreenImageService
             // Enter fullscreen mode
             try
             {
-                _window.WindowState = Avalonia.Controls.WindowState.FullScreen;
+                _windowStateManager.WindowState = Avalonia.Controls.WindowState.FullScreen;
                 DebugLogger.Log("FullscreenImageService.ShowFullscreen: entered fullscreen mode");
             }
             catch (Exception fsEx)
@@ -75,7 +82,7 @@ public class FullscreenImageService
         {
             DebugLogger.Log("FullscreenImageService.CloseFullscreen: closing overlay");
             
-            var overlay = _window.FindControl<Border>("FullscreenImageOverlay");
+            var overlay = _controlFinder.FindControl<Border>("FullscreenImageOverlay");
             if (overlay != null)
             {
                 overlay.IsVisible = false;
@@ -84,9 +91,9 @@ public class FullscreenImageService
             // Exit fullscreen mode
             try
             {
-                if (_window.WindowState == Avalonia.Controls.WindowState.FullScreen)
+                if (_windowStateManager.WindowState == Avalonia.Controls.WindowState.FullScreen)
                 {
-                    _window.WindowState = Avalonia.Controls.WindowState.Normal;
+                    _windowStateManager.WindowState = Avalonia.Controls.WindowState.Normal;
                     DebugLogger.Log("FullscreenImageService.CloseFullscreen: exited fullscreen mode");
                 }
             }
@@ -108,7 +115,7 @@ public class FullscreenImageService
     {
         try
         {
-            var overlay = _window.FindControl<Border>("FullscreenImageOverlay");
+            var overlay = _controlFinder.FindControl<Border>("FullscreenImageOverlay");
             return overlay?.IsVisible ?? false;
         }
         catch (Exception ex)

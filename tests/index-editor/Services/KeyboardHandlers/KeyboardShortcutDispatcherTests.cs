@@ -34,19 +34,38 @@ public class KeyboardShortcutDispatcherTests
         }
     }
 
+    // Test implementation of KeyEventArgs that properly sets the Key
     private class TestKeyEventArgs : KeyEventArgs
     {
         public TestKeyEventArgs(Key key)
         {
-            Key = key;
-            Handled = false;
+            // Set the RoutedEvent so the base class is properly initialized
+            RoutedEvent = Avalonia.Interactivity.RoutedEvent.Register<KeyEventArgs>(
+                "TestKey", 
+                Avalonia.Interactivity.RoutingStrategies.Bubble, 
+                typeof(KeyboardShortcutDispatcherTests));
+            
+            // Use reflection to set the private backing field for Key in the base class
+            var keyField = typeof(KeyEventArgs).GetField("<Key>k__BackingField", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (keyField != null)
+            {
+                keyField.SetValue(this, key);
+            }
+            else
+            {
+                // Try alternate field name
+                keyField = typeof(KeyEventArgs).GetField("_key", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (keyField != null)
+                {
+                    keyField.SetValue(this, key);
+                }
+            }
         }
-
-        public new Key Key { get; }
-        public new bool Handled { get; set; }
     }
 
-    private TestKeyEventArgs CreateKeyEvent(Key key = Key.A)
+    private KeyEventArgs CreateKeyEvent(Key key = Key.A)
     {
         return new TestKeyEventArgs(key);
     }
