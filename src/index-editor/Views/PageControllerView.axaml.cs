@@ -495,6 +495,10 @@ namespace IndexEditor.Views
                 {
                     var src = new Avalonia.Media.Imaging.Bitmap(path);
                     img.Source = src;
+
+                    // Set high quality interpolation mode for better image rendering
+                    RenderOptions.SetBitmapInterpolationMode(img, Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality);
+                    
                     if (missing != null) missing.IsVisible = false;
                     if (pageInput != null) pageInput.Foreground = Brushes.Black;
                 }

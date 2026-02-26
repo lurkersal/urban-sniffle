@@ -149,3 +149,98 @@
     WHERE il.contentid IN (536,537)
     ORDER BY il.linkedvolume, il.linkednumber, il.page
 [DEBUG] ArticleId: 252, LinkedIssues.Count: 0
+[DEBUG] GetLinkedIssuesForArticleAsync: ArticleId=509, ContentIds=[1136,1137]
+[DEBUG] Final SQL: SELECT DISTINCT
+    il.linkedmagazineid AS LinkedMagazineId,
+    il.linkedvolume AS LinkedVolume,
+    il.linkednumber AS LinkedNumber,
+    il.page AS Page,
+    i.issueid AS IssueId,
+    m.name AS MagazineName,
+    i.year AS Year,
+    NULL AS CoverImagePath
+    FROM issuelink il
+    LEFT JOIN issue i ON
+        i.magazineid = il.linkedmagazineid
+        AND i.volume = il.linkedvolume
+        AND i.number = il.linkednumber
+    LEFT JOIN magazine m ON m.magazineid = il.linkedmagazineid
+    WHERE il.contentid IN (1136,1137)
+    ORDER BY il.linkedvolume, il.linkednumber, il.page
+[DEBUG] ArticleId: 509, LinkedIssues.Count: 0
+[DEBUG] GetLinkedIssuesForArticleAsync: ArticleId=433, ContentIds=[901,902]
+[DEBUG] Final SQL: SELECT DISTINCT
+    il.linkedmagazineid AS LinkedMagazineId,
+    il.linkedvolume AS LinkedVolume,
+    il.linkednumber AS LinkedNumber,
+    il.page AS Page,
+    i.issueid AS IssueId,
+    m.name AS MagazineName,
+    i.year AS Year,
+    NULL AS CoverImagePath
+    FROM issuelink il
+    LEFT JOIN issue i ON
+        i.magazineid = il.linkedmagazineid
+        AND i.volume = il.linkedvolume
+        AND i.number = il.linkednumber
+    LEFT JOIN magazine m ON m.magazineid = il.linkedmagazineid
+    WHERE il.contentid IN (901,902)
+    ORDER BY il.linkedvolume, il.linkednumber, il.page
+[DEBUG] ArticleId: 433, LinkedIssues.Count: 0
+[DEBUG] GetLinkedIssuesForArticleAsync: ArticleId=269, ContentIds=[555,556]
+[DEBUG] Final SQL: SELECT DISTINCT
+    il.linkedmagazineid AS LinkedMagazineId,
+    il.linkedvolume AS LinkedVolume,
+    il.linkednumber AS LinkedNumber,
+    il.page AS Page,
+    i.issueid AS IssueId,
+    m.name AS MagazineName,
+    i.year AS Year,
+    NULL AS CoverImagePath
+    FROM issuelink il
+    LEFT JOIN issue i ON
+        i.magazineid = il.linkedmagazineid
+        AND i.volume = il.linkedvolume
+        AND i.number = il.linkednumber
+    LEFT JOIN magazine m ON m.magazineid = il.linkedmagazineid
+    WHERE il.contentid IN (555,556)
+    ORDER BY il.linkedvolume, il.linkednumber, il.page
+[DEBUG] ArticleId: 269, LinkedIssues.Count: 0
+[DEBUG] GetLinkedIssuesForArticleAsync: ArticleId=541, ContentIds=[1235,1236,1237,1238,1239,1240]
+[DEBUG] Final SQL: SELECT DISTINCT
+    il.linkedmagazineid AS LinkedMagazineId,
+    il.linkedvolume AS LinkedVolume,
+    il.linkednumber AS LinkedNumber,
+    il.page AS Page,
+    i.issueid AS IssueId,
+    m.name AS MagazineName,
+    i.year AS Year,
+    NULL AS CoverImagePath
+    FROM issuelink il
+    LEFT JOIN issue i ON
+        i.magazineid = il.linkedmagazineid
+        AND i.volume = il.linkedvolume
+        AND i.number = il.linkednumber
+    LEFT JOIN magazine m ON m.magazineid = il.linkedmagazineid
+    WHERE il.contentid IN (1235,1236,1237,1238,1239,1240)
+    ORDER BY il.linkedvolume, il.linkednumber, il.page
+[DEBUG] ArticleId: 541, LinkedIssues.Count: 0
+[DEBUG] GetLinkedIssuesForArticleAsync: ArticleId=167, ContentIds=[347,348]
+[DEBUG] Final SQL: SELECT DISTINCT
+    il.linkedmagazineid AS LinkedMagazineId,
+    il.linkedvolume AS LinkedVolume,
+    il.linkednumber AS LinkedNumber,
+    il.page AS Page,
+    i.issueid AS IssueId,
+    m.name AS MagazineName,
+    i.year AS Year,
+    NULL AS CoverImagePath
+    FROM issuelink il
+    LEFT JOIN issue i ON
+        i.magazineid = il.linkedmagazineid
+        AND i.volume = il.linkedvolume
+        AND i.number = il.linkednumber
+    LEFT JOIN magazine m ON m.magazineid = il.linkedmagazineid
+    WHERE il.contentid IN (347,348)
+    ORDER BY il.linkedvolume, il.linkednumber, il.page
+[DEBUG] ArticleId: 167, LinkedIssues.Count: 0
