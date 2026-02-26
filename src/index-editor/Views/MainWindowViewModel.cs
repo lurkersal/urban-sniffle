@@ -116,6 +116,8 @@ namespace IndexEditor.Views
                 }
                 else System.IO.File.Move(temp, indexPath);
                 ToastService.Show("_index.txt saved");
+                // Clear unsaved changes flag after successful save
+                EditorState.HasUnsavedChanges = false;
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindowViewModel.SaveIndexFromOverlay", ex); ToastService.Show("Failed to save _index.txt"); }
         }

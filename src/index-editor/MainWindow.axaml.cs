@@ -145,6 +145,8 @@ public partial class MainWindow : Window
                                      try { if (vm != null) oldIndex = vm.Articles.IndexOf(toDelete); else if (IndexEditor.Shared.EditorState.Articles != null) oldIndex = IndexEditor.Shared.EditorState.Articles.IndexOf(toDelete); } catch { }
                                      // Remove from shared state
                                      IndexEditor.Shared.EditorState.Articles?.Remove(toDelete);
+                                     // Mark that we have unsaved changes
+                                     IndexEditor.Shared.EditorState.HasUnsavedChanges = true;
                                      // Update VM list if present
                                      if (vm != null)
                                      {
@@ -383,10 +385,46 @@ public partial class MainWindow : Window
         catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: outer", ex); WriteDiagFile("[TRACE] Exception raising window"); }
     }
 
-    private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
         try
         {
+            // Check for unsaved changes and prompt user
+            if (IndexEditor.Shared.EditorState.HasUnsavedChanges)
+            {
+                try
+                {
+                    e.Cancel = true; // Cancel the close temporarily
+                    var result = await IndexEditor.Views.ConfirmDialog.ShowDialog(
+                        this, 
+                        "You have unsaved changes. Do you want to save before quitting?");
+                    
+                    if (result)
+                    {
+                        // User wants to save
+                        try
+                        {
+                            var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                            if (!string.IsNullOrWhiteSpace(folder))
+                            {
+                                IndexEditor.Shared.IndexSaver.SaveIndex(folder);
+                                IndexEditor.Shared.ToastService.Show("Index saved");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            DebugLogger.LogException("OnWindowClosing: save failed", ex);
+                            IndexEditor.Shared.ToastService.Show("Failed to save index");
+                        }
+                    }
+                    
+                    // Now close the window
+                    this.Close();
+                }
+                catch (Exception ex) { DebugLogger.LogException("OnWindowClosing: prompt save", ex); }
+                return;
+            }
+            
             try
             {
                 var isMax = this.WindowState == WindowState.Maximized;
@@ -854,6 +892,10 @@ public partial class MainWindow : Window
             catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: choose first image", ex); IndexEditor.Shared.EditorState.CurrentPage = 1; }
 
             IndexEditor.Shared.EditorState.NotifyStateChanged();
+            
+            // Clear unsaved changes flag since we just loaded from disk
+            IndexEditor.Shared.EditorState.HasUnsavedChanges = false;
+            
             // Persist the folder as the most-recently opened so future runs can default to it
             try { IndexEditor.Shared.RecentFolderStore.SetLastOpenedFolder(folder); } catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: persist recent folder", ex); }
         }

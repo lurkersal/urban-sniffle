@@ -7,7 +7,7 @@
       <TextBlock x:Name="MessageText" TextWrapping="Wrap" />
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
         <Button x:Name="CancelButton" Content="Cancel" />
-        <Button x:Name="OkButton" Content="Delete" />
+        <Button x:Name="OkButton" Content="Save" />
       </StackPanel>
     </StackPanel>
   </Border>

@@ -59,6 +59,9 @@ namespace IndexEditor.Shared
             {
                 File.Move(tempPath, indexPath);
             }
+            
+            // Clear the unsaved changes flag after successful save
+            EditorState.HasUnsavedChanges = false;
         }
     }
 }

@@ -86,8 +86,45 @@ namespace IndexEditor.Views
                 {
                     try
                     {
-                        // Use custom folder browser window that lists only folders and selects a folder when it has no subfolders on double-click
                         var wnd = this.VisualRoot as Window;
+                        
+                        // Check for unsaved changes and prompt user
+                        if (IndexEditor.Shared.EditorState.HasUnsavedChanges)
+                        {
+                            try
+                            {
+                                if (wnd != null)
+                                {
+                                    var result = await IndexEditor.Views.ConfirmDialog.ShowDialog(
+                                        wnd, 
+                                        "You have unsaved changes. Do you want to save before opening a new folder?");
+                                    
+                                    if (result)
+                                    {
+                                        // User wants to save
+                                        try
+                                        {
+                                            var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                                            if (!string.IsNullOrWhiteSpace(folder))
+                                            {
+                                                IndexEditor.Shared.IndexSaver.SaveIndex(folder);
+                                                IndexEditor.Shared.ToastService.Show("Index saved");
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            IndexEditor.Shared.ToastService.Show("Failed to save index");
+                                            IndexEditor.Shared.DebugLogger.LogException("TopBar: save before open", ex);
+                                            return; // Don't proceed with opening if save failed
+                                        }
+                                    }
+                                    // If user chose not to save (result == false), proceed with opening
+                                }
+                            }
+                            catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: prompt save before open", ex); }
+                        }
+                        
+                        // Use custom folder browser window that lists only folders and selects a folder when it has no subfolders on double-click
                         var start = IndexEditor.Shared.EditorState.CurrentFolder;
                         IndexEditor.Shared.DebugLogger.Log($"TopBar.OpenClick: Current folder is: {start ?? "(null)"}");
                         string? path = null;

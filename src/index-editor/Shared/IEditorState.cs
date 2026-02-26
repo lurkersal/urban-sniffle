@@ -67,6 +67,11 @@ namespace IndexEditor.Shared
         bool ShowImages { get; set; }
         
         /// <summary>
+        /// Flag indicating whether there are unsaved changes to the index file.
+        /// </summary>
+        bool HasUnsavedChanges { get; set; }
+        
+        /// <summary>
         /// Counter used to request focus in the ArticleEditor.
         /// ArticleEditor instances monitor this counter and attempt to focus the Title textbox when it increases.
         /// </summary>

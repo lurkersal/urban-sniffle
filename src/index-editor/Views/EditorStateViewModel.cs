@@ -393,6 +393,9 @@ namespace IndexEditor.Views
         {
             if (sender is ArticleLine article)
             {
+                // Mark that we have unsaved changes whenever an article property changes
+                try { IndexEditor.Shared.EditorState.HasUnsavedChanges = true; } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.OnArticlePropertyChanged: set HasUnsavedChanges", ex); }
+                
                 // OnArticlePropertyChanged
                 // If pages or category changed, we may need to reorder
                 if (e.PropertyName == nameof(ArticleLine.Pages) || e.PropertyName == nameof(ArticleLine.PagesText) || e.PropertyName == nameof(ArticleLine.Category))

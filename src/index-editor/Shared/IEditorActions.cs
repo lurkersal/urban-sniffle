@@ -313,6 +313,9 @@ namespace IndexEditor.Shared
                 
                 _state.NotifyStateChanged();
                 
+                // Mark that we have unsaved changes
+                _state.HasUnsavedChanges = true;
+                
                 // Raise event to notify UI layer
                 try
                 {

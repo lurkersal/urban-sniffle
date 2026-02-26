@@ -23,6 +23,7 @@ namespace IndexEditor.Shared
         public string? CurrentYear { get; set; }
         public string? CurrentFolder { get; set; }
         public bool ShowImages { get; set; } = true;
+        public bool HasUnsavedChanges { get; set; }
         public int ArticleEditorFocusRequest => _articleEditorFocusRequest;
         
         public event Action? StateChanged;
@@ -134,6 +135,12 @@ namespace IndexEditor.Shared
         { 
             get => Instance.ShowImages; 
             set => Instance.ShowImages = value; 
+        }
+        
+        public static bool HasUnsavedChanges 
+        { 
+            get => Instance.HasUnsavedChanges; 
+            set => Instance.HasUnsavedChanges = value; 
         }
         
         public static int ArticleEditorFocusRequest => Instance.ArticleEditorFocusRequest;
