@@ -19,12 +19,12 @@ namespace IndexEditor.Views
 
         private void OnKeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Y)
+            if (e.Key == Key.Y || e.Key == Key.Enter)
             {
                 e.Handled = true;
                 Close(true);
             }
-            else if (e.Key == Key.N)
+            else if (e.Key == Key.N || e.Key == Key.Escape)
             {
                 e.Handled = true;
                 Close(false);

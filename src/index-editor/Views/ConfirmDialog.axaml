@@ -1,13 +1,14 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="IndexEditor.Views.ConfirmDialog"
+        Title="Unsaved Changes"
         Width="400" Height="150" WindowStartupLocation="CenterOwner" CanResize="False">
   <Border Padding="12">
     <StackPanel Spacing="12">
       <TextBlock x:Name="MessageText" TextWrapping="Wrap" />
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-        <Button x:Name="CancelButton" Content="_Cancel" HotKey="Escape" />
-        <Button x:Name="OkButton" Content="_Save" HotKey="Enter" IsDefault="True" />
+        <Button x:Name="CancelButton" Content="_No" />
+        <Button x:Name="OkButton" Content="_Yes" IsDefault="True" />
       </StackPanel>
     </StackPanel>
   </Border>

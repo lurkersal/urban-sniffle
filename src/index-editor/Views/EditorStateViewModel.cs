@@ -85,6 +85,8 @@ namespace IndexEditor.Views
             get => _selectedArticle;
             set
             {
+                try { DebugLogger.Log($"==> SelectedArticle SETTER CALLED: incoming='{value?.Title}', current='{_selectedArticle?.Title}', stacktrace={Environment.StackTrace}"); } catch { }
+                
                 // Normalize the incoming article to an instance from our Articles collection if possible
                 ArticleLine? incoming = value;
                 if (incoming != null)
@@ -101,6 +103,7 @@ namespace IndexEditor.Views
                 {
                     if (activeArticle != null && !object.ReferenceEquals(activeArticle, incoming))
                     {
+                        try { DebugLogger.Log($"==> SelectedArticle SETTER: BLOCKED - active segment prevents selection change"); } catch { }
                         // Inform user and do not change selection while a segment is open
                         IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first");
                         // Push a property changed so UI bindings revert to the existing selected article
@@ -113,6 +116,7 @@ namespace IndexEditor.Views
                 // exists in our Articles collection, ignore the transient null to avoid losing the editor view.
                 if (incoming == null && _selectedArticle != null && Articles.Contains(_selectedArticle))
                 {
+                    try { DebugLogger.Log($"==> SelectedArticle SETTER: IGNORING transient null (current article still in collection)"); } catch { }
                     // ignore transient clear
                     return;
                 }
@@ -160,6 +164,7 @@ namespace IndexEditor.Views
          }
 
          private bool _suppressCategorySet = false;
+        private bool _isReordering = false;
          public string? SelectedCategory
          {
              get => SelectedArticle?.Category;
@@ -400,7 +405,11 @@ namespace IndexEditor.Views
                 // If pages or category changed, we may need to reorder
                 if (e.PropertyName == nameof(ArticleLine.Pages) || e.PropertyName == nameof(ArticleLine.PagesText) || e.PropertyName == nameof(ArticleLine.Category))
                  {
-                     ReorderArticlesByPage();
+                     // Skip if already reordering to prevent recursive calls
+                     if (!_isReordering)
+                     {
+                         ReorderArticlesByPage();
+                     }
                  }
                 // If the article's active segment or last-modified segment changed, notify ActiveSegmentDisplay
                 if (e.PropertyName == nameof(ArticleLine.ActiveSegment) || e.PropertyName == nameof(ArticleLine.LastModifiedSegment))
@@ -412,8 +421,22 @@ namespace IndexEditor.Views
 
         private void ReorderArticlesByPage()
         {
-            // Suppress category writes while we reorder/move items to avoid transient writes
-            _suppressCategorySet = true;
+            // Prevent recursive calls during reordering
+            if (_isReordering)
+            {
+                try { DebugLogger.Log("ReorderArticlesByPage: Skipping - already reordering"); } catch { }
+                return;
+            }
+            
+            _isReordering = true;
+            try
+            {
+                // Preserve the current selection so it doesn't get lost during reordering
+                var currentSelection = _selectedArticle;
+                try { DebugLogger.Log($"ReorderArticlesByPage: Saving selection: '{currentSelection?.Title}' (Category: {currentSelection?.Category})"); } catch { }
+                
+                // Suppress category writes while we reorder/move items to avoid transient writes
+                _suppressCategorySet = true;
             // Compute ordered list (articles with no pages end up after those with pages)
             var ordered = (EditorState.Articles ?? new System.Collections.Generic.List<Common.Shared.ArticleLine>())
                 .OrderBy(a => (a.Pages != null && a.Pages.Count > 0) ? a.Pages.Min() : int.MaxValue)
@@ -440,20 +463,90 @@ namespace IndexEditor.Views
                 }
             }
 
+            // Restore the selection after reordering to prevent article from disappearing
+            // This must happen AFTER the ObservableCollection is updated so the Contains check in the setter works
+            if (currentSelection != null && ordered.Contains(currentSelection))
+            {
+                try { DebugLogger.Log($"ReorderArticlesByPage: currentSelection found in ordered list, attempting restore"); } catch { }
+                // Find the article in the new ordered list (it might be the same reference or a matching one)
+                var restored = ordered.FirstOrDefault(a => object.ReferenceEquals(a, currentSelection))
+                            ?? ordered.FirstOrDefault(a => a.Pages != null && currentSelection.Pages != null && 
+                                                          a.Pages.SequenceEqual(currentSelection.Pages) && 
+                                                          (a.Title ?? string.Empty) == (currentSelection.Title ?? string.Empty));
+                if (restored != null)
+                {
+                    try { DebugLogger.Log($"ReorderArticlesByPage: Restoring selection to '{restored.Title}' (same ref: {object.ReferenceEquals(currentSelection, restored)})"); } catch { }
+                    // Directly set the backing field to avoid the setter's guard logic
+                    // which might reject the restoration
+                    var wasSelected = _selectedArticle;
+                    _selectedArticle = restored;
+                    
+                    // Only raise PropertyChanged if the selection actually changed
+                    if (!object.ReferenceEquals(wasSelected, restored))
+                    {
+                        try
+                        {
+                            // Update IsSelected flags on all articles
+                            foreach (var a in Articles)
+                            {
+                                try { a.IsSelected = object.ReferenceEquals(a, _selectedArticle); } 
+                                catch (Exception ex) { DebugLogger.LogException("ReorderArticlesByPage: set IsSelected", ex); }
+                            }
+                            
+                            // Update global state
+                            IndexEditor.Shared.EditorState.ActiveArticle = _selectedArticle;
+                            
+                            // Notify bindings
+                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
+                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
+                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentShownArticle)));
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("ReorderArticlesByPage: restore selection notifications", ex); }
+                    }
+                    else
+                    {
+                        try { DebugLogger.Log($"ReorderArticlesByPage: Selection unchanged (same reference), no notification needed"); } catch { }
+                    }
+                }
+                else
+                {
+                    try { DebugLogger.Log($"ReorderArticlesByPage: WARNING - Could not find restored article in ordered list!"); } catch { }
+                }
+            }
+            else
+            {
+                try { DebugLogger.Log($"ReorderArticlesByPage: WARNING - currentSelection is null or not in ordered list (currentSelection null: {currentSelection == null})"); } catch { }
+            }
+
             // Categories are exclusively DB-sourced; do not recompute or update Categories from articles here.
             // ReorderArticlesByPage completed
             _suppressCategorySet = false;
+            }
+            finally
+            {
+                _isReordering = false;
+            }
         }
 
         private void OnEditorStateChanged()
         {
             try
             {
+                try { DebugLogger.Log($"==> OnEditorStateChanged CALLED: SelectedArticle is currently '{_selectedArticle?.Title}'"); } catch { }
                 Dispatcher.UIThread.Post(() =>
                 {
-                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle))); } catch { }
+                    // DO NOT raise PropertyChanged for SelectedArticle here!
+                    // Raising it when the value hasn't actually changed confuses the binding
+                    // system and causes the article to disappear from the editor.
+                    // Only the SelectedArticle setter should raise this event.
+                    
+                    // try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle))); } catch { }
+                    
+                    // These are fine - they may actually change when EditorState changes
                     try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentShownArticle))); } catch { }
                     try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegmentDisplay))); } catch { }
+                    
+                    try { DebugLogger.Log($"==> OnEditorStateChanged COMPLETED: SelectedArticle is still '{_selectedArticle?.Title}'"); } catch { }
                 });
             }
             catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.OnEditorStateChanged", ex); }

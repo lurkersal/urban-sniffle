@@ -69,8 +69,8 @@
                         <TextBlock x:Name="DeleteArticleConfirmMessage" Grid.Row="0" Text="Delete the selected article?" FontWeight="Bold" FontSize="14" TextWrapping="Wrap" />
                         <TextBlock Grid.Row="1" Text="This action will remove the article from the index. You can undo by reopening the folder if needed." TextWrapping="Wrap" Foreground="#333" Margin="0,8,0,0" />
                         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                            <Button x:Name="DeleteArticleConfirmBtn" Content="_Delete" HotKey="Enter" IsDefault="True" />
-                            <Button x:Name="DeleteArticleCancelBtn" Content="_Cancel" HotKey="Escape" />
+                            <Button x:Name="DeleteArticleConfirmBtn" Content="_Delete" IsDefault="True" />
+                            <Button x:Name="DeleteArticleCancelBtn" Content="_Cancel" />
                         </StackPanel>
                     </Grid>
                 </Border>

@@ -179,6 +179,55 @@ public partial class MainWindow : Window
                     delCancel.Click += (s, e) => { try { delOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("DeleteArticleCancelBtn.Click", ex); } };
                     delCancel.Click += (s, e) => { try { delOverlay.IsVisible = false; DebugLogger.Log("DeleteArticleCancelBtn.Click - overlay hidden"); } catch (Exception ex) { DebugLogger.LogException("DeleteArticleCancelBtn.Click", ex); } };
                  }
+                 
+                 // Add keyboard handling for Delete overlay - Enter to confirm, Escape to cancel
+                 // This handles the keys only when the overlay is visible
+                 if (delOverlay != null && delConfirm != null && delCancel != null)
+                 {
+                     delOverlay.KeyDown += (s, e) =>
+                     {
+                         try
+                         {
+                             if (delOverlay.IsVisible)
+                             {
+                                 if (e.Key == Avalonia.Input.Key.Enter)
+                                 {
+                                     delConfirm.Command?.Execute(delConfirm.CommandParameter);
+                                     // Trigger click event
+                                     delConfirm.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                                     e.Handled = true;
+                                 }
+                                 else if (e.Key == Avalonia.Input.Key.Escape)
+                                 {
+                                     delOverlay.IsVisible = false;
+                                     e.Handled = true;
+                                 }
+                             }
+                         }
+                         catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmOverlay.KeyDown", ex); }
+                     };
+                     
+                     // Make the overlay focusable so it can receive keyboard input
+                     delOverlay.Focusable = true;
+                     
+                     // When overlay becomes visible, focus it so it receives keyboard input
+                     delOverlay.PropertyChanged += (s, e) =>
+                     {
+                         try
+                         {
+                             if (e.Property.Name == "IsVisible" && e.NewValue is bool isVisible && isVisible)
+                             {
+                                 // Overlay just became visible, focus it
+                                 Dispatcher.UIThread.Post(() =>
+                                 {
+                                     try { delOverlay.Focus(); }
+                                     catch (Exception ex2) { DebugLogger.LogException("DeleteArticleConfirmOverlay focus on visible", ex2); }
+                                 }, Avalonia.Threading.DispatcherPriority.Loaded);
+                             }
+                         }
+                         catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmOverlay.PropertyChanged", ex); }
+                     };
+                 }
              }
              catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire delete confirmation buttons", ex); }
 
@@ -417,6 +466,9 @@ public partial class MainWindow : Window
                             IndexEditor.Shared.ToastService.Show("Failed to save index");
                         }
                     }
+                    
+                    // Clear the unsaved changes flag so we can quit without being prompted again
+                    IndexEditor.Shared.EditorState.HasUnsavedChanges = false;
                     
                     // Now close the window
                     this.Close();

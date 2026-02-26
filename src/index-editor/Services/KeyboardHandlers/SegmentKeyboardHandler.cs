@@ -122,6 +122,10 @@ public class SegmentKeyboardHandler : IKeyboardShortcutHandler
                 // User feedback
                 try { ToastService.Show($"Segment ended ({start}-{end})"); } 
                 catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: ToastService.Show on end segment", ex); }
+                
+                // Return focus to page controller
+                try { FocusPageController(); }
+                catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: FocusPageController after end", ex); }
             }
             catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: EndActiveSegment", ex); }
             
@@ -276,6 +280,39 @@ public class SegmentKeyboardHandler : IKeyboardShortcutHandler
         e.Handled = true;
     }
 
+    private void FocusPageController()
+    {
+        try
+        {
+            // Find the PageControllerView and focus its PageInput TextBox
+            var pageController = _window.FindControl<Views.PageControllerView>("PageControllerView");
+            if (pageController != null)
+            {
+                // Add a small delay to ensure segment ending and UI updates are complete
+                // before transferring focus, preventing article from disappearing
+                System.Threading.Tasks.Task.Delay(50).ContinueWith(_ =>
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        try
+                        {
+                            var pageInput = pageController.FindControl<TextBox>("PageInput");
+                            if (pageInput != null)
+                            {
+                                pageInput.Focus();
+                                // Select all text so user can easily type a new page number
+                                try { pageInput.SelectAll(); }
+                                catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: SelectAll on PageInput", ex); }
+                            }
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: FocusPageController (UIThread)", ex); }
+                    });
+                });
+            }
+        }
+        catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: FocusPageController", ex); }
+    }
+
     private void CancelActiveSegment(KeyEventArgs e)
     {
         try
@@ -290,6 +327,10 @@ public class SegmentKeyboardHandler : IKeyboardShortcutHandler
             
             try { ToastService.Show("Segment cancelled"); } 
             catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: ToastService.Show on cancel", ex); }
+            
+            // Return focus to page controller
+            try { FocusPageController(); }
+            catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: FocusPageController after cancel", ex); }
         }
         catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: cancel active segment", ex); }
         
