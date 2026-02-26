@@ -484,6 +484,10 @@ namespace Common.Shared
             if (cat == "wives")
                 return $"{categoryText}\n{pagesText}\nModel: {string.Join(" | ", ModelNames)}\nTitle: {Title}";
 
+            // Interview: show author and model
+            if (cat == "interview")
+                return $"{categoryText}\n{pagesText}\nTitle: {Title}\nModel: {string.Join(" | ", ModelNames)}\nAuthor: {string.Join(", ", Contributors)}";
+
             // Feature, Fiction, Review, Humour: show contributors as Author
             if (cat == "feature" || cat == "fiction" || cat == "review" || cat == "humour" || cat == "humor")
                 return $"{categoryText}\n{pagesText}\nTitle: {Title}\nAuthor: {string.Join(", ", Contributors)}";

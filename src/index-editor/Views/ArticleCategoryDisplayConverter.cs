@@ -17,7 +17,8 @@ namespace IndexEditor.Views
                     category.Equals("Model", StringComparison.OrdinalIgnoreCase) ||
                     category.Equals("Group", StringComparison.OrdinalIgnoreCase) ||
                     category.Equals("Wives", StringComparison.OrdinalIgnoreCase) ||
-                    category.Equals("Letters", StringComparison.OrdinalIgnoreCase))
+                    category.Equals("Letters", StringComparison.OrdinalIgnoreCase) ||
+                    category.Equals("Interview", StringComparison.OrdinalIgnoreCase))
                     return 2;
                 if (category.Equals("Review", StringComparison.OrdinalIgnoreCase) ||
                     category.Equals("Fiction", StringComparison.OrdinalIgnoreCase) ||
