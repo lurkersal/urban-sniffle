@@ -52,6 +52,11 @@ namespace IndexEditor.Shared
         string? CurrentNumber { get; set; }
         
         /// <summary>
+        /// Year extracted from _index.txt or folder name.
+        /// </summary>
+        string? CurrentYear { get; set; }
+        
+        /// <summary>
         /// Folder path opened by the app (used to locate page image files).
         /// </summary>
         string? CurrentFolder { get; set; }

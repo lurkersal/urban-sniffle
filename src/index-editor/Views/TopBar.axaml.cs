@@ -21,6 +21,7 @@ namespace IndexEditor.Views
             var magTypeText = this.FindControl<TextBlock>("MagTypeText");
             var volText = this.FindControl<TextBlock>("VolumeText");
             var numText = this.FindControl<TextBlock>("NumberText");
+            var yearText = this.FindControl<TextBlock>("YearText");
             // Initialize magazine metadata display from EditorState (may be populated by MainWindow when loading _index.txt)
             void RefreshMetadataDisplay()
             {
@@ -29,9 +30,11 @@ namespace IndexEditor.Views
                     var mag = IndexEditor.Shared.EditorState.CurrentMagazine ?? "—";
                     var vol = IndexEditor.Shared.EditorState.CurrentVolume ?? "—";
                     var num = IndexEditor.Shared.EditorState.CurrentNumber ?? "—";
+                    var year = IndexEditor.Shared.EditorState.CurrentYear ?? "—";
                     if (magTypeText != null) magTypeText.Text = $"Magazine: {mag}";
                     if (volText != null) volText.Text = $"Vol: {vol}";
                     if (numText != null) numText.Text = $"No: {num}";
+                    if (yearText != null) yearText.Text = $"Year: {year}";
                 }
                 catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar.RefreshMetadataDisplay", ex); }
             }

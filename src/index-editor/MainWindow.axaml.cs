@@ -699,10 +699,11 @@ public partial class MainWindow : Window
             try
             {
                 var folderName = System.IO.Path.GetFileName(folder.TrimEnd(System.IO.Path.DirectorySeparatorChar));
-                var (mag, vol, num) = IndexEditor.Shared.FolderMetadataParser.ParseFolderMetadata(folderName);
+                var (mag, vol, num, year) = IndexEditor.Shared.FolderMetadataParser.ParseFolderMetadata(folderName);
                 IndexEditor.Shared.EditorState.CurrentMagazine = mag;
                 IndexEditor.Shared.EditorState.CurrentVolume = vol;
                 IndexEditor.Shared.EditorState.CurrentNumber = num;
+                IndexEditor.Shared.EditorState.CurrentYear = year;
             }
             catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: parse folder metadata", ex); }
 
@@ -711,6 +712,7 @@ public partial class MainWindow : Window
             string fileMag = IndexEditor.Shared.EditorState.CurrentMagazine ?? string.Empty;
             string fileVol = IndexEditor.Shared.EditorState.CurrentVolume ?? string.Empty;
             string fileNum = IndexEditor.Shared.EditorState.CurrentNumber ?? string.Empty;
+            string fileYear = IndexEditor.Shared.EditorState.CurrentYear ?? string.Empty;
 
             if (System.IO.File.Exists(indexPath))
             {
@@ -736,6 +738,10 @@ public partial class MainWindow : Window
                             var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
                             fileNum = val.Replace("Number:", string.Empty).Replace("No:", string.Empty).Trim();
                         }
+                        else if (content.StartsWith("Year:", StringComparison.OrdinalIgnoreCase))
+                        {
+                            fileYear = content.Substring("Year:".Length).Trim();
+                        }
                         articleStartIndex = i + 1;
                         continue;
                     }
@@ -747,6 +753,10 @@ public partial class MainWindow : Window
                         fileMag = Unescape(parts[0]);
                         fileVol = Unescape(parts[1]);
                         fileNum = Unescape(parts[2]);
+                        if (parts.Count >= 4)
+                        {
+                            fileYear = Unescape(parts[3]);
+                        }
                         articleStartIndex = i + 1;
                     }
                     else
@@ -791,6 +801,7 @@ public partial class MainWindow : Window
             IndexEditor.Shared.EditorState.CurrentMagazine = fileMag;
             IndexEditor.Shared.EditorState.CurrentVolume = fileVol;
             IndexEditor.Shared.EditorState.CurrentNumber = fileNum;
+            IndexEditor.Shared.EditorState.CurrentYear = fileYear;
             IndexEditor.Shared.EditorState.Articles = articles.Where(a => a.Pages != null && a.Pages.Count > 0).OrderBy(a => a.Pages.Min()).ToList();
 
             // Update VM collection if present

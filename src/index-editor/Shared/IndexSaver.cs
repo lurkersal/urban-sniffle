@@ -10,7 +10,7 @@ namespace IndexEditor.Shared
     public static class IndexSaver
     {
         // Save the current EditorState.Articles and metadata into _index.txt under folder.
-        // Ensures the first non-comment line is an uncommented CSV metadata line: Magazine,Volume,Number
+        // Ensures the first non-comment line is an uncommented CSV metadata line: Magazine,Volume,Number,Year
         public static void SaveIndex(string folder)
         {
             if (string.IsNullOrWhiteSpace(folder)) throw new ArgumentException("folder is required", nameof(folder));
@@ -33,9 +33,9 @@ namespace IndexEditor.Shared
             }
 
             var outLinesList = new List<string>();
-            if (!string.IsNullOrWhiteSpace(EditorState.CurrentMagazine) || !string.IsNullOrWhiteSpace(EditorState.CurrentVolume) || !string.IsNullOrWhiteSpace(EditorState.CurrentNumber))
+            if (!string.IsNullOrWhiteSpace(EditorState.CurrentMagazine) || !string.IsNullOrWhiteSpace(EditorState.CurrentVolume) || !string.IsNullOrWhiteSpace(EditorState.CurrentNumber) || !string.IsNullOrWhiteSpace(EditorState.CurrentYear))
             {
-                var metaParts = new[] { Escape(EditorState.CurrentMagazine ?? string.Empty), Escape(EditorState.CurrentVolume ?? string.Empty), Escape(EditorState.CurrentNumber ?? string.Empty) };
+                var metaParts = new[] { Escape(EditorState.CurrentMagazine ?? string.Empty), Escape(EditorState.CurrentVolume ?? string.Empty), Escape(EditorState.CurrentNumber ?? string.Empty), Escape(EditorState.CurrentYear ?? string.Empty) };
                 outLinesList.Add(string.Join(",", metaParts));
             }
             // Do not write legacy commented header lines; metadata is represented by the first CSV line only.

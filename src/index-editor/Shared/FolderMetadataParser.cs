@@ -6,14 +6,14 @@ namespace IndexEditor.Shared
 {
     public static class FolderMetadataParser
     {
-        // Strict parse for folder basename metadata (magazine, volume, number).
+        // Strict parse for folder basename metadata (magazine, volume, number, year).
         // Valid format: "MagazineName 17-03, 1982" (magazine name, 2-digit volume '-' 2-digit number, ',' 4-digit year)
-        public static (string mag, string vol, string num) ParseFolderMetadata(string folderName)
+        public static (string mag, string vol, string num, string year) ParseFolderMetadata(string folderName)
         {
             try
             {
                 if (string.IsNullOrWhiteSpace(folderName))
-                    return (folderName ?? string.Empty, "—", "—");
+                    return (folderName ?? string.Empty, "—", "—", "—");
 
                 // Strict pattern: magazine name (anything), whitespace, 2 digits, '-', 2 digits, ',', 4-digit year
                 var pattern = @"^(?<mag>.+?)\s+(?<vol>\d{2})-(?<num>\d{2}),\s*(?<year>\d{4})\s*$";
@@ -23,15 +23,16 @@ namespace IndexEditor.Shared
                     var mag = m.Groups["mag"].Value.Trim();
                     var vol = m.Groups["vol"].Value;
                     var num = m.Groups["num"].Value;
-                    return (mag, vol, num);
+                    var year = m.Groups["year"].Value;
+                    return (mag, vol, num, year);
                 }
 
                 // Not a strict match: return the original folderName and placeholders
-                return (folderName, "—", "—");
+                return (folderName, "—", "—", "—");
             }
             catch
             {
-                return (folderName ?? string.Empty, "—", "—");
+                return (folderName ?? string.Empty, "—", "—", "—");
             }
         }
     }

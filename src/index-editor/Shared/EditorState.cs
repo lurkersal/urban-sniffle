@@ -20,6 +20,7 @@ namespace IndexEditor.Shared
         public string? CurrentMagazine { get; set; }
         public string? CurrentVolume { get; set; }
         public string? CurrentNumber { get; set; }
+        public string? CurrentYear { get; set; }
         public string? CurrentFolder { get; set; }
         public bool ShowImages { get; set; } = true;
         public int ArticleEditorFocusRequest => _articleEditorFocusRequest;
@@ -115,6 +116,12 @@ namespace IndexEditor.Shared
         { 
             get => Instance.CurrentNumber; 
             set => Instance.CurrentNumber = value; 
+        }
+        
+        public static string? CurrentYear 
+        { 
+            get => Instance.CurrentYear; 
+            set => Instance.CurrentYear = value; 
         }
         
         public static string? CurrentFolder 
