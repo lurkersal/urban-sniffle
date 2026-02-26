@@ -310,138 +310,40 @@ namespace IndexEditor.Views
 
          private async Task<List<string>?> LoadCategoriesFromDatabaseAsync()
          {
+            // Categories are now loaded from ArticleCategory enum, not from database.
+            // This method is kept for compatibility but now returns enum-based categories.
             try
             {
-                // Try multiple likely locations for appsettings.json to avoid issues when working directory differs from app folder.
-                var candidates = new List<string>();
-                try { candidates.Add(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json")); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: add candidate current dir", ex); }
-                try { candidates.Add(Path.Combine(AppContext.BaseDirectory ?? string.Empty, "appsettings.json")); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: add candidate base dir", ex); }
-                // Also try the application's assembly folder as a fallback
-                try
-                {
-                    var asmFolder = Path.GetDirectoryName(typeof(EditorStateViewModel).Assembly.Location);
-                    if (!string.IsNullOrWhiteSpace(asmFolder)) candidates.Add(Path.Combine(asmFolder, "appsettings.json"));
-                }
-                catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: asmFolder detection", ex); }
-
-                string? foundPath = null;
-                foreach (var c in candidates.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct())
-                {
-                    try
-                    {
-                        if (File.Exists(c))
-                        {
-                            foundPath = c;
-                            break;
-                        }
-                    }
-                    catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: File.Exists check", ex); }
-                }
-
-                try { DebugLogger.Log($"LoadCategories: candidates={string.Join(";", candidates)} found={foundPath}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append debug file", ex); }
-
-                if (string.IsNullOrWhiteSpace(foundPath))
-                    return null;
-
-                using var fs = File.OpenRead(foundPath);
-                using var doc = await JsonDocument.ParseAsync(fs);
-                if (!doc.RootElement.TryGetProperty("ConnectionStrings", out var connSection))
-                    return null;
-                if (!connSection.TryGetProperty("MagazineDb", out var connStringElem))
-                    return null;
-                var connString = connStringElem.GetString();
-                if (string.IsNullOrWhiteSpace(connString))
-                    return null;
-
-                try
-                {
-                    var cats = await IndexEditor.Shared.CategoryRepository.GetCategoriesAsync(connString);
-                    try { DebugLogger.Log($"DB returned {cats?.Count ?? 0} categories"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append DB count", ex); }
-                    if (cats != null && cats.Count > 0)
-                    {
-                        return cats;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    try { DebugLogger.Log($"DB error: {ex}"); } catch (Exception ex2) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append DB error", ex2); }
-                    DebugLogger.LogException("EditorStateViewModel.LoadCategories: DB error", ex);
-                }
-                return null;
-             }
-             catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: outer", ex); return null; }
+                var cats = ArticleCategoryHelper.GetAllCategories();
+                DebugLogger.Log($"LoadCategories: Loaded {cats.Count} categories from ArticleCategory enum");
+                return cats;
+            }
+            catch (Exception ex) 
+            { 
+                DebugLogger.LogException("EditorStateViewModel.LoadCategories: outer", ex); 
+                return null; 
+            }
          }
 
         private void UpdateCategories(List<string> newCats, bool fromDatabase = false)
          {
             if (newCats == null) newCats = new List<string>();
-             // Ensure selected category is preserved
-             var selectedCat = SelectedArticle?.Category;
-            // If categories are already loaded from DB, ignore any non-DB updates
-            if (!fromDatabase && _categoriesLoadedFromDb)
-            {
-                try { DebugLogger.Log("UpdateCategories: skipped non-DB update because DB list already loaded"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append skipped non-DB", ex); }
-                return;
-            }
+            
+            // Ensure selected category is preserved
+            var selectedCat = SelectedArticle?.Category;
+            
+            // Categories now come from the ArticleCategory enum
+            // We merge discovered categories with enum categories to preserve any custom ones
+            var sorted = newCats.OrderBy(s => s).ToList();
+            if (!string.IsNullOrWhiteSpace(selectedCat) && !sorted.Contains(selectedCat))
+                sorted.Add(selectedCat);
 
-            // If this update comes from the database, prefer showing DB categories exactly (preserve selectedCategory if missing)
-            if (fromDatabase && newCats != null && newCats.Count > 0)
-            {
-                var sorted = newCats.OrderBy(s => s).ToList();
-                if (!string.IsNullOrWhiteSpace(selectedCat) && !sorted.Contains(selectedCat))
-                    sorted.Add(selectedCat);
-
-                // If we already have DB-loaded categories, avoid downgrading to a smaller set.
-                if (_categoriesLoadedFromDb)
-                {
-                    var currentSet = new HashSet<string>(Categories);
-                    var newSet = new HashSet<string>(sorted);
-                    if (newSet.SetEquals(currentSet))
-                    {
-                        try { DebugLogger.Log("UpdateCategories: DB update identical to current set - ignored"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append identical", ex); }
-                        return;
-                    }
-                    // Accept only if new set is a superset or strictly larger (new categories added)
-                    if (newSet.IsSupersetOf(currentSet) && newSet.Count >= currentSet.Count)
-                    {
-                        Categories.Clear();
-                        foreach (var c in sorted)
-                            Categories.Add(c);
-                        try { DebugLogger.Log($"Updated Categories (DB superset applied): {string.Join(",", sorted)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append superset", ex); }
-                        return;
-                    }
-                    else
-                    {
-                        try { DebugLogger.Log($"UpdateCategories: DB update skipped (would shrink/replace smaller set): {string.Join(",", sorted)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append skip shrink", ex); }
-                        return;
-                    }
-                }
-
-                // First DB load: accept unconditionally
-                Categories.Clear();
-                foreach (var c in sorted)
-                    Categories.Add(c);
-                _categoriesLoadedFromDb = true;
-                try { DebugLogger.Log($"Updated Categories (DB preferred first load): {string.Join(",", sorted)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append first load", ex); }
-                return;
-            }
-
-            // Fallback: merge categories discovered from articles (existing behavior)
-            if (newCats == null) newCats = new List<string>();
-            if (!string.IsNullOrWhiteSpace(selectedCat) && !newCats.Contains(selectedCat))
-            {
-                newCats.Add(selectedCat);
-            }
-            var union = new HashSet<string>(Categories ?? new ObservableCollection<string>());
-            foreach (var c in newCats)
-                if (!string.IsNullOrWhiteSpace(c)) union.Add(c);
-            var merged = union.OrderBy(s => s).ToList();
-            foreach (var c in merged)
-            {
-                if (Categories != null && !Categories.Contains(c))
-                    Categories.Add(c);
-            }
-            try { DebugLogger.Log($"Updated Categories (merged): {string.Join(",", merged)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append merged", ex); }
+            // Update the collection
+            Categories.Clear();
+            foreach (var c in sorted)
+                Categories.Add(c);
+            
+            try { DebugLogger.Log($"Updated Categories: {string.Join(",", sorted)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append", ex); }
          }
 
         private void SyncArticles()
