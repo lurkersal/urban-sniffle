@@ -614,14 +614,14 @@ public partial class MainWindow : Window
             // Delete confirmation overlay: Enter to confirm, Esc to cancel
             if (_overlayManager?.IsDeleteConfirmationVisible() ?? false)
             {
-                if (e.Key == Key.Enter)
+                if (e.Key == Key.Enter || e.Key == Key.Y)
                 {
                     try { DeleteSelectedArticleAndCloseOverlay(); }
                     catch (Exception ex) { DebugLogger.LogException("MainWindow: confirm delete", ex); }
                     e.Handled = true;
                     return true;
                 }
-                if (e.Key == Key.Escape)
+                if (e.Key == Key.Escape || e.Key == Key.N)
                 {
                     _overlayManager?.CloseDeleteConfirmation();
                     e.Handled = true;

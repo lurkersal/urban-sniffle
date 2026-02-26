@@ -6,8 +6,8 @@
     <StackPanel Spacing="12">
       <TextBlock x:Name="MessageText" TextWrapping="Wrap" />
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-        <Button x:Name="CancelButton" Content="Cancel" />
-        <Button x:Name="OkButton" Content="Save" />
+        <Button x:Name="CancelButton" Content="_Cancel" HotKey="Escape" />
+        <Button x:Name="OkButton" Content="_Save" HotKey="Enter" IsDefault="True" />
       </StackPanel>
     </StackPanel>
   </Border>
