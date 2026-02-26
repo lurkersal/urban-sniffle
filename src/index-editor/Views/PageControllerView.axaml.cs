@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Media;
 using System.IO;
+using Avalonia;
 
 #pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
 
@@ -114,6 +115,167 @@ namespace IndexEditor.Views
             }
         }
 
+        /// <summary>
+        /// Updates the current article information display at the top of the page controller.
+        /// Shows article cards for all articles that contain the current page (stacked if multiple).
+        /// </summary>
+        private void UpdateCurrentArticleDisplay()
+        {
+            try
+            {
+                var articleCardsContainer = this.FindControl<StackPanel>("ArticleCardsContainer");
+                if (articleCardsContainer == null) return;
+
+                // Clear existing article cards
+                articleCardsContainer.Children.Clear();
+
+                // Find all articles that contain the current page
+                var currentPage = EditorState.CurrentPage;
+                var articles = EditorState.Articles
+                    .Where(a => a.Pages != null && a.Pages.Contains(currentPage))
+                    .ToList();
+
+                if (articles.Count == 0)
+                {
+                    // No articles contain this page, leave container empty
+                    return;
+                }
+
+                // Create a card for each article
+                foreach (var article in articles)
+                {
+                    var card = CreateArticleCard(article);
+                    if (card != null)
+                    {
+                        articleCardsContainer.Children.Add(card);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("PageControllerView.UpdateCurrentArticleDisplay", ex);
+            }
+        }
+
+        /// <summary>
+        /// Creates a visual card for an article with colored bar, title, details, and category.
+        /// </summary>
+        private Border CreateArticleCard(Common.Shared.ArticleLine article)
+        {
+            try
+            {
+                // Create the card border
+                var cardBorder = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromRgb(0xF8, 0xF8, 0xF8)),
+                    CornerRadius = new CornerRadius(4),
+                    Padding = new Thickness(8),
+                    Margin = new Thickness(0, 0, 0, 4)
+                };
+
+                // Create grid with 3 columns: color bar | content | category
+                var grid = new Grid
+                {
+                    ColumnDefinitions = new ColumnDefinitions
+                    {
+                        new ColumnDefinition(GridLength.Auto),    // Color bar
+                        new ColumnDefinition(GridLength.Star),    // Content
+                        new ColumnDefinition(GridLength.Auto)     // Category label
+                    }
+                };
+
+                // Create color bar
+                var colorBarOuter = new Border
+                {
+                    Width = 16,
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(2),
+                    Margin = new Thickness(0, 0, 8, 0)
+                };
+                Grid.SetColumn(colorBarOuter, 0);
+
+                // Get category color
+                var converter = new ArticleCategoryToColorConverter();
+                var colorBrush = converter.Convert(article.Category, typeof(SolidColorBrush), null, 
+                    System.Globalization.CultureInfo.InvariantCulture) as SolidColorBrush;
+
+                var colorBarInner = new Border
+                {
+                    Background = colorBrush ?? new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+                    Opacity = 0.6,
+                    CornerRadius = new CornerRadius(1)
+                };
+                colorBarOuter.Child = colorBarInner;
+
+                // Create content stack (title and details)
+                var contentStack = new StackPanel
+                {
+                    Spacing = 2
+                };
+                Grid.SetColumn(contentStack, 1);
+
+                // Title
+                var titleText = new TextBlock
+                {
+                    Text = !string.IsNullOrWhiteSpace(article.Title) ? article.Title : article.Category,
+                    FontWeight = FontWeight.Bold,
+                    FontSize = 16
+                };
+                contentStack.Children.Add(titleText);
+
+                // Details
+                var details = new List<string>();
+                if (!string.IsNullOrWhiteSpace(article.ModelName0))
+                {
+                    details.Add(article.ModelName0);
+                }
+                if (!string.IsNullOrWhiteSpace(article.Age0))
+                {
+                    details.Add(article.Age0);
+                }
+                if (!string.IsNullOrWhiteSpace(article.Contributor0))
+                {
+                    details.Add(article.Contributor0);
+                }
+
+                if (details.Count > 0)
+                {
+                    var detailsText = new TextBlock
+                    {
+                        Text = string.Join(" • ", details),
+                        FontSize = 12,
+                        Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66))
+                    };
+                    contentStack.Children.Add(detailsText);
+                }
+
+                // Category label
+                var categoryText = new TextBlock
+                {
+                    Text = article.Category,
+                    FontWeight = FontWeight.Bold,
+                    FontSize = 13,
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
+                    Margin = new Thickness(8, 0, 0, 0)
+                };
+                Grid.SetColumn(categoryText, 2);
+
+                // Add all elements to grid
+                grid.Children.Add(colorBarOuter);
+                grid.Children.Add(contentStack);
+                grid.Children.Add(categoryText);
+
+                cardBorder.Child = grid;
+                return cardBorder;
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("PageControllerView.CreateArticleCard", ex);
+                return null;
+            }
+        }
+
         public int Page
         {
             get => EditorState.CurrentPage;
@@ -192,6 +354,9 @@ namespace IndexEditor.Views
                     
                 // Update button states
                 UpdateNavigationButtons();
+                
+                // Update current article display
+                UpdateCurrentArticleDisplay();
                     
                 // If an active segment exists, update its preview end so UI displays Start → CurrentPage
                 try
@@ -365,6 +530,7 @@ namespace IndexEditor.Views
                     if (pageInput != null) pageInput.Text = EditorState.CurrentPage.ToString();
                     UpdateUi();
                     UpdateNavigationButtons();
+                    UpdateCurrentArticleDisplay();
                     LoadCurrentPageImage();
                 }
                 catch (Exception ex) { DebugLogger.LogException("PageControllerView.StateChanged handler", ex); }
