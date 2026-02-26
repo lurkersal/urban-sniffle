@@ -80,7 +80,7 @@
                                 <!-- Pages row -->
                                 <StackPanel Orientation="Horizontal" Margin="0,4">
                                     <TextBlock Text="Pages:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                    <TextBox Text="{Binding PagesText, Mode=TwoWay}" Width="240" BorderBrush="{Binding HasPagesError, Converter={StaticResource FieldErrorToBrushConverter}}" />
+                                    <TextBox Name="PagesTextBox" Text="{Binding PagesText, Mode=TwoWay}" Width="240" BorderBrush="{Binding HasPagesError, Converter={StaticResource FieldErrorToBrushConverter}}" LostFocus="OnPagesTextBoxLostFocus" />
                                 </StackPanel>
 
                                 <!-- Removed inline active segment; lozenge will be shown below the editor content -->

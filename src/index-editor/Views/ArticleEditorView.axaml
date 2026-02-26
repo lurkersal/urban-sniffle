@@ -10,6 +10,7 @@
         <local:FieldLabelConverter x:Key="FieldLabelConverter" />
         <local:ShowMeasurementsConverter x:Key="ShowMeasurements" />
         <local:ShowContributorCategoryConverter x:Key="ShowContributor" />
+        <local:SegmentMissingPagesForegroundConverter x:Key="SegmentMissingPagesForeground" />
     </UserControl.Resources>
     <Grid>
         <StackPanel Margin="16">
@@ -81,7 +82,9 @@
                                             <Border BorderBrush="#0000001A" BorderThickness="0,0,1,1" CornerRadius="14" IsHitTestVisible="False" />
                                             <!-- Active overlay (category colour) shown only when segment.IsHighlighted is true -->
                                             <Border Background="{Binding DataContext.SelectedArticle.Category, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource CategoryToBrush}}" Opacity="0.6" CornerRadius="14" IsVisible="{Binding IsHighlighted}" />
-                                            <TextBlock Text="{Binding Display}" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Black" FontWeight="Normal" />
+                                            <TextBlock Text="{Binding Display}" VerticalAlignment="Center" HorizontalAlignment="Center" 
+                                                       Foreground="{Binding HasMissingPages, Converter={StaticResource SegmentMissingPagesForeground}}" 
+                                                       FontWeight="Normal" />
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

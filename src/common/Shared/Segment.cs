@@ -102,7 +102,7 @@ namespace Common.Shared
             }
         }
 
-        // Was this segment created as part of the current active operation (new)?
+        // Flag that indicates if the segment was marked as newly created (used for cancel logic)
         public bool WasNew
         {
             get => _wasNew;
@@ -116,7 +116,22 @@ namespace Common.Shared
             }
         }
 
-        public Segment() { }
+        // Returns true if any pages in the segment range are missing (no image file exists)
+        // This property is computed based on folder path - it requires external validation
+        private bool _hasMissingPages;
+        public bool HasMissingPages
+        {
+            get => _hasMissingPages;
+            set
+            {
+                if (_hasMissingPages != value)
+                {
+                    _hasMissingPages = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasMissingPages)));
+                }
+            }
+        }
+
         public Segment(int start, int? end = null)
         {
             _start = start;

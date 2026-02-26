@@ -499,5 +499,30 @@ namespace IndexEditor.Views
             }
             catch (Exception ex) { DebugLogger.LogException("ArticleEditor.OnEditorStateChanged: outermost", ex); }
         }
+
+        // Event handler for Pages TextBox LostFocus - trigger validation when editing is complete
+        private void OnPagesTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                // Get the article from the DataContext and trigger validation
+                if (this.DataContext is Common.Shared.ArticleLine article)
+                {
+                    article.Validate();
+                    
+                    // Also validate segments for missing pages
+                    try
+                    {
+                        var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                        if (!string.IsNullOrWhiteSpace(folder))
+                        {
+                            article.ValidateSegments(folder, (f, p) => IndexEditor.Shared.ImageHelper.ImageExists(f, p));
+                        }
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("OnPagesTextBoxLostFocus: validate segments", ex); }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnPagesTextBoxLostFocus: outer", ex); }
+        }
     }
 }

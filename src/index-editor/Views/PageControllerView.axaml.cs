@@ -619,6 +619,21 @@ namespace IndexEditor.Views
                     DebugLogger.Log($"EndActiveSegment: set ActiveSegment.End={EditorState.CurrentPage}");
                     Console.WriteLine($"[DEBUG] EndActiveSegment: set ActiveSegment.End={EditorState.CurrentPage}");
                 }
+                
+                // Validate segments for missing pages
+                if (art != null)
+                {
+                    try
+                    {
+                        var folder = EditorState.CurrentFolder;
+                        if (!string.IsNullOrWhiteSpace(folder))
+                        {
+                            art.ValidateSegments(folder, (f, p) => IndexEditor.Shared.ImageHelper.ImageExists(f, p));
+                        }
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("EndActiveSegment: validate segments", ex); }
+                }
+                
                 EditorState.ActiveSegment = null;
                 EditorState.NotifyStateChanged();
                 DebugLogger.Log("EndActiveSegment: completed and cleared ActiveSegment");

@@ -113,6 +113,10 @@ namespace Common.Shared
                 Segments.Clear();
                 foreach (var s in newSegs) Segments.Add(s);
                 try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegment))); } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.RecomputeSegmentsFromPages: notify ActiveSegment", ex); }
+                
+                // Trigger validation for the newly created segments
+                // Note: This requests validation but doesn't do it directly since we don't have folder context here
+                try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Segments))); } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.RecomputeSegmentsFromPages: notify Segments", ex); }
             }
             catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.RecomputeSegmentsFromPages: outer", ex); }
         }
@@ -265,7 +269,8 @@ namespace Common.Shared
                 Pages = parsed;
                 HasPageNumberError = hasError;
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PagesText)));
-                Validate();
+                // Don't call Validate() here - let it be triggered when the field loses focus
+                // Calling Validate() during editing interferes with text input (e.g., backspace)
             }
         }
 
@@ -575,5 +580,39 @@ namespace Common.Shared
         // Convenience boolean properties for XAML bindings
         public bool HasPagesError => HasFieldError("Pages");
         public bool HasCategoryError => HasFieldError("Category");
+
+        /// <summary>
+        /// Validates all segments to check if any pages in their ranges are missing image files.
+        /// Requires a folder path to check for image existence.
+        /// </summary>
+        public void ValidateSegments(string? folder, Func<string, int, bool>? imageExistsChecker = null)
+        {
+            if (string.IsNullOrWhiteSpace(folder) || Segments == null)
+                return;
+
+            foreach (var segment in Segments)
+            {
+                if (segment.End.HasValue)
+                {
+                    // Closed segment - check all pages in range
+                    bool hasMissing = false;
+                    for (int page = segment.Start; page <= segment.End.Value; page++)
+                    {
+                        bool exists = imageExistsChecker?.Invoke(folder, page) ?? false;
+                        if (!exists)
+                        {
+                            hasMissing = true;
+                            break;
+                        }
+                    }
+                    segment.HasMissingPages = hasMissing;
+                }
+                else
+                {
+                    // Active segment - don't validate yet
+                    segment.HasMissingPages = false;
+                }
+            }
+        }
     }
 }

@@ -507,9 +507,8 @@ public partial class MainWindow : Window
 
     private bool ImageExistsInFolder(string folder, int pageNumber)
     {
-        // Check if the image file for the given page number exists in the specified folder
-        var filePath = System.IO.Path.Combine(folder, $"{pageNumber:D3}.jpg");
-        return System.IO.File.Exists(filePath);
+        // Use ImageHelper.ImageExists to check all possible filename patterns
+        return IndexEditor.Shared.ImageHelper.ImageExists(folder, pageNumber);
     }
 
     // Main window event handlers
@@ -851,6 +850,16 @@ public partial class MainWindow : Window
             IndexEditor.Shared.EditorState.CurrentNumber = fileNum;
             IndexEditor.Shared.EditorState.CurrentYear = fileYear;
             IndexEditor.Shared.EditorState.Articles = articles.Where(a => a.Pages != null && a.Pages.Count > 0).OrderBy(a => a.Pages.Min()).ToList();
+
+            // Validate segments for missing pages
+            try
+            {
+                foreach (var article in IndexEditor.Shared.EditorState.Articles)
+                {
+                    article.ValidateSegments(folder, ImageExistsInFolder);
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: validate segments", ex); }
 
             // Update VM collection if present
             try
