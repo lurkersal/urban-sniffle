@@ -102,8 +102,18 @@ namespace IndexEditor.Views
                 if (string.IsNullOrWhiteSpace(folder)) { ToastService.Show("No folder open; cannot save _index.txt"); return; }
                 var indexPath = System.IO.Path.Combine(folder, "_index.txt");
                 var temp = indexPath + ".tmp";
+                var backupPath = indexPath + "~";
                 System.IO.File.WriteAllText(temp, overlayText ?? string.Empty);
-                if (System.IO.File.Exists(indexPath)) System.IO.File.Replace(temp, indexPath, null);
+                if (System.IO.File.Exists(indexPath))
+                {
+                    // Create backup before replacing
+                    if (System.IO.File.Exists(backupPath))
+                    {
+                        System.IO.File.Delete(backupPath);
+                    }
+                    System.IO.File.Copy(indexPath, backupPath);
+                    System.IO.File.Replace(temp, indexPath, null);
+                }
                 else System.IO.File.Move(temp, indexPath);
                 ToastService.Show("_index.txt saved");
             }

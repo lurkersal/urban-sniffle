@@ -43,9 +43,16 @@ namespace IndexEditor.Shared
             outLinesList.AddRange(lines);
 
             var tempPath = indexPath + ".tmp";
+            var backupPath = indexPath + "~";
             File.WriteAllLines(tempPath, outLinesList);
             if (File.Exists(indexPath))
             {
+                // Create backup before replacing
+                if (File.Exists(backupPath))
+                {
+                    File.Delete(backupPath);
+                }
+                File.Copy(indexPath, backupPath);
                 File.Replace(tempPath, indexPath, null);
             }
             else

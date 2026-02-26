@@ -247,8 +247,18 @@ public partial class MainWindow : Window
                         var indexPath = System.IO.Path.Combine(folder, "_index.txt");
                         // Atomic write
                         var temp = indexPath + ".tmp";
+                        var backupPath = indexPath + "~";
                         System.IO.File.WriteAllText(temp, textBox.Text ?? string.Empty);
-                        if (System.IO.File.Exists(indexPath)) System.IO.File.Replace(temp, indexPath, null);
+                        if (System.IO.File.Exists(indexPath))
+                        {
+                            // Create backup before replacing
+                            if (System.IO.File.Exists(backupPath))
+                            {
+                                System.IO.File.Delete(backupPath);
+                            }
+                            System.IO.File.Copy(indexPath, backupPath);
+                            System.IO.File.Replace(temp, indexPath, null);
+                        }
                         else System.IO.File.Move(temp, indexPath);
                         IndexEditor.Shared.ToastService.Show("_index.txt saved");
                         // Reload articles from folder to reflect edits
