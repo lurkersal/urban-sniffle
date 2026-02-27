@@ -58,16 +58,33 @@ publish_project() {
         -o "$BIN_DIR"
 }
 
-# List of projects to publish (edit as needed)
+# List of projects to publish
+# Console applications (command-line tools)
 projects=(
     "src/file-renamer/file-renamer.csproj"
     "src/magazine-parser/magazine-parser.csproj"
-    "src/image-splitter/image-splitter.csproj"
+    "src/image-splitter/ImageSplitter.csproj"
     "src/find-links/find-links.csproj"
+    "src/common/measure-test/measure-test.csproj"
+)
+
+# Note: MeasureProbe is a helper/test class without a Main method and cannot be published
+
+# Desktop applications (Avalonia/GUI)
+desktop_apps=(
     "src/index-editor/IndexEditor.csproj"
 )
 
+# Note: magazine-viewer is a web app and should be published differently
+# Use: dotnet publish src/magazine-viewer/MagazineViewer.csproj -c Release
+
 for p in "${projects[@]}"; do
+    publish_project "$p"
+done
+
+echo ""
+echo "Publishing desktop applications..."
+for p in "${desktop_apps[@]}"; do
     publish_project "$p"
 done
 
@@ -76,3 +93,4 @@ echo "Done! All tools published to $BIN_DIR"
 if ! echo "$PATH" | tr ':' '\n' | grep -xq "$BIN_DIR"; then
     echo "Make sure $BIN_DIR is in your PATH (e.g. add 'export PATH=\"$BIN_DIR:$PATH\"' to your shell profile)"
 fi
+
