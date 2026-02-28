@@ -292,33 +292,44 @@ public partial class MainWindow : Window
                         var folder = IndexEditor.Shared.EditorState.CurrentFolder;
                         if (string.IsNullOrWhiteSpace(folder))
                         {
-                            IndexEditor.Shared.ToastService.Show("No folder open; cannot save _index.txt");
+                            IndexEditor.Shared.ToastService.Show("No folder open; cannot save index file");
                             return;
                         }
-                        var indexPath = System.IO.Path.Combine(folder, "_index.txt");
-                        // Atomic write
-                        var temp = indexPath + ".tmp";
-                        var backupPath = indexPath + "~";
-                        System.IO.File.WriteAllText(temp, textBox.Text ?? string.Empty);
-                        if (System.IO.File.Exists(indexPath))
+                        
+                        // Determine which format to save based on file content
+                        var text = textBox.Text ?? string.Empty;
+                        var jsonPath = System.IO.Path.Combine(folder, "_index.json");
+                        var txtPath = System.IO.Path.Combine(folder, "_index.txt");
+                        
+                        // Check if content looks like JSON
+                        bool isJson = text.TrimStart().StartsWith("{");
+                        var targetPath = isJson ? jsonPath : txtPath;
+                        
+                        // Atomic write with backup
+                        var temp = targetPath + ".tmp";
+                        var backupPath = targetPath + "~";
+                        System.IO.File.WriteAllText(temp, text);
+                        
+                        if (System.IO.File.Exists(targetPath))
                         {
                             // Create backup before replacing
                             if (System.IO.File.Exists(backupPath))
                             {
                                 System.IO.File.Delete(backupPath);
                             }
-                            System.IO.File.Copy(indexPath, backupPath);
-                            System.IO.File.Replace(temp, indexPath, null);
+                            System.IO.File.Copy(targetPath, backupPath);
+                            System.IO.File.Replace(temp, targetPath, null);
                         }
-                        else System.IO.File.Move(temp, indexPath);
-                        IndexEditor.Shared.ToastService.Show("_index.txt saved");
+                        else System.IO.File.Move(temp, targetPath);
+                        
+                        IndexEditor.Shared.ToastService.Show(isJson ? "_index.json saved" : "_index.txt saved");
                         // Reload articles from folder to reflect edits
                         LoadArticlesFromFolder(folder);
                     }
                     catch (Exception ex)
                     {
-                        IndexEditor.Shared.ToastService.Show("Failed to save _index.txt");
-                        DebugLogger.LogException("MainWindow.SaveIndex: saving _index.txt", ex);
+                        IndexEditor.Shared.ToastService.Show("Failed to save index file");
+                        DebugLogger.LogException("MainWindow.SaveIndex: saving index file", ex);
                     }
                 };
             }
@@ -806,92 +817,118 @@ public partial class MainWindow : Window
             }
             catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: parse folder metadata", ex); }
 
-            var indexPath = System.IO.Path.Combine(folder, "_index.txt");
             var articles = new List<Common.Shared.ArticleLine>();
             string fileMag = IndexEditor.Shared.EditorState.CurrentMagazine ?? string.Empty;
             string fileVol = IndexEditor.Shared.EditorState.CurrentVolume ?? string.Empty;
             string fileNum = IndexEditor.Shared.EditorState.CurrentNumber ?? string.Empty;
             string fileYear = IndexEditor.Shared.EditorState.CurrentYear ?? string.Empty;
 
-            if (System.IO.File.Exists(indexPath))
+            // Phase 1: Check for JSON first, fall back to CSV
+            if (Common.Shared.IndexJsonSerializer.JsonExists(folder))
             {
-                var lines = System.IO.File.ReadAllLines(indexPath);
-                int articleStartIndex = 0;
-                for (int i = 0; i < lines.Length; i++)
+                DebugLogger.Log("LoadArticlesFromFolder: Loading from _index.json");
+                try
                 {
-                    var raw = lines[i];
-                    if (string.IsNullOrWhiteSpace(raw)) { articleStartIndex = i + 1; continue; }
-                    var trimmed = raw.Trim();
-                    if (trimmed.StartsWith("#"))
-                    {
-                        var content = trimmed.TrimStart('#').Trim();
-                        if (content.StartsWith("Magazine:", StringComparison.OrdinalIgnoreCase))
-                            fileMag = content.Substring("Magazine:".Length).Trim();
-                        else if (content.StartsWith("Volume:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("Vol:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var val = content.Contains(":" ) ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
-                            fileVol = val.Replace("Volume:", string.Empty).Replace("Vol:", string.Empty).Trim();
-                        }
-                        else if (content.StartsWith("Number:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("No:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
-                            fileNum = val.Replace("Number:", string.Empty).Replace("No:", string.Empty).Trim();
-                        }
-                        else if (content.StartsWith("Year:", StringComparison.OrdinalIgnoreCase))
-                        {
-                            fileYear = content.Substring("Year:".Length).Trim();
-                        }
-                        articleStartIndex = i + 1;
-                        continue;
-                    }
-                    // First non-comment line: try CSV metadata
-                    var parts = IndexFileParser.SplitRespectingEscapedCommas(trimmed);
-                    if (parts.Count >= 3)
-                    {
-                        string Unescape(string s) => s.Replace("\\,", ",");
-                        fileMag = Unescape(parts[0]);
-                        fileVol = Unescape(parts[1]);
-                        fileNum = Unescape(parts[2]);
-                        if (parts.Count >= 4)
-                        {
-                            fileYear = Unescape(parts[3]);
-                        }
-                        articleStartIndex = i + 1;
-                    }
-                    else
-                    {
-                        articleStartIndex = i;
-                    }
-                    break;
+                    var (mag, vol, num, year, jsonArticles) = Common.Shared.IndexJsonSerializer.LoadFromJson(folder);
+                    fileMag = mag;
+                    fileVol = vol;
+                    fileNum = num;
+                    fileYear = year;
+                    articles = jsonArticles;
                 }
-
-                for (int i = articleStartIndex; i < lines.Length; i++)
+                catch (Exception ex)
                 {
-                    var line = lines[i];
-                    if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#")) continue;
-                    try
+                    DebugLogger.LogException("LoadArticlesFromFolder: Failed to load JSON, falling back to CSV", ex);
+                    IndexEditor.Shared.ToastService.Show("Failed to load _index.json, falling back to _index.txt");
+                    // Fall through to CSV loading below
+                }
+            }
+            
+            // Fall back to CSV if JSON doesn't exist or failed to load
+            if (articles.Count == 0)
+            {
+                var indexPath = System.IO.Path.Combine(folder, "_index.txt");
+                if (System.IO.File.Exists(indexPath))
+                {
+                    DebugLogger.Log("LoadArticlesFromFolder: Loading from _index.txt");
+                    var lines = System.IO.File.ReadAllLines(indexPath);
+                    int articleStartIndex = 0;
+                    for (int i = 0; i < lines.Length; i++)
                     {
-                        var parsed = ParseArticleLine(line);
-                        if (parsed != null) articles.Add(parsed);
+                        var raw = lines[i];
+                        if (string.IsNullOrWhiteSpace(raw)) { articleStartIndex = i + 1; continue; }
+                        var trimmed = raw.Trim();
+                        if (trimmed.StartsWith("#"))
+                        {
+                            var content = trimmed.TrimStart('#').Trim();
+                            if (content.StartsWith("Magazine:", StringComparison.OrdinalIgnoreCase))
+                                fileMag = content.Substring("Magazine:".Length).Trim();
+                            else if (content.StartsWith("Volume:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("Vol:", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var val = content.Contains(":" ) ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
+                                fileVol = val.Replace("Volume:", string.Empty).Replace("Vol:", string.Empty).Trim();
+                            }
+                            else if (content.StartsWith("Number:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("No:", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
+                                fileNum = val.Replace("Number:", string.Empty).Replace("No:", string.Empty).Trim();
+                            }
+                            else if (content.StartsWith("Year:", StringComparison.OrdinalIgnoreCase))
+                            {
+                                fileYear = content.Substring("Year:".Length).Trim();
+                            }
+                            articleStartIndex = i + 1;
+                            continue;
+                        }
+                        // First non-comment line: try CSV metadata
+                        var parts = IndexFileParser.SplitRespectingEscapedCommas(trimmed);
+                        if (parts.Count >= 3)
+                        {
+                            string Unescape(string s) => s.Replace("\\,", ",");
+                            fileMag = Unescape(parts[0]);
+                            fileVol = Unescape(parts[1]);
+                            fileNum = Unescape(parts[2]);
+                            if (parts.Count >= 4)
+                            {
+                                fileYear = Unescape(parts[3]);
+                            }
+                            articleStartIndex = i + 1;
+                        }
+                        else
+                        {
+                            articleStartIndex = i;
+                        }
+                        break;
                     }
-                    catch (FormatException fx)
+
+                    for (int i = articleStartIndex; i < lines.Length; i++)
                     {
-                        // Show error and open index overlay with full file contents for user correction
-                        try { IndexEditor.Shared.ToastService.Show("_index.txt format error: " + fx.Message); } catch { }
-                        
-                        // Use overlay manager to show the error
+                        var line = lines[i];
+                        if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#")) continue;
                         try
                         {
-                            var fullText = System.IO.File.ReadAllText(indexPath);
-                            _overlayManager?.ShowIndexOverlayError(line ?? string.Empty, fullText);
+                            var parsed = ParseArticleLine(line);
+                            if (parsed != null) articles.Add(parsed);
                         }
-                        catch (Exception ex)
+                        catch (FormatException fx)
                         {
-                            DebugLogger.LogException("LoadArticlesFromFolder: show overlay on format error", ex);
-                        }
+                            // Show error and open index overlay with full file contents for user correction
+                            try { IndexEditor.Shared.ToastService.Show("_index.txt format error: " + fx.Message); } catch { }
+                            
+                            // Use overlay manager to show the error
+                            try
+                            {
+                                var fullText = System.IO.File.ReadAllText(indexPath);
+                                _overlayManager?.ShowIndexOverlayError(line ?? string.Empty, fullText);
+                            }
+                            catch (Exception ex)
+                            {
+                                DebugLogger.LogException("LoadArticlesFromFolder: show overlay on format error", ex);
+                            }
 
-                        // Stop further parsing; let the user fix the file
-                        break;
+                            // Stop further parsing; let the user fix the file
+                            break;
+                        }
                     }
                 }
             }

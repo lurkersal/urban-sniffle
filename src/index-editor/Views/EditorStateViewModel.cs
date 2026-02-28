@@ -398,8 +398,36 @@ namespace IndexEditor.Views
         {
             if (sender is ArticleLine article)
             {
-                // Mark that we have unsaved changes whenever an article property changes
-                try { IndexEditor.Shared.EditorState.HasUnsavedChanges = true; } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.OnArticlePropertyChanged: set HasUnsavedChanges", ex); }
+                // Mark that we have unsaved changes only for properties that represent actual user data changes
+                // Exclude UI-only properties like ActiveSegment, LastModifiedSegment, WasAutoHighlighted, FormattedCardText, IsSelected, etc.
+                var dataProperties = new[] 
+                { 
+                    nameof(ArticleLine.Pages), 
+                    nameof(ArticleLine.PagesText), 
+                    nameof(ArticleLine.Category), 
+                    nameof(ArticleLine.Title),
+                    nameof(ArticleLine.ModelNames),
+                    nameof(ArticleLine.Age),
+                    nameof(ArticleLine.Ages),
+                    nameof(ArticleLine.Contributors),
+                    nameof(ArticleLine.Illustrators),
+                    nameof(ArticleLine.ModelSize),
+                    nameof(ArticleLine.Measurements),
+                    nameof(ArticleLine.BustSize),
+                    nameof(ArticleLine.WaistSize),
+                    nameof(ArticleLine.HipSize),
+                    nameof(ArticleLine.CupSize),
+                    nameof(ArticleLine.BustSizes),
+                    nameof(ArticleLine.WaistSizes),
+                    nameof(ArticleLine.HipSizes),
+                    nameof(ArticleLine.CupSizes),
+                    nameof(ArticleLine.Notes)
+                };
+                
+                if (dataProperties.Contains(e.PropertyName))
+                {
+                    try { IndexEditor.Shared.EditorState.HasUnsavedChanges = true; } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.OnArticlePropertyChanged: set HasUnsavedChanges", ex); }
+                }
                 
                 // OnArticlePropertyChanged
                 // If pages or category changed, we may need to reorder

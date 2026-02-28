@@ -24,9 +24,10 @@ public class OverlayManager
     }
 
     /// <summary>
-    /// Shows the index file editor overlay with the content of _index.txt.
+    /// Shows the index file editor overlay with the content of _index.json or _index.txt.
+    /// Phase 1: Prefers JSON format if it exists.
     /// </summary>
-    /// <param name="folder">The folder containing _index.txt</param>
+    /// <param name="folder">The folder containing the index file</param>
     public void ShowIndexOverlay(string? folder)
     {
         try
@@ -45,17 +46,28 @@ public class OverlayManager
             if (errBorder != null) errBorder.IsVisible = false;
             if (errLine != null) errLine.Text = string.Empty;
 
-            // Load _index.txt content
+            // Load index file content - prefer JSON
             if (string.IsNullOrWhiteSpace(folder))
             {
                 textBox.Text = "No folder open.";
             }
             else
             {
-                var indexPath = Path.Combine(folder, "_index.txt");
-                textBox.Text = File.Exists(indexPath)
-                    ? File.ReadAllText(indexPath)
-                    : $"_index.txt not found in folder: {folder}";
+                var jsonPath = Path.Combine(folder, "_index.json");
+                var txtPath = Path.Combine(folder, "_index.txt");
+                
+                if (File.Exists(jsonPath))
+                {
+                    textBox.Text = File.ReadAllText(jsonPath);
+                }
+                else if (File.Exists(txtPath))
+                {
+                    textBox.Text = File.ReadAllText(txtPath);
+                }
+                else
+                {
+                    textBox.Text = $"No index file found in folder: {folder}";
+                }
             }
 
             overlay.IsVisible = true;
