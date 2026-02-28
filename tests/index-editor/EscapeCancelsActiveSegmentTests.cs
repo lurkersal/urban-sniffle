@@ -6,7 +6,7 @@ using Common.Shared;
 
 namespace IndexEditor.Tests
 {
-    public class EscapeCancelsActiveSegmentTests
+    public class EscapeCancelsActiveSegmentTests : IDisposable
     {
         public EscapeCancelsActiveSegmentTests() 
         { 

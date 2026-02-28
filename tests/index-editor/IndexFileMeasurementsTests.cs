@@ -36,7 +36,7 @@ namespace IndexEditor.Tests
             var parsed = IndexFileParser.ParseArticleLine(line);
             Assert.NotNull(parsed);
             Assert.NotNull(parsed.Measurements);
-            Assert.Equal(1, parsed.Measurements.Count);
+            Assert.Single(parsed.Measurements);
             Assert.Equal(string.Empty, parsed.Measurements[0]);
         }
     }

@@ -584,7 +584,7 @@ namespace IndexEditor.Tests
             // Arrange
             var article = new ArticleLine 
             { 
-                Pages = null,
+                Pages = null!,
                 Segments = new System.Collections.ObjectModel.ObservableCollection<Segment>()
             };
             EditorState.ActiveArticle = article;

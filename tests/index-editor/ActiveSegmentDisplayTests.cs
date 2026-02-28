@@ -8,7 +8,7 @@ using Common.Shared;
 
 namespace IndexEditor.Tests
 {
-    public class ActiveSegmentDisplayTests
+    public class ActiveSegmentDisplayTests : IDisposable
     {
         public ActiveSegmentDisplayTests() 
         { 

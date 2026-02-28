@@ -7,7 +7,7 @@ using Common.Shared;
 
 namespace IndexEditor.Tests
 {
-    public class SegmentLifecycleTests
+    public class SegmentLifecycleTests : IDisposable
     {
         public SegmentLifecycleTests() 
         { 
