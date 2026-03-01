@@ -43,23 +43,34 @@ class Program
             return 2;
         }
 
-        var indexPath = Path.Combine(directory, "_index.txt");
+        // Phase 2: Prefer JSON format, fall back to TXT
+        var jsonPath = Path.Combine(directory, "_index.json");
+        var txtPath = Path.Combine(directory, "_index.txt");
+        var autoIndexPath = Path.Combine(directory, "_auto_index.txt");
         
-        // If _index.txt doesn't exist, try _auto_index.txt
-        if (!File.Exists(indexPath))
+        string indexPath;
+        if (File.Exists(jsonPath))
         {
-            var autoIndexPath = Path.Combine(directory, "_auto_index.txt");
-            if (File.Exists(autoIndexPath))
-            {
-                indexPath = autoIndexPath;
-            }
-            else
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"ERROR: Neither _index.txt nor _auto_index.txt found in: {directory}");
-                Console.ResetColor();
-                return 3;
-            }
+            indexPath = jsonPath;
+            Console.WriteLine($"Found _index.json - using JSON format");
+        }
+        else if (File.Exists(txtPath))
+        {
+            indexPath = txtPath;
+            Console.WriteLine($"Found _index.txt - using legacy CSV format");
+        }
+        else if (File.Exists(autoIndexPath))
+        {
+            indexPath = autoIndexPath;
+            Console.WriteLine($"Found _auto_index.txt - using legacy CSV format");
+        }
+        else
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"ERROR: No index file found in: {directory}");
+            Console.WriteLine($"  Looked for: _index.json, _index.txt, _auto_index.txt");
+            Console.ResetColor();
+            return 3;
         }
 
         try

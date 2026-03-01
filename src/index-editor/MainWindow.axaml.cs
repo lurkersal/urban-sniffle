@@ -298,6 +298,18 @@ public partial class MainWindow : Window
                         
                         // Determine which format to save based on file content
                         var text = textBox.Text ?? string.Empty;
+                        
+                        // Phase 2 - Task 2: Validate JSON before saving
+                        if (_overlayManager != null)
+                        {
+                            (bool isValid, string? errorMessage) = _overlayManager.ValidateJsonContent(text);
+                            if (!isValid)
+                            {
+                                IndexEditor.Shared.ToastService.Show($"Validation failed: {errorMessage}");
+                                return;
+                            }
+                        }
+                        
                         var jsonPath = System.IO.Path.Combine(folder, "_index.json");
                         var txtPath = System.IO.Path.Combine(folder, "_index.txt");
                         

@@ -1,10 +1,10 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="magazine-parser" type="DotNetProject" factoryName=".NET Project">
     <option name="EXE_PATH" value="$PROJECT_DIR$/src/magazine-parser/bin/Debug/net8.0/magazine-parser" />
-    <option name="PROGRAM_PARAMETERS" value="" />
-    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/src/magazine-parser/bin/Debug/net8.0" />
+    <option name="PROGRAM_PARAMETERS" value="./" />
+    <option name="WORKING_DIRECTORY" value="$USER_HOME$/Magazines/Club International/Club International 17-06, 1988" />
     <option name="PASS_PARENT_ENVS" value="1" />
-    <option name="ENV_FILE_PATHS" value="" />
+    <option name="ENV_FILE_PATHS" value="$PROJECT_DIR$/.env" />
     <option name="REDIRECT_INPUT_PATH" value="" />
     <option name="MIXED_MODE_DEBUG" value="0" />
     <option name="USE_MONO" value="0" />
@@ -13,7 +13,7 @@
     <option name="PROJECT_PATH" value="$PROJECT_DIR$/src/magazine-parser/magazine-parser.csproj" />
     <option name="PROJECT_EXE_PATH_TRACKING" value="1" />
     <option name="PROJECT_ARGUMENTS_TRACKING" value="1" />
-    <option name="PROJECT_WORKING_DIRECTORY_TRACKING" value="1" />
+    <option name="PROJECT_WORKING_DIRECTORY_TRACKING" value="0" />
     <option name="PROJECT_KIND" value="DotNetCore" />
     <option name="PROJECT_TFM" value="net8.0" />
     <method v="2">

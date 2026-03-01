@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using Avalonia.Controls;
 using IndexEditor.Shared;
+using Common.Shared;
 
 namespace IndexEditor.Services;
 
@@ -331,6 +333,74 @@ public class OverlayManager
         catch
         {
             return false;
+        }
+    }
+    
+    /// <summary>
+    /// Validates JSON content. Returns (isValid, errorMessage).
+    /// Phase 2 - Task 2: JSON validation
+    /// </summary>
+    public (bool isValid, string? errorMessage) ValidateJsonContent(string content)
+    {
+        try
+        {
+            // Check if content looks like JSON
+            var trimmed = content.Trim();
+            if (!trimmed.StartsWith("{"))
+            {
+                // Not JSON, assume it's CSV - no validation needed
+                return (true, null);
+            }
+            
+            // Try to parse as JSON using shared JsonOptions
+            var jsonData = JsonSerializer.Deserialize<IndexFileJson>(content, IndexJsonSerializer.JsonOptions);
+            
+            if (jsonData == null)
+            {
+                return (false, "JSON deserialization returned null");
+            }
+            
+            // Validate structure
+            if (jsonData.Metadata == null)
+            {
+                return (false, "Missing 'metadata' section");
+            }
+            
+            if (string.IsNullOrWhiteSpace(jsonData.Metadata.Magazine))
+            {
+                return (false, "Missing magazine name in metadata");
+            }
+            
+            if (jsonData.Articles == null || jsonData.Articles.Count == 0)
+            {
+                return (false, "Missing or empty 'articles' array");
+            }
+            
+            // Validate each article
+            for (int i = 0; i < jsonData.Articles.Count; i++)
+            {
+                var article = jsonData.Articles[i];
+                
+                if (string.IsNullOrWhiteSpace(article.Category))
+                {
+                    return (false, $"Article {i + 1}: Missing category");
+                }
+                
+                if (article.Pages == null || article.Pages.Count == 0)
+                {
+                    return (false, $"Article {i + 1} ({article.Title ?? "untitled"}): Missing pages");
+                }
+            }
+            
+            return (true, null);
+        }
+        catch (JsonException ex)
+        {
+            return (false, $"JSON parse error: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Validation error: {ex.Message}");
         }
     }
 }
