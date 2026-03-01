@@ -942,7 +942,7 @@ public class MagazineParsingService
             
             // Load JSON using the common serializer
             var directory = Path.GetDirectoryName(indexPath) ?? string.Empty;
-            var (magazine, volume, number, year, articles) = Common.Shared.IndexJsonSerializer.LoadFromJson(directory);
+            var (magazine, volume, number, year, articles, _) = Common.Shared.IndexJsonSerializer.LoadFromJson(directory);
             
             var magazineTitle = magazine;
             int.TryParse(volume, out int volumeNum);

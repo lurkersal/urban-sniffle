@@ -13,6 +13,9 @@ namespace Common.Shared
 
         [JsonPropertyName("articles")]
         public List<ArticleJson> Articles { get; set; } = new List<ArticleJson>();
+
+        [JsonPropertyName("links")]
+        public List<MagazineLink>? Links { get; set; }
     }
 
     public class IndexMetadata
@@ -55,6 +58,24 @@ namespace Common.Shared
 
         [JsonPropertyName("measurements")]
         public List<string>? Measurements { get; set; }
+    }
+
+    /// <summary>
+    /// Represents a link from a page in this issue to another magazine issue
+    /// </summary>
+    public class MagazineLink
+    {
+        [JsonPropertyName("page")]
+        public int Page { get; set; }
+
+        [JsonPropertyName("magazine")]
+        public string Magazine { get; set; } = string.Empty;
+
+        [JsonPropertyName("volume")]
+        public string Volume { get; set; } = string.Empty;
+
+        [JsonPropertyName("issue")]
+        public string Issue { get; set; } = string.Empty;
     }
 
     // SegmentJson class removed - segments are computed, not stored

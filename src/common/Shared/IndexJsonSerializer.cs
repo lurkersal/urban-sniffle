@@ -23,7 +23,7 @@ namespace Common.Shared
         /// <summary>
         /// Converts ArticleLine objects to JSON format and saves to _index.json
         /// </summary>
-        public static void SaveToJson(string folder, string magazine, string volume, string number, string year, List<ArticleLine> articles)
+        public static void SaveToJson(string folder, string magazine, string volume, string number, string year, List<ArticleLine> articles, List<MagazineLink>? links = null)
         {
             if (string.IsNullOrWhiteSpace(folder))
                 throw new ArgumentException("folder is required", nameof(folder));
@@ -39,7 +39,8 @@ namespace Common.Shared
                     Number = number,
                     Year = year
                 },
-                Articles = articles.Select(ConvertToArticleJson).ToList()
+                Articles = articles.Select(ConvertToArticleJson).ToList(),
+                Links = links
             };
 
             var tempPath = indexPath + ".tmp";
@@ -65,7 +66,7 @@ namespace Common.Shared
         /// <summary>
         /// Loads _index.json and converts to ArticleLine objects
         /// </summary>
-        public static (string magazine, string volume, string number, string year, List<ArticleLine> articles) LoadFromJson(string folder)
+        public static (string magazine, string volume, string number, string year, List<ArticleLine> articles, List<MagazineLink>? links) LoadFromJson(string folder)
         {
             if (string.IsNullOrWhiteSpace(folder))
                 throw new ArgumentException("folder is required", nameof(folder));
@@ -87,7 +88,8 @@ namespace Common.Shared
                 data.Metadata.Volume,
                 data.Metadata.Number,
                 data.Metadata.Year,
-                articles
+                articles,
+                data.Links
             );
         }
 

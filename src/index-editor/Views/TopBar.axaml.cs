@@ -63,7 +63,8 @@ namespace IndexEditor.Views
                         btn.IsEnabled = false;
                         try
                         {
-                            IndexEditor.Shared.IndexSaver.SaveIndex(folder);
+                            var links = MainWindow.Instance?.GetDiscoveredLinks();
+                            IndexEditor.Shared.IndexSaver.SaveIndex(folder, links);
                             IndexEditor.Shared.ToastService.Show("_index.txt saved");
                         }
                         catch (Exception ex)
@@ -107,7 +108,8 @@ namespace IndexEditor.Views
                                             var folder = IndexEditor.Shared.EditorState.CurrentFolder;
                                             if (!string.IsNullOrWhiteSpace(folder))
                                             {
-                                                IndexEditor.Shared.IndexSaver.SaveIndex(folder);
+                                                var links = MainWindow.Instance?.GetDiscoveredLinks();
+                                                IndexEditor.Shared.IndexSaver.SaveIndex(folder, links);
                                                 IndexEditor.Shared.ToastService.Show("Index saved");
                                             }
                                         }
@@ -204,7 +206,8 @@ namespace IndexEditor.Views
                         // Save current edits first
                         try
                         {
-                            IndexEditor.Shared.IndexSaver.SaveIndex(folder);
+                            var links = MainWindow.Instance?.GetDiscoveredLinks();
+                            IndexEditor.Shared.IndexSaver.SaveIndex(folder, links);
                             IndexEditor.Shared.ToastService.Show("_index.txt saved");
                         }
                         catch (Exception ex)

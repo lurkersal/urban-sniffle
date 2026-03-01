@@ -170,7 +170,8 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
 
             try
             {
-                IndexSaver.SaveIndex(saveFolder);
+                var links = MainWindow.Instance?.GetDiscoveredLinks();
+                IndexSaver.SaveIndex(saveFolder, links);
                 ToastService.Show("_index.txt saved");
             }
             catch (Exception saveEx)

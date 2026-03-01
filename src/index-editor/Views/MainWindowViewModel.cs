@@ -77,7 +77,8 @@ namespace IndexEditor.Views
 
                 try
                 {
-                    IndexSaver.SaveIndex(folder);
+                    var links = MainWindow.Instance?.GetDiscoveredLinks();
+                    IndexSaver.SaveIndex(folder, links);
                     ToastService.Show("_index.txt saved");
                     EditorState.NotifyStateChanged();
                 }

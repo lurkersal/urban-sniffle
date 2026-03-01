@@ -374,6 +374,9 @@ namespace IndexEditor.Views
                 EditorState.NotifyStateChanged();
                 // Also load the current page image immediately when Page is set
                 try { LoadCurrentPageImage(); } catch (Exception ex) { DebugLogger.LogException("PageControllerView.Page: LoadCurrentPageImage", ex); }
+                
+                // Update link indicator for new page
+                UpdateLinkIndicator();
             }
         }
 
@@ -1186,5 +1189,71 @@ namespace IndexEditor.Views
         }
 
         // Bridge will call the public methods defined on this view (AddSegmentAtCurrentPage, CreateNewArticle, EndActiveSegment, MoveLeft, MoveRight).
+
+        private Dictionary<int, List<Common.Shared.MagazineLink>> _pageLinks = new();
+
+        /// <summary>
+        /// Update the link indicator for discovered links
+        /// </summary>
+        public void UpdateDiscoveredLinks(Dictionary<int, List<Common.Shared.MagazineLink>> discoveredLinks)
+        {
+            _pageLinks = discoveredLinks ?? new Dictionary<int, List<Common.Shared.MagazineLink>>();
+            UpdateLinkIndicator();
+        }
+
+        /// <summary>
+        /// Update the link indicator visibility and count based on current page
+        /// </summary>
+        private void UpdateLinkIndicator()
+        {
+            try
+            {
+                var linkIndicator = this.FindControl<StackPanel>("LinkIndicator");
+                var linkCount = this.FindControl<TextBlock>("LinkCount");
+                var tooltipContent = this.FindControl<StackPanel>("LinkTooltipContent");
+                
+                if (linkIndicator == null) return;
+
+                var currentPage = EditorState.CurrentPage;
+                if (_pageLinks.TryGetValue(currentPage, out var links) && links.Count > 0)
+                {
+                    linkIndicator.IsVisible = true;
+                    if (linkCount != null)
+                    {
+                        linkCount.Text = links.Count == 1 ? "1 link" : $"{links.Count} links";
+                    }
+                    
+                    // Populate tooltip with link details
+                    if (tooltipContent != null)
+                    {
+                        // Clear existing content except the header
+                        while (tooltipContent.Children.Count > 1)
+                        {
+                            tooltipContent.Children.RemoveAt(1);
+                        }
+                        
+                        // Add each link to the tooltip
+                        foreach (var link in links)
+                        {
+                            var linkText = new TextBlock
+                            {
+                                Text = $"• {link.Magazine} Vol.{link.Volume} No.{link.Issue}",
+                                FontSize = 11,
+                                Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33))
+                            };
+                            tooltipContent.Children.Add(linkText);
+                        }
+                    }
+                }
+                else
+                {
+                    linkIndicator.IsVisible = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("PageControllerView.UpdateLinkIndicator", ex);
+            }
+        }
     }
 }

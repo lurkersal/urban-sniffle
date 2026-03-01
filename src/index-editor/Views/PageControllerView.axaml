@@ -38,11 +38,29 @@
         
         <!-- Row 1: Fixed Page Navigation Controls at bottom -->
         <Border Grid.Row="1" Background="#F0F0F0" BorderBrush="#CCCCCC" BorderThickness="0,1,0,0" Padding="12">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
-                <Button Name="PrevPageBtn" Content="◀" Width="36" Height="36" Background="White" Foreground="Black"/>
-                <TextBox Name="PageInput" Text="8" Width="80" HorizontalContentAlignment="Center" FontWeight="Bold" FontSize="18" VerticalAlignment="Center" Background="White" Foreground="Black"/>
-                <Button Name="NextPageBtn" Content="▶" Width="36" Height="36" Background="White" Foreground="Black"/>
-            </StackPanel>
+            <Grid ColumnDefinitions="*,Auto,*">
+                <!-- Page Navigation Controls (center) -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+                    <Button Name="PrevPageBtn" Content="◀" Width="36" Height="36" Background="White" Foreground="Black"/>
+                    <TextBox Name="PageInput" Text="8" Width="80" HorizontalContentAlignment="Center" FontWeight="Bold" FontSize="18" VerticalAlignment="Center" Background="White" Foreground="Black"/>
+                    <Button Name="NextPageBtn" Content="▶" Width="36" Height="36" Background="White" Foreground="Black"/>
+                </StackPanel>
+                
+                <!-- Link Indicator (right) -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="4" Name="LinkIndicator" IsVisible="False">
+                    <TextBlock Text="🔗" FontSize="18" VerticalAlignment="Center">
+                        <ToolTip.Tip>
+                            <Border Background="#F5F5F5" BorderBrush="#999" BorderThickness="1" CornerRadius="4" Padding="8">
+                                <StackPanel Name="LinkTooltipContent" Spacing="4">
+                                    <!-- Links will be populated dynamically -->
+                                    <TextBlock Text="Links found on this page:" FontWeight="Bold" FontSize="12" />
+                                </StackPanel>
+                            </Border>
+                        </ToolTip.Tip>
+                    </TextBlock>
+                    <TextBlock Name="LinkCount" Text="" FontSize="12" VerticalAlignment="Center" Foreground="#666" />
+                </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>
