@@ -638,6 +638,19 @@ public partial class MainWindow : Window
     {
         try
         {
+            // Fullscreen image overlay: Esc to close (highest priority)
+            if (_fullscreenService?.IsFullscreenVisible() ?? false)
+            {
+                if (e.Key == Key.Escape)
+                {
+                    CloseFullscreenImage();
+                    e.Handled = true;
+                    return true;
+                }
+                // Block other shortcuts while fullscreen is visible
+                return true;
+            }
+
             var overlay = this.FindControl<Border>("IndexOverlay");
             var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
 
