@@ -143,7 +143,17 @@ namespace IndexEditor.Views
                       }
                       catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: set active article/notify", ex); }
                       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
-                    try { DebugLogger.Log($"SelectedArticle set. current.Title='{_selectedArticle?.Title}', Category='{_selectedArticle?.Category}', Contributor0='{_selectedArticle?.Contributor0}'"); } catch {}
+                    try { 
+                        var pagesStr = _selectedArticle?.Pages != null ? string.Join(",", _selectedArticle.Pages) : "(null)";
+                        var pagesTextStr = _selectedArticle?.PagesText ?? "(null)";
+                        DebugLogger.Log($"SelectedArticle set. current.Title='{_selectedArticle?.Title}', Category='{_selectedArticle?.Category}', Contributor0='{_selectedArticle?.Contributor0}', Pages=[{pagesStr}], PagesText='{pagesTextStr}'"); 
+                    } catch {}
+                      // Force the ArticleLine to notify all UI-bound properties changed so TextBox bindings refresh
+                      try
+                      {
+                          _selectedArticle?.RefreshUIBindings();
+                      }
+                      catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: RefreshUIBindings", ex); }
                       // Notify SelectedCategory so the editor ComboBox updates to the new article's category
                       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
                       // Also notify CurrentShownArticle which may change when SelectedArticle changes
@@ -167,7 +177,16 @@ namespace IndexEditor.Views
         private bool _isReordering = false;
          public string? SelectedCategory
          {
-             get => SelectedArticle?.Category;
+             get
+             {
+                 var category = SelectedArticle?.Category;
+                 // Debug: Log when category is accessed to verify binding is working
+                 if (category != null)
+                 {
+                     try { DebugLogger.Log($"SelectedCategory GET: '{category}' for article '{SelectedArticle?.Title}'"); } catch { }
+                 }
+                 return category;
+             }
              set
              {
                  if (_suppressCategorySet) return;
@@ -192,11 +211,19 @@ namespace IndexEditor.Views
                      // Forward notify so bindings update
                      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
                  }
-             }
-         }
+              }
+          }
 
-         public ObservableCollection<Common.Shared.ArticleLine> Articles { get; } = new();
-         public ObservableCollection<string> Categories { get; } = new();
+          /// <summary>
+          /// Notify that SelectedCategory changed. Used to refresh bindings after programmatic setup.
+          /// </summary>
+          public void NotifySelectedCategoryChanged()
+          {
+              PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
+          }
+
+          public ObservableCollection<Common.Shared.ArticleLine> Articles { get; } = new();
+          public ObservableCollection<string> Categories { get; } = new();
 
          private bool _isLoadingCategories = false;
          public bool IsLoadingCategories
@@ -215,71 +242,46 @@ namespace IndexEditor.Views
          public EditorStateViewModel()
          {
              SelectArticleCommand = new SelectArticleCommand(this);
-             // Initialize from static EditorState
+             
+             // CRITICAL: Initialize categories FIRST, before loading articles
+             // Categories load from enum (instant), so do it synchronously to avoid race conditions
+             // This ensures ComboBox ItemsSource is populated before articles with categories are loaded
+             try
+             {
+                 // Initialize CategoryService synchronously if not already done
+                 // Since it loads from enum, this is instant (no I/O, no async needed)
+                 if (IndexEditor.Shared.CategoryService.Categories.Count == 0)
+                 {
+                     // Call InitializeAsync synchronously - it's instant for enum-based loading
+                     IndexEditor.Shared.CategoryService.InitializeAsync().Wait();
+                 }
+                 
+                 // Mirror categories to our VM's collection
+                 Categories.Clear();
+                 foreach (var c in IndexEditor.Shared.CategoryService.Categories)
+                     Categories.Add(c);
+                 
+                 _categoriesLoadedFromDb = IndexEditor.Shared.CategoryService.Categories.Count > 0;
+                 
+                 // Explicitly ensure the loading indicator is off (should already be false, but ensure binding updates)
+                 IsLoadingCategories = false;
+                 
+                 DebugLogger.Log($"EditorStateViewModel: Categories initialized synchronously, count={Categories.Count}, IsLoadingCategories={IsLoadingCategories}");
+             }
+             catch (Exception ex)
+             {
+                 DebugLogger.LogException("EditorStateViewModel: category initialization", ex);
+                 IsLoadingCategories = false;  // Ensure it's false even on error
+             }
+
+             // Now load articles - categories are guaranteed to be available
              foreach (var article in EditorState.Articles ?? new System.Collections.Generic.List<Common.Shared.ArticleLine>())
                  Articles.Add(article);
 
-             // IMPORTANT: Categories must come only from the database. Do not populate from Articles.
-             // Leave Categories empty until DB load completes. The ComboBox will show DB-provided values only.
-
-            // Initialize the shared CategoryService once and mirror its collection into our VM's Categories
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await IndexEditor.Shared.CategoryService.InitializeAsync();
-                    // Mirror the service collection to our VM on UI thread
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        Categories.Clear();
-                        foreach (var c in IndexEditor.Shared.CategoryService.Categories) Categories.Add(c);
-                        // Mark that categories came from DB
-                        try { _categoriesLoadedFromDb = IndexEditor.Shared.CategoryService.Categories.Count > 0; } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel: mirror categories count", ex); }
-                        // Subscribe to future changes so we mirror updates
-                        try
-                        {
-                            IndexEditor.Shared.CategoryService.Categories.CollectionChanged += (s, e) =>
-                            {
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                {
-                                    Categories.Clear();
-                                    foreach (var cc in IndexEditor.Shared.CategoryService.Categories) Categories.Add(cc);
-                                });
-                            };
-                        }
-                        catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel: subscribe CategoryService.CollectionChanged", ex); }
-                     });
-                 }
-                 catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel: initial CategoryService.InitializeAsync", ex); }
-             });
-
-             // Asynchronously try to load categories from DB (do not block UI thread)
-             IsLoadingCategories = true;
-             Task.Run(async () =>
-             {
-                 try
-                 {
-                     // The CategoryService already loads categories; we just mirror from it above. Keep IsLoadingCategories for compatibility.
-                     await IndexEditor.Shared.CategoryService.InitializeAsync();
-                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                     {
-                         Categories.Clear();
-                         foreach (var c in IndexEditor.Shared.CategoryService.Categories) Categories.Add(c);
-                     });
-                 }
-                 catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel: CategoryService.InitializeAsync (secondary)", ex); }
-                 finally
-                 {
-                     Dispatcher.UIThread.Post(() => IsLoadingCategories = false);
-                 }
-             });
-
-             // Debug: Print type of every item
-             // Skip debug printing of article types
-              // Listen for changes
-              EditorState.StateChanged += SyncArticles;
-              // Also raise SelectedArticle when the global EditorState changes (e.g., CurrentPage) so bindings like SelectedArticle.ActiveSegment re-evaluate
-              EditorState.StateChanged += OnEditorStateChanged;
+             // Listen for changes
+             EditorState.StateChanged += SyncArticles;
+             // Also raise SelectedArticle when the global EditorState changes (e.g., CurrentPage) so bindings like SelectedArticle.ActiveSegment re-evaluate
+             EditorState.StateChanged += OnEditorStateChanged;
           }
 
         // Returns the article that should be shown for active-segment display: prefer the selected article, otherwise the global active article

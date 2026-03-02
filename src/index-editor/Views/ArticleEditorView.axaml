@@ -49,8 +49,10 @@
                             </TextBox.Text>
                         </TextBox>
                     </StackPanel>
-                    <TextBlock Text="{Binding SelectedArticle.MeasurementsErrorMessage}" Foreground="Red" FontSize="12" Margin="124,2,0,0" IsVisible="{Binding SelectedArticle.HasMeasurementsError}" />
-                    <TextBlock Text="Format: bust(+cup)-waist-hip — e.g. '36B-28-38' (separator must be '-')" Foreground="Gray" FontSize="11" Margin="124,2,0,0" IsVisible="{Binding SelectedArticle.HasMeasurementsError}" />
+                    <!-- Measurements validation message - only shown when measurements field is visible AND there's an error -->
+                    <StackPanel IsVisible="{Binding SelectedArticle, Converter={StaticResource ShowMeasurements}}">
+                        <TextBlock Text="{Binding SelectedArticle.MeasurementsErrorMessage}" Foreground="Red" FontSize="12" Margin="124,2,0,0" IsVisible="{Binding SelectedArticle.HasMeasurementsError}" />
+                    </StackPanel>
 
                     <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle.Category, Converter={StaticResource ShowContributor}}">
                         <TextBlock Text="{Binding SelectedArticle.Category, Converter={StaticResource FieldLabelConverter}, ConverterParameter=Photographer}" FontWeight="Bold" Width="120"/>

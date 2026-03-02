@@ -7,6 +7,27 @@ namespace Common.Shared
     public class ArticleLine : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
+        
+        /// <summary>
+        /// Force all UI-bound properties to notify PropertyChanged so bindings refresh.
+        /// Use this when an article is selected/displayed in the editor.
+        /// </summary>
+        public void RefreshUIBindings()
+        {
+            try
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Title)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Category)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PagesText)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ModelName0)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Age0)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Measurements0)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Contributor0)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Segments)));
+            }
+            catch { /* ignore */ }
+        }
+        
         private bool _isSelected;
         public bool IsSelected
         {
@@ -262,9 +283,16 @@ namespace Common.Shared
         // PagesText property for user-friendly editing (e.g. "2|3-4")
         public string PagesText
         {
-            get => string.Join("|", PagesToSegments(Pages));
+            get
+            {
+                var result = string.Join("|", PagesToSegments(Pages));
+                // Debug: Log when PagesText is accessed
+                try { Console.WriteLine($"[PagesText GET] Title='{Title}', Pages={Pages?.Count ?? 0}, Result='{result}'"); } catch { }
+                return result;
+            }
             set
             {
+                try { Console.WriteLine($"[PagesText SET] Title='{Title}', Value='{value}'"); } catch { }
                 var parsed = ParsePageText(value, out bool hasError);
                 Pages = parsed;
                 HasPageNumberError = hasError;
@@ -514,6 +542,7 @@ namespace Common.Shared
         /// </summary>
         public void Validate()
         {
+            Logger.Log($"[VALIDATE] Validate() called for article '{Title}', Category='{Category}'");
             var errors = new List<string>();
             if (Pages == null || Pages.Count == 0)
                 errors.Add("Pages");
@@ -522,38 +551,55 @@ namespace Common.Shared
             // Category-specific validation: Model/Cover/Group measurements are optional; if provided, validate format
             HasMeasurementsError = false;
             var cat = (Category ?? string.Empty).Trim().ToLowerInvariant();
+            Logger.Log($"[VALIDATE] Category (lowercase)='{cat}'");
             if (cat == "model" || cat == "cover" || cat == "group")
             {
+                Logger.Log($"[VALIDATE] Category requires measurement validation");
                 // Validate each pipe-separated measurement
                 var measurementStrings = Measurements.Where(m => !string.IsNullOrWhiteSpace(m)).ToList();
+                Logger.Log($"[VALIDATE] Found {measurementStrings.Count} non-empty measurements: [{string.Join(", ", measurementStrings.Select(s => $"'{s}'"))}]");
                 if (measurementStrings.Count > 0)
                 {
                     var allErrors = new List<string>();
                     for (int i = 0; i < measurementStrings.Count; i++)
                     {
+                        Logger.Log($"[VALIDATE] Validating measurement {i + 1}: '{measurementStrings[i]}'");
                         if (!Common.Shared.MeasurementsValidator.TryParseMeasurements(measurementStrings[i], out var b, out var cup, out var w, out var h, out var mErr))
                         {
-                            allErrors.Add($"Measurement {i + 1}: {mErr ?? "Invalid format"}");
+                            var errorMsg = $"Measurement {i + 1}: {mErr ?? "Invalid format"}";
+                            Logger.Log($"[VALIDATE] ❌ Validation FAILED: {errorMsg}");
+                            allErrors.Add(errorMsg);
+                        }
+                        else
+                        {
+                            Logger.Log($"[VALIDATE] ✓ Validation PASSED: bust={b}, cup='{cup}', waist={w}, hip={h}");
                         }
                     }
                     
                     if (allErrors.Count > 0)
                     {
+                        Logger.Log($"[VALIDATE] Setting HasMeasurementsError=true, MeasurementsErrorMessage='{string.Join("; ", allErrors)}'");
                         errors.Add("Measurements");
                         HasMeasurementsError = true;
                         MeasurementsErrorMessage = string.Join("; ", allErrors);
                     }
                     else
                     {
+                        Logger.Log($"[VALIDATE] All measurements valid, clearing error message");
                         MeasurementsErrorMessage = null;
                     }
                 }
                 else
                 {
+                    Logger.Log($"[VALIDATE] No measurements provided (optional), clearing error");
                     // Measurements left empty: optional -> clear any previous message
                     MeasurementsErrorMessage = null;
                     HasMeasurementsError = false;
                 }
+            }
+            else
+            {
+                Logger.Log($"[VALIDATE] Category does not require measurement validation");
             }
             // You can add more category-specific rules here later.
 
@@ -563,6 +609,7 @@ namespace Common.Shared
             if (had != HasValidationError)
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasValidationError)));
 
+            Logger.Log($"[VALIDATE] Final: HasMeasurementsError={HasMeasurementsError}, MeasurementsErrorMessage='{MeasurementsErrorMessage}'");
             // Raise per-field notifications so UI can update
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ValidationErrors)));
             // Raise convenience boolean properties for bindings
@@ -570,6 +617,7 @@ namespace Common.Shared
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasCategoryError)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasMeasurementsError)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MeasurementsErrorMessage)));
+            Logger.Log($"[VALIDATE] PropertyChanged events fired for validation properties");
         }
 
         public bool HasFieldError(string fieldName)

@@ -17,7 +17,10 @@ namespace IndexEditor.Views
         public ArticleEditor()
         {
             InitializeComponent();
-            // When the global EditorState changes, if the ActiveArticle matches our DataContext, focus the category combobox.
+            
+            // Category ComboBox is now bound directly in XAML, no code-behind setup needed
+            
+            // Listen for global EditorState changes
             IndexEditor.Shared.EditorState.StateChanged += OnEditorStateChanged;
             // Also listen for explicit focus requests initiated by the window/key handlers
             IndexEditor.Shared.EditorState.StateChanged += OnEditorStateFocusRequested;
@@ -524,5 +527,26 @@ namespace IndexEditor.Views
             }
             catch (Exception ex) { DebugLogger.LogException("OnPagesTextBoxLostFocus: outer", ex); }
         }
+
+    // Event handler for Measurements TextBox LostFocus - trigger validation when editing is complete
+    private void OnMeasurementsTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        try
+        {
+            if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
+            {
+                // Manually trigger the setter if binding didn't work
+                var text = tb.Text ?? string.Empty;
+                if (article.Measurements0 != text)
+                {
+                    article.Measurements0 = text;
+                }
+                
+                // Trigger validation to update error messages
+                article.Validate();
+            }
+        }
+        catch (Exception ex) { DebugLogger.LogException("OnMeasurementsTextBoxLostFocus", ex); }
+    }
     }
 }
