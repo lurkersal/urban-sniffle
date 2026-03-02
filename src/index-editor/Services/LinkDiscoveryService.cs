@@ -108,7 +108,7 @@ namespace IndexEditor.Services
 
         private List<(int, int)> FindLinks(string text)
         {
-            var links = new List<(int, int)>();
+            var linksSet = new HashSet<(int, int)>();
             var regex = new System.Text.RegularExpressions.Regex(
                 @"(vol(?:ume)?)[\s\.:/]*([0-9]+)[\s\S]*?(no(?:\.|umber)?)[\s\.:/]*([0-9]+)",
                 System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -119,10 +119,10 @@ namespace IndexEditor.Services
                     int.TryParse(m.Groups[2].Value, out int vol) &&
                     int.TryParse(m.Groups[4].Value, out int num))
                 {
-                    links.Add((vol, num));
+                    linksSet.Add((vol, num));
                 }
             }
-            return links;
+            return new List<(int, int)>(linksSet);
         }
     }
 

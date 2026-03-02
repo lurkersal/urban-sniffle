@@ -523,12 +523,10 @@ namespace IndexEditor.Views
             {
                 try
                 {
-                    // Check if folder changed and rescan if needed
-                    var currentFolder = EditorState.CurrentFolder;
-                    if (currentFolder != _lastScannedFolder)
-                    {
-                        ScanAvailablePages();
-                    }
+                    // Always rescan available pages to pick up newly added files
+                    // This ensures that if image files are added while the editor is open,
+                    // they become available for navigation
+                    ScanAvailablePages();
                     
                     if (pageInput != null) pageInput.Text = EditorState.CurrentPage.ToString();
                     UpdateUi();

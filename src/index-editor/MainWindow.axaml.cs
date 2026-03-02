@@ -891,6 +891,9 @@ public partial class MainWindow : Window
             }
             catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: parse folder metadata", ex); }
 
+            // Clear discovered links from previous folder
+            _discoveredLinks.Clear();
+
             var articles = new List<Common.Shared.ArticleLine>();
             string fileMag = IndexEditor.Shared.EditorState.CurrentMagazine ?? string.Empty;
             string fileVol = IndexEditor.Shared.EditorState.CurrentVolume ?? string.Empty;
@@ -910,8 +913,7 @@ public partial class MainWindow : Window
                     fileYear = year;
                     articles = jsonArticles;
                     
-                    // Load links into discovered links dictionary
-                    _discoveredLinks.Clear();
+                    // Load links into discovered links dictionary (already cleared at method start)
                     if (loadedLinks != null && loadedLinks.Count > 0)
                     {
                         foreach (var link in loadedLinks)
@@ -920,9 +922,21 @@ public partial class MainWindow : Window
                             {
                                 _discoveredLinks[link.Page] = new List<Common.Shared.MagazineLink>();
                             }
-                            _discoveredLinks[link.Page].Add(link);
+                            
+                            // Check if this exact link already exists for this page (deduplicate)
+                            bool isDuplicate = _discoveredLinks[link.Page].Any(l => 
+                                l.Magazine == link.Magazine && 
+                                l.Volume == link.Volume && 
+                                l.Issue == link.Issue);
+                            
+                            if (!isDuplicate)
+                            {
+                                _discoveredLinks[link.Page].Add(link);
+                            }
                         }
-                        DebugLogger.Log($"Loaded {loadedLinks.Count} links from JSON");
+                        
+                        var totalLinks = _discoveredLinks.Values.Sum(list => list.Count);
+                        DebugLogger.Log($"Loaded {totalLinks} unique links from JSON (deduplicated from {loadedLinks.Count})");
                     }
                 }
                 catch (Exception ex)
@@ -1172,26 +1186,39 @@ public partial class MainWindow : Window
                 _discoveredLinks[e.Page] = new List<Common.Shared.MagazineLink>();
             }
             
-            _discoveredLinks[e.Page].Add(new Common.Shared.MagazineLink
-            {
-                Page = e.Page,
-                Magazine = e.Magazine,
-                Volume = e.Volume,
-                Issue = e.Issue
-            });
+            // Check if this exact link already exists for this page (deduplicate)
+            bool isDuplicate = _discoveredLinks[e.Page].Any(l => 
+                l.Magazine == e.Magazine && 
+                l.Volume == e.Volume && 
+                l.Issue == e.Issue);
             
-            DebugLogger.Log($"Link discovered on page {e.Page}: {e.Magazine} Vol.{e.Volume} No.{e.Issue}");
-            
-            // Update PageControllerView with current links
-            Dispatcher.UIThread.Post(() =>
+            if (!isDuplicate)
             {
-                try
+                _discoveredLinks[e.Page].Add(new Common.Shared.MagazineLink
                 {
-                    var pcView = this.FindControl<Views.PageControllerView>("PageControllerControl");
-                    pcView?.UpdateDiscoveredLinks(_discoveredLinks);
-                }
-                catch (Exception ex) { DebugLogger.LogException("OnLinkDiscovered: update PageController", ex); }
-            });
+                    Page = e.Page,
+                    Magazine = e.Magazine,
+                    Volume = e.Volume,
+                    Issue = e.Issue
+                });
+                
+                DebugLogger.Log($"Link discovered on page {e.Page}: {e.Magazine} Vol.{e.Volume} No.{e.Issue}");
+                
+                // Update PageControllerView with current links
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try
+                    {
+                        var pcView = this.FindControl<Views.PageControllerView>("PageControllerControl");
+                        pcView?.UpdateDiscoveredLinks(_discoveredLinks);
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("OnLinkDiscovered: update PageController", ex); }
+                });
+            }
+            else
+            {
+                DebugLogger.Log($"Duplicate link skipped on page {e.Page}: {e.Magazine} Vol.{e.Volume} No.{e.Issue}");
+            }
         }
         catch (Exception ex) { DebugLogger.LogException("OnLinkDiscovered", ex); }
     }
@@ -1220,6 +1247,13 @@ public partial class MainWindow : Window
                         statusText.Text = linkCount > 0 
                             ? $"Found {linkCount} link(s) on {_discoveredLinks.Count} page(s)" 
                             : "Ready";
+                        
+                        // Mark index as modified if links were discovered
+                        if (linkCount > 0)
+                        {
+                            IndexEditor.Shared.EditorState.HasUnsavedChanges = true;
+                            DebugLogger.Log($"Index file marked as modified due to {linkCount} discovered link(s)");
+                        }
                     }
                     
                     DebugLogger.Log($"Link discovery completed. Found {_discoveredLinks.Count} pages with links.");

@@ -55,6 +55,26 @@ User can click "Re-scan for Links" button to:
 - Start fresh discovery
 - Get updated link references
 
+### 6. Duplicate Link Handling
+**Status**: ✅ Complete
+
+Duplicate links to the same issue from a single page are automatically deduplicated:
+- OCR may find the same reference multiple times on a page
+- HashSet used during discovery to keep only unique (volume, issue) pairs
+- Additional deduplication when loading from JSON
+- Additional deduplication when adding to discovered links dictionary
+- Only one entry per unique issue reference per page
+
+### 7. Discovered Links Flag File as Modified
+**Status**: ✅ Complete
+
+When links are discovered, the index file is marked as modified:
+- `HasUnsavedChanges = true` after discovery completes
+- User prompted to save on close/open
+- Prevents data loss of discovered links
+- Only flagged when links are actually found (not when zero links discovered)
+- Integrates with existing save prompts and Ctrl+S workflow
+
 ## Build Status
 ✅ **Build Successful**
 - **0 Errors**
@@ -134,11 +154,18 @@ User can click "Re-scan for Links" button to:
 ```
 
 ### Data Flow
-1. **Discovery**: OCR finds links → Events fired → MainWindow collects
-2. **Storage**: Dictionary `_discoveredLinks[page] = List<MagazineLink>`
+1. **Discovery**: OCR finds links → **Deduplicated via HashSet** → Events fired → MainWindow collects
+2. **Storage**: Dictionary `_discoveredLinks[page] = List<MagazineLink>` with duplicate checking
 3. **Display**: PageControllerView receives dictionary, shows icon + tooltip
 4. **Persistence**: Flattened to list when saving via `GetDiscoveredLinks()`
-5. **Loading**: List loaded, grouped by page into dictionary
+5. **Loading**: List loaded, **deduplicated**, grouped by page into dictionary
+
+### Deduplication Strategy
+Links are deduplicated at multiple levels:
+1. **Discovery time**: HashSet in `FindLinks()` ensures unique (volume, issue) per page
+2. **Event handling**: `OnLinkDiscovered()` checks for duplicates before adding
+3. **Loading time**: When loading from JSON, duplicates are filtered out
+4. **Comparison**: Links are considered duplicates if they have the same Magazine, Volume, and Issue on the same page
 
 ## Key Components
 
