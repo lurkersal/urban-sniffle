@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace IndexEditor.Shared
 {
@@ -11,6 +12,12 @@ namespace IndexEditor.Shared
         public bool IsMaximized { get; set; }
     }
 
+    [JsonSerializable(typeof(WindowState))]
+    [JsonSourceGenerationOptions(WriteIndented = true, PropertyNameCaseInsensitive = true)]
+    internal partial class WindowStateJsonContext : JsonSerializerContext
+    {
+    }
+
     public static class WindowStateStore
     {
         private static string GetStoragePath()
@@ -18,7 +25,14 @@ namespace IndexEditor.Shared
             try
             {
                 var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                if (string.IsNullOrWhiteSpace(appData)) appData = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) ?? ".";
+                if (string.IsNullOrWhiteSpace(appData))
+                {
+                    appData = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                    if (string.IsNullOrWhiteSpace(appData))
+                    {
+                        appData = ".";
+                    }
+                }
                 var dir = Path.Combine(appData, "urban-sniffle");
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
                 return Path.Combine(dir, "index-editor-windowstate.json");
@@ -37,8 +51,7 @@ namespace IndexEditor.Shared
                 if (!File.Exists(path)) return null;
                 var txt = File.ReadAllText(path);
                 if (string.IsNullOrWhiteSpace(txt)) return null;
-                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var st = JsonSerializer.Deserialize<WindowState>(txt, opts);
+                var st = JsonSerializer.Deserialize(txt, WindowStateJsonContext.Default.WindowState);
                 return st;
             }
             catch (Exception ex)
@@ -55,7 +68,7 @@ namespace IndexEditor.Shared
                 var path = GetStoragePath();
                 var temp = path + ".tmp";
                 var st = new WindowState { Width = width, Height = height, IsMaximized = isMaximized };
-                var txt = JsonSerializer.Serialize(st);
+                var txt = JsonSerializer.Serialize(st, WindowStateJsonContext.Default.WindowState);
                 File.WriteAllText(temp, txt);
                 if (File.Exists(path)) File.Replace(temp, path, null);
                 else File.Move(temp, path);
