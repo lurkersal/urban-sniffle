@@ -127,14 +127,14 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
                         var folder = EditorState.CurrentFolder;
                         if (string.IsNullOrWhiteSpace(folder))
                         {
-                            ToastService.Show("No folder open; cannot save _index.txt");
+                            ToastService.Show("No folder open; cannot save index");
                             e.Handled = true;
                             return;
                         }
 
                         var indexPath = Path.Combine(folder, "_index.txt");
                         File.WriteAllText(indexPath, textBox.Text ?? string.Empty);
-                        ToastService.Show("_index.txt saved");
+                        ToastService.Show("Index saved");
                         
                         // Close overlay and reload
                         overlay.IsVisible = false;
@@ -142,7 +142,7 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
                     }
                     catch (Exception ex)
                     {
-                        ToastService.Show("Failed to save _index.txt");
+                        ToastService.Show("Failed to save index");
                         DebugLogger.LogException("FileKeyboardHandler: Ctrl+S save from overlay", ex);
                     }
                 }
@@ -163,7 +163,7 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
             var saveFolder = EditorState.CurrentFolder;
             if (string.IsNullOrWhiteSpace(saveFolder))
             {
-                ToastService.Show("No folder open; cannot save _index.txt");
+                ToastService.Show("No folder open; cannot save index");
                 e.Handled = true;
                 return;
             }
@@ -172,11 +172,11 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
             {
                 var links = MainWindow.Instance?.GetDiscoveredLinks();
                 IndexSaver.SaveIndex(saveFolder, links);
-                ToastService.Show("_index.txt saved");
+                ToastService.Show("Index saved");
             }
             catch (Exception saveEx)
             {
-                ToastService.Show("Failed to save _index.txt");
+                ToastService.Show("Failed to save index");
                 DebugLogger.LogException("FileKeyboardHandler: Save index", saveEx);
             }
         }

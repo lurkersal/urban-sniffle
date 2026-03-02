@@ -55,7 +55,7 @@ namespace IndexEditor.Views
                         var folder = IndexEditor.Shared.EditorState.CurrentFolder;
                         if (string.IsNullOrWhiteSpace(folder))
                         {
-                            IndexEditor.Shared.ToastService.Show("No folder opened; cannot save _index.txt");
+                            IndexEditor.Shared.ToastService.Show("No folder opened; cannot save index");
                             return;
                         }
 
@@ -65,12 +65,12 @@ namespace IndexEditor.Views
                         {
                             var links = MainWindow.Instance?.GetDiscoveredLinks();
                             IndexEditor.Shared.IndexSaver.SaveIndex(folder, links);
-                            IndexEditor.Shared.ToastService.Show("_index.txt saved");
+                            IndexEditor.Shared.ToastService.Show("Index saved");
                         }
                         catch (Exception ex)
                         {
-                            IndexEditor.Shared.ToastService.Show("Failed to save _index.txt");
-                            IndexEditor.Shared.DebugLogger.LogException("TopBar: save _index.txt", ex);
+                            IndexEditor.Shared.ToastService.Show("Failed to save index");
+                            IndexEditor.Shared.DebugLogger.LogException("TopBar: save index", ex);
                         }
                         finally
                         {
