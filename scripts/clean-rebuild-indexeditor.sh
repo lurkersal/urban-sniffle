@@ -24,7 +24,6 @@ dotnet publish src/index-editor/IndexEditor.csproj \
     -r linux-x64 \
     --self-contained \
     -p:PublishSingleFile=true \
-    -p:PublishTrimmed=true \
     -o ~/bin \
     2>&1 | grep -v "warning" | tail -10
 

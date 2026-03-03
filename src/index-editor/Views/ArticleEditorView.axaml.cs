@@ -162,85 +162,31 @@ namespace IndexEditor.Views
                     try { IndexEditor.Shared.ToastService.Show("_index.txt format error: " + fx.Message); } catch { }
                     try
                     {
-                        var wnd = this.VisualRoot as MainWindow ?? (this.VisualRoot as Window);
+                        var wnd = this.VisualRoot as Window;
                         if (wnd != null)
                         {
+                            // Directly show overlay with error
+                            var fileText = System.IO.File.Exists(indexFilePath) ? System.IO.File.ReadAllText(indexFilePath) : $"_index.txt not found in folder: {_currentFolder}";
                             var overlay = wnd.FindControl<Border>("IndexOverlay");
-                            var tb = wnd.FindControl<TextBox>("IndexOverlayTextBox");
-                            // Use the existing indexFilePath variable declared at the top of this method
-                            if (overlay != null && tb != null)
+                            var textBlock = wnd.FindControl<TextBlock>("IndexOverlayTextBlock");
+                            var errorBorder = wnd.FindControl<Border>("IndexOverlayErrorBorder");
+                            var errorLine = wnd.FindControl<TextBlock>("IndexOverlayErrorLine");
+                            
+                            if (overlay != null && textBlock != null)
                             {
-                                var fileText = System.IO.File.Exists(indexFilePath) ? System.IO.File.ReadAllText(indexFilePath) : $"_index.txt not found in folder: {_currentFolder}";
-                                tb.Text = fileText;
-                                // Highlight the overlay with a red border/background to indicate parse error
-                                try
-                                {
-                                    overlay.Background = Brushes.MistyRose;
-                                    overlay.BorderBrush = Brushes.Red;
-                                    overlay.BorderThickness = new Thickness(2);
-                                }
-                                catch { }
-
-                                // Try to select the offending line in the TextBox so user can see it immediately
-                                try
-                                {
-                                    // Use the trimmed 'raw' (non-null) when searching inside fileText
-                                    var pos = fileText.IndexOf(raw ?? line ?? string.Empty, StringComparison.Ordinal);
-                                    if (pos >= 0 && tb != null)
-                                    {
-                                        // Select the error substring (use safe string for length)
-                                        try
-                                        {
-                                            var selectText = raw ?? line ?? string.Empty;
-                                            tb.SelectionStart = pos;
-                                            tb.SelectionEnd = pos + selectText.Length;
-                                            tb.CaretIndex = tb.SelectionEnd;
-                                            // give focus so selection is visible
-                                            tb.Focus();
-                                        }
-                                        catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: selectText set", ex); }
-                                    }
-                                    else
-                                    {
-                                        // If line not found, just focus the textbox (if present)
-                                        try { tb?.Focus(); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: focus tb fallback", ex); }
-                                    }
-                                }
-                                catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: select offending line", ex); }
-
+                                textBlock.Text = fileText;
                                 overlay.IsVisible = true;
-
-                                // Clear highlight when user starts editing the overlay text
-                                try
+                                
+                                // Show error message if controls are available
+                                if (errorBorder != null && errorLine != null)
                                 {
-                                    // Subscribe to text changes to clear the red highlight (if textbox present)
-                                    if (tb != null)
-                                    {
-                                        var disp = tb.GetObservable(TextBox.TextProperty).Subscribe(new LambdaObserver<string?>(_ =>
-                                        {
-                                            try
-                                            {
-                                                overlay.Background = Brushes.Transparent;
-                                                overlay.BorderBrush = Brushes.Gray;
-                                                overlay.BorderThickness = new Thickness(1);
-                                            }
-                                            catch { }
-                                        }));
-                                        // If the overlay is closed, dispose the subscription - hook into IsVisible property
-                                        overlay.GetObservable(Border.IsVisibleProperty).Subscribe(new LambdaObserver<bool>(visible =>
-                                        {
-                                            if (!visible)
-                                            {
-                                                try { disp.Dispose(); } catch { }
-                                            }
-                                        }));
-                                    }
+                                    errorLine.Text = fx.Message;
+                                    errorBorder.IsVisible = true;
                                 }
-                                catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: subscribe clear highlight", ex); }
                             }
                         }
                     }
-                    catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: show overlay on format error", ex); }
+                    catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: show error overlay", ex); }
 
                     // Stop processing further lines
                     break;

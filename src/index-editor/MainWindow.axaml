@@ -44,18 +44,33 @@
         <!-- Index file overlay (hidden by default) -->
         <Border x:Name="IndexOverlay" Grid.Row="0" Grid.ColumnSpan="3" Grid.RowSpan="2" Background="#80000000" IsVisible="False">
             <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Border Width="800" Height="600" Background="White" CornerRadius="6" Padding="12">
+                <Border Width="900" Height="650" Background="White" CornerRadius="6" Padding="12">
                     <Grid RowDefinitions="Auto,Auto,*,Auto">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-                            <Button x:Name="IndexOverlaySaveBtn" Content="Save" />
+                            <Button x:Name="IndexOverlayToggleModeBtn" Content="Switch to Edit Mode" />
+                            <Button x:Name="IndexOverlaySaveBtn" Content="Save" IsVisible="False" />
+                            <Button x:Name="IndexOverlayExpandAllBtn" Content="Expand All" />
+                            <Button x:Name="IndexOverlayCollapseAllBtn" Content="Collapse All" />
                             <Button x:Name="IndexOverlayCloseBtn" Content="Close" />
                         </StackPanel>
                         <!-- Error line display (hidden unless parsing error) -->
                         <Border Grid.Row="1" Background="#FFF5F5" Padding="6" CornerRadius="4" IsVisible="False" x:Name="IndexOverlayErrorBorder">
                             <TextBlock x:Name="IndexOverlayErrorLine" FontFamily="'Ubuntu Mono', 'DejaVu Sans Mono', 'Courier New', monospace" Foreground="Red" TextWrapping="NoWrap" />
                         </Border>
-                        <TextBox x:Name="IndexOverlayTextBox" Grid.Row="2" TextWrapping="Wrap" AcceptsReturn="True" IsReadOnly="False" FontFamily="'Ubuntu Mono', 'DejaVu Sans Mono', 'Courier New', monospace" FontSize="16" />
-                        <TextBlock Grid.Row="3" Text="Press 'i' to close" HorizontalAlignment="Right" FontSize="12" Foreground="#666" />
+                        <!-- JSON viewer with syntax highlighting and collapse/expand (read-only) -->
+                        <ScrollViewer Grid.Row="2" 
+                                      HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Auto"
+                                      Background="White">
+                            <!-- Simple TextBlock for legacy _index.txt files -->
+                            <TextBlock x:Name="IndexOverlayTextBlock" 
+                                       FontFamily="'Ubuntu Mono', 'DejaVu Sans Mono', 'Courier New', monospace" 
+                                       FontSize="14"
+                                       Padding="8"
+                                       TextWrapping="NoWrap"
+                                       IsVisible="False" />
+                        </ScrollViewer>
+                        <TextBlock Grid.Row="3" Text="Press 'i' to close | Toggle between View (collapsible tree) and Edit modes | Click ▶/▼ to expand/collapse in View mode" HorizontalAlignment="Right" FontSize="12" Foreground="#666" />
                     </Grid>
                 </Border>
             </Grid>

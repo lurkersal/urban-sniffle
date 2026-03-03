@@ -253,7 +253,9 @@ public partial class MainWindow : Window
             var closeBtn = this.FindControl<Button>("IndexOverlayCloseBtn");
             var saveBtn = this.FindControl<Button>("IndexOverlaySaveBtn");
             var overlay = this.FindControl<Border>("IndexOverlay");
-            var textBox = this.FindControl<TextBox>("IndexOverlayTextBox");
+            
+            // Note: Overlay is now editable TextBox for JSON
+            
             if (closeBtn != null && overlay != null)
             {
                 closeBtn.Click += (s, e) => {
@@ -266,6 +268,72 @@ public partial class MainWindow : Window
                     catch (Exception ex) { DebugLogger.LogException("IndexOverlayCloseBtn.Click", ex); }
                 };
             }
+            
+            if (saveBtn != null)
+            {
+                saveBtn.Click += (s, e) =>
+                {
+                    try
+                    {
+                        var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                        _overlayManager?.SaveIndexFromOverlay(folder);
+                        // Reload the folder after save
+                        if (!string.IsNullOrWhiteSpace(folder))
+                        {
+                            LoadArticlesFromFolder(folder);
+                        }
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("IndexOverlaySaveBtn.Click", ex); }
+                };
+            }
+            
+            // Wire up toggle mode button
+            var toggleModeBtn = this.FindControl<Button>("IndexOverlayToggleModeBtn");
+            if (toggleModeBtn != null)
+            {
+                toggleModeBtn.Click += (s, e) =>
+                {
+                    try
+                    {
+                        var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                        _overlayManager?.ToggleEditMode(folder);
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("IndexOverlayToggleModeBtn.Click", ex); }
+                };
+            }
+            
+            // Wire up expand/collapse buttons for JSON tree viewer
+            try
+            {
+                var expandAllBtn = this.FindControl<Button>("IndexOverlayExpandAllBtn");
+                var collapseAllBtn = this.FindControl<Button>("IndexOverlayCollapseAllBtn");
+                
+                if (expandAllBtn != null)
+                {
+                    expandAllBtn.Click += (s, e) => 
+                    {
+                        try
+                        {
+                            _overlayManager?.ExpandAllJsonNodes();
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("IndexOverlayExpandAllBtn.Click", ex); }
+                    };
+                }
+                
+                if (collapseAllBtn != null)
+                {
+                    collapseAllBtn.Click += (s, e) =>
+                    {
+                        try
+                        {
+                            _overlayManager?.CollapseAllJsonNodes();
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("IndexOverlayCollapseAllBtn.Click", ex); }
+                    };
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire expand/collapse buttons", ex); }
+            
             // Help overlay close wiring
             try
             {
@@ -301,70 +369,6 @@ public partial class MainWindow : Window
                 }
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire FullscreenCloseBtn", ex); }
-
-            if (saveBtn != null && overlay != null && textBox != null)
-            {
-                saveBtn.Click += (s, e) =>
-                {
-                    try
-                    {
-                        var folder = IndexEditor.Shared.EditorState.CurrentFolder;
-                        if (string.IsNullOrWhiteSpace(folder))
-                        {
-                            IndexEditor.Shared.ToastService.Show("No folder open; cannot save index file");
-                            return;
-                        }
-                        
-                        // Determine which format to save based on file content
-                        var text = textBox.Text ?? string.Empty;
-                        
-                        // Phase 2 - Task 2: Validate JSON before saving
-                        if (_overlayManager != null)
-                        {
-                            (bool isValid, string? errorMessage) = _overlayManager.ValidateJsonContent(text);
-                            if (!isValid)
-                            {
-                                IndexEditor.Shared.ToastService.Show($"Validation failed: {errorMessage}");
-                                return;
-                            }
-                        }
-                        
-                        var jsonPath = System.IO.Path.Combine(folder, "_index.json");
-                        var txtPath = System.IO.Path.Combine(folder, "_index.txt");
-                        
-                        // Check if content looks like JSON
-                        bool isJson = text.TrimStart().StartsWith("{");
-                        var targetPath = isJson ? jsonPath : txtPath;
-                        
-                        // Atomic write with backup
-                        var temp = targetPath + ".tmp";
-                        var backupPath = targetPath + "~";
-                        System.IO.File.WriteAllText(temp, text);
-                        
-                        if (System.IO.File.Exists(targetPath))
-                        {
-                            // Create backup before replacing
-                            if (System.IO.File.Exists(backupPath))
-                            {
-                                System.IO.File.Delete(backupPath);
-                            }
-                            System.IO.File.Copy(targetPath, backupPath);
-                            System.IO.File.Replace(temp, targetPath, null);
-                        }
-                        else System.IO.File.Move(temp, targetPath);
-                        
-                        IndexEditor.Shared.ToastService.Show(isJson ? "_index.json saved" : "_index.txt saved");
-                        // Reload articles from folder to reflect edits
-                        LoadArticlesFromFolder(folder);
-                    }
-                    catch (Exception ex)
-                    {
-                        IndexEditor.Shared.ToastService.Show("Failed to save index file");
-                        DebugLogger.LogException("MainWindow.SaveIndex: saving index file", ex);
-                    }
-                };
-            }
-            // Allow pressing 'i' again to close overlay; handled in OnMainWindowKeyDown
         }
         catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire up overlay buttons", ex); }
 
@@ -701,13 +705,10 @@ public partial class MainWindow : Window
             }
 
             var overlay = this.FindControl<Border>("IndexOverlay");
-            var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
 
-            // Index overlay: capture all keys except Ctrl+I, Esc, and Ctrl+S
+            // Index overlay: capture Ctrl+I and Esc to close
             if (overlay != null && overlay.IsVisible)
             {
-                try { if (tb != null && !tb.IsFocused) tb.Focus(); } 
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: overlay textbox focus", ex); }
 
                 // Ctrl+I: Toggle overlay
                 if (e.Key == Key.I && (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta)))
