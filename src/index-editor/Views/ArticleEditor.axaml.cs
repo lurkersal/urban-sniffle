@@ -508,9 +508,15 @@ namespace IndexEditor.Views
         {
             try
             {
-                // Get the article from the DataContext and trigger validation
-                if (this.DataContext is Common.Shared.ArticleLine article)
+                // Manually sync the text value to ensure it's saved
+                if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
                 {
+                    var text = tb.Text ?? string.Empty;
+                    if (article.PagesText != text)
+                    {
+                        article.PagesText = text;
+                    }
+                    
                     article.Validate();
                     
                     // Also validate segments for missing pages
