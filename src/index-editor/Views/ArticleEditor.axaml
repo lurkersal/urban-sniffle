@@ -35,7 +35,7 @@
                                 <!-- Title row (now first) -->
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                     <TextBlock Text="Title:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                    <TextBox Name="TitleTextBox" Text="{Binding Title, Mode=TwoWay}" Width="360" />
+                                    <TextBox Name="TitleTextBox" Text="{Binding Title, Mode=TwoWay}" Width="360" LostFocus="OnTitleTextBoxLostFocus" />
                                 </StackPanel>
 
                                 <!-- Category row -->
@@ -56,12 +56,12 @@
                                 <!-- Model/Cover rows -->
                                 <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter=&quot;2&quot;}">
                                     <TextBlock Text="Model:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                    <TextBox Text="{Binding ModelName0, Mode=TwoWay}" Width="360" />
+                                    <TextBox Name="ModelNameTextBox" Text="{Binding ModelName0, Mode=TwoWay}" Width="360" LostFocus="OnModelNameTextBoxLostFocus" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowAge}}">
                                     <TextBlock Text="Age:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                    <TextBox Text="{Binding Age0, Mode=TwoWay}" Width="120" />
+                                    <TextBox Name="AgeTextBox" Text="{Binding Age0, Mode=TwoWay}" Width="120" LostFocus="OnAgeTextBoxLostFocus" />
                                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowMeasurements}}">
@@ -82,7 +82,7 @@
                                 <!-- Unified contributor row (field 6). Label changes depending on category via FieldLabelConverter. -->
                                 <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowContributor}}">
                                     <TextBlock Text="{Binding Category, Converter={StaticResource FieldLabelConverter}, ConverterParameter=Photographer}" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                    <TextBox Text="{Binding Contributor0, Mode=TwoWay}" Width="360" />
+                                    <TextBox Name="ContributorTextBox" Text="{Binding Contributor0, Mode=TwoWay}" Width="360" LostFocus="OnContributorTextBoxLostFocus" />
                                 </StackPanel>
 
                                 <!-- Pages row -->

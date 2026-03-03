@@ -534,25 +534,93 @@ namespace IndexEditor.Views
             catch (Exception ex) { DebugLogger.LogException("OnPagesTextBoxLostFocus: outer", ex); }
         }
 
-    // Event handler for Measurements TextBox LostFocus - trigger validation when editing is complete
-    private void OnMeasurementsTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
-    {
-        try
+        // Event handler for Measurements TextBox LostFocus - trigger validation when editing is complete
+        private void OnMeasurementsTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
         {
-            if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
+            try
             {
-                // Manually trigger the setter if binding didn't work
-                var text = tb.Text ?? string.Empty;
-                if (article.Measurements0 != text)
+                if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
                 {
-                    article.Measurements0 = text;
+                    // Manually trigger the setter if binding didn't work
+                    var text = tb.Text ?? string.Empty;
+                    if (article.Measurements0 != text)
+                    {
+                        article.Measurements0 = text;
+                    }
+                    
+                    // Trigger validation to update error messages
+                    article.Validate();
                 }
-                
-                // Trigger validation to update error messages
-                article.Validate();
             }
+            catch (Exception ex) { DebugLogger.LogException("OnMeasurementsTextBoxLostFocus", ex); }
         }
-        catch (Exception ex) { DebugLogger.LogException("OnMeasurementsTextBoxLostFocus", ex); }
-    }
+
+        // Event handler for Title TextBox LostFocus - ensure changes are persisted
+        private void OnTitleTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
+                {
+                    var text = tb.Text ?? string.Empty;
+                    if (article.Title != text)
+                    {
+                        article.Title = text;
+                    }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnTitleTextBoxLostFocus", ex); }
+        }
+
+        // Event handler for ModelName TextBox LostFocus - ensure changes are persisted
+        private void OnModelNameTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
+                {
+                    var text = tb.Text ?? string.Empty;
+                    if (article.ModelName0 != text)
+                    {
+                        article.ModelName0 = text;
+                    }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnModelNameTextBoxLostFocus", ex); }
+        }
+
+        // Event handler for Age TextBox LostFocus - ensure changes are persisted
+        private void OnAgeTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
+                {
+                    var text = tb.Text ?? string.Empty;
+                    if (article.Age0 != text)
+                    {
+                        article.Age0 = text;
+                    }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnAgeTextBoxLostFocus", ex); }
+        }
+
+        // Event handler for Contributor TextBox LostFocus - ensure changes are persisted
+        private void OnContributorTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
+                {
+                    var text = tb.Text ?? string.Empty;
+                    if (article.Contributor0 != text)
+                    {
+                        article.Contributor0 = text;
+                    }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnContributorTextBoxLostFocus", ex); }
+        }
     }
 }
