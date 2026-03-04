@@ -126,14 +126,20 @@ namespace IndexEditor.Views
                     try { DebugLogger.Log($"SelectedArticle changing. incoming.Title='{incoming?.Title}', Category='{incoming?.Category}', Contributor0='{incoming?.Contributor0}'"); } catch {}
                      _selectedArticle = incoming;
                       // Update IsSelected flags on all articles so UI bindings reflect selection
+                      // Suppress HasUnsavedChanges since this is just a UI state change
                       try
                       {
+                          _suppressHasUnsavedChanges = true;
                           foreach (var a in Articles)
                           {
                               try { a.IsSelected = object.ReferenceEquals(a, _selectedArticle); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: set IsSelected", ex); }
                           }
                       }
                       catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: updating IsSelected flags", ex); }
+                      finally
+                      {
+                          _suppressHasUnsavedChanges = false;
+                      }
                       // Ensure the global EditorState reflects the current selected article so
                       // other views (PageController, etc.) can read the active article details.
                       try
@@ -149,11 +155,17 @@ namespace IndexEditor.Views
                         DebugLogger.Log($"SelectedArticle set. current.Title='{_selectedArticle?.Title}', Category='{_selectedArticle?.Category}', Contributor0='{_selectedArticle?.Contributor0}', Pages=[{pagesStr}], PagesText='{pagesTextStr}'"); 
                     } catch {}
                       // Force the ArticleLine to notify all UI-bound properties changed so TextBox bindings refresh
+                      // Suppress HasUnsavedChanges during this refresh since no actual data is changing
                       try
                       {
+                          _suppressHasUnsavedChanges = true;
                           _selectedArticle?.RefreshUIBindings();
                       }
                       catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: RefreshUIBindings", ex); }
+                      finally
+                      {
+                          _suppressHasUnsavedChanges = false;
+                      }
                       // Notify SelectedCategory so the editor ComboBox updates to the new article's category
                       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
                       // Also notify CurrentShownArticle which may change when SelectedArticle changes
@@ -174,7 +186,8 @@ namespace IndexEditor.Views
          }
 
          private bool _suppressCategorySet = false;
-        private bool _isReordering = false;
+         private bool _suppressHasUnsavedChanges = false;
+         private bool _isReordering = false;
          public string? SelectedCategory
          {
              get
@@ -428,7 +441,11 @@ namespace IndexEditor.Views
                 
                 if (dataProperties.Contains(e.PropertyName))
                 {
-                    try { IndexEditor.Shared.EditorState.HasUnsavedChanges = true; } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.OnArticlePropertyChanged: set HasUnsavedChanges", ex); }
+                    // Only set HasUnsavedChanges if we're not in the middle of refreshing UI bindings
+                    if (!_suppressHasUnsavedChanges)
+                    {
+                        try { IndexEditor.Shared.EditorState.HasUnsavedChanges = true; } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.OnArticlePropertyChanged: set HasUnsavedChanges", ex); }
+                    }
                 }
                 
                 // OnArticlePropertyChanged
