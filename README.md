@@ -23,9 +23,6 @@ Avalonia-based desktop application for editing magazine indexes.
 Utility for batch renaming files with pattern matching.
 - Location: `src/file-renamer/`
 
-### find-links
-Console application for finding and parsing links in magazine issues.
-- Location: `src/find-links/`
 
 ### image-splitter
 Utility for splitting magazine page images.
