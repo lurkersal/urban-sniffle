@@ -91,15 +91,23 @@ namespace Common.Tests
             // This test verifies that the EditorState properly tracks active segments
             // The actual UI behavior for preventing selection is handled by the ViewModel
             
-            // Arrange: article with active segment
+            // Arrange: Reset state first
+            EditorState.ActiveArticle = null;
+            EditorState.ActiveSegment = null;
+            
+            // Create article with active segment
             var a1 = new ArticleLine { Pages = new List<int> { 1 }, Title = "T1" };
             var seg = new Common.Shared.Segment(1);
             seg.End = null; // Active segment (no End)
             a1.Segments.Clear();
             a1.Segments.Add(seg);
             
+            // Set state through the static wrapper (which forwards to the instance)
             EditorState.ActiveArticle = a1;
             EditorState.ActiveSegment = seg;
+            
+            // Force state change notification to ensure subscribers update
+            EditorState.NotifyStateChanged();
             
             // Assert: EditorState correctly tracks the active segment
             Assert.NotNull(EditorState.ActiveSegment);

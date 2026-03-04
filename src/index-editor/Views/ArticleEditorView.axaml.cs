@@ -16,8 +16,13 @@ namespace IndexEditor.Views
 {
     public partial class ArticleEditorView : UserControl
     {
-        public ArticleEditorView()
+        private readonly Services.IIndexFileService? _indexFileService;
+        private readonly Services.OverlayManager? _overlayManager;
+
+        public ArticleEditorView(Services.IIndexFileService? indexFileService = null, Services.OverlayManager? overlayManager = null)
         {
+            _indexFileService = indexFileService;
+            _overlayManager = overlayManager;
             InitializeComponent();
             // Use the window's DataContext (shared EditorStateViewModel). Do not create a new VM here —
             // multiple instances caused duplicate category updates and selection sync issues.
@@ -134,97 +139,204 @@ namespace IndexEditor.Views
         private void LoadArticlesFromIndexFile()
         {
             if (string.IsNullOrEmpty(_currentFolder)) return;
-            var indexFilePath = System.IO.Path.Combine(_currentFolder, "_index.txt");
-            if (!System.IO.File.Exists(indexFilePath)) return;
-            var lines = System.IO.File.ReadAllLines(indexFilePath);
-            var articles = new List<Common.Shared.ArticleLine>();
-            foreach (var line in lines)
+
+            List<Common.Shared.ArticleLine> articles;
+            
+            // Use IIndexFileService if available (preferred - eliminates duplication)
+            if (_indexFileService != null)
             {
-                // Skip empty or comment lines (header metadata starts with '#') — do not attempt to parse these as article lines
-                var raw = line?.Trim();
-                if (string.IsNullOrEmpty(raw))
-                    continue;
-                if (raw.StartsWith("#"))
-                    continue;
                 try
                 {
-                    // Use the trimmed 'raw' string (non-null) for parsing to satisfy nullable analysis
-                    var parsed = IndexEditor.Shared.IndexFileParser.ParseArticleLine(raw!);
-                    if (parsed != null)
-                    {
-                        // ParseArticleLine returns a fully-populated Common.Shared.ArticleLine
-                        articles.Add(parsed);
-                    }
+                    var (magazine, volume, number, year, loadedArticles, links) = _indexFileService.LoadFromFolder(_currentFolder);
+                    articles = loadedArticles;
+                    
+                    // Update EditorState metadata
+                    IndexEditor.Shared.EditorState.CurrentMagazine = magazine;
+                    IndexEditor.Shared.EditorState.CurrentVolume = volume;
+                    IndexEditor.Shared.EditorState.CurrentNumber = number;
                 }
                 catch (FormatException fx)
                 {
                     // Format error: show toast and open the index overlay for correction
-                    try { IndexEditor.Shared.ToastService.Show("_index.txt format error: " + fx.Message); } catch { }
-                    try
-                    {
-                        var wnd = this.VisualRoot as Window;
-                        if (wnd != null)
-                        {
-                            // Directly show overlay with error
-                            var fileText = System.IO.File.Exists(indexFilePath) ? System.IO.File.ReadAllText(indexFilePath) : $"_index.txt not found in folder: {_currentFolder}";
-                            var overlay = wnd.FindControl<Border>("IndexOverlay");
-                            var textBlock = wnd.FindControl<TextBlock>("IndexOverlayTextBlock");
-                            var errorBorder = wnd.FindControl<Border>("IndexOverlayErrorBorder");
-                            var errorLine = wnd.FindControl<TextBlock>("IndexOverlayErrorLine");
-                            
-                            if (overlay != null && textBlock != null)
-                            {
-                                textBlock.Text = fileText;
-                                overlay.IsVisible = true;
-                                
-                                // Show error message if controls are available
-                                if (errorBorder != null && errorLine != null)
-                                {
-                                    errorLine.Text = fx.Message;
-                                    errorBorder.IsVisible = true;
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: show error overlay", ex); }
-
-                    // Stop processing further lines
-                    break;
+                    ShowFormatError(fx.Message);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: service load failed", ex);
+                    articles = new List<Common.Shared.ArticleLine>();
                 }
             }
-            IndexEditor.Shared.EditorState.Articles = articles;
+            else
+            {
+                // Legacy fallback path (maintained for backward compatibility)
+                var indexFilePath = System.IO.Path.Combine(_currentFolder, "_index.txt");
+                if (!System.IO.File.Exists(indexFilePath)) return;
+                
+                try
+                {
+                    articles = ParseLegacyIndexFile(indexFilePath);
+                }
+                catch (FormatException fx)
+                {
+                    ShowFormatError(fx.Message);
+                    return;
+                }
+            }
 
-            // Update the view-model's observable collection so UI bindings (SelectedArticle, Articles) refresh.
+            // Update EditorState and ViewModel with loaded articles
+            UpdateEditorStateWithArticles(articles);
+        }
+
+        /// <summary>
+        /// Shows format error to user via toast and overlay
+        /// </summary>
+        private void ShowFormatError(string errorMessage)
+        {
+            try { IndexEditor.Shared.ToastService.Show("Index file format error: " + errorMessage); } catch { }
+            
+            // Use OverlayManager service if available (preferred)
+            if (_overlayManager != null)
+            {
+                try
+                {
+                    var indexFilePath = GetIndexFilePath();
+                    var fileText = System.IO.File.Exists(indexFilePath) 
+                        ? System.IO.File.ReadAllText(indexFilePath) 
+                        : $"Index file not found in folder: {_currentFolder}";
+                    
+                    _overlayManager.ShowIndexOverlayError(errorMessage, fileText);
+                }
+                catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.ShowFormatError: overlay manager", ex); }
+            }
+            else
+            {
+                // Legacy fallback: direct control manipulation
+                ShowFormatErrorLegacy(errorMessage);
+            }
+        }
+
+        /// <summary>
+        /// Legacy error display method for backward compatibility
+        /// </summary>
+        private void ShowFormatErrorLegacy(string errorMessage)
+        {
+            try
+            {
+                var wnd = this.VisualRoot as Window;
+                if (wnd == null) return;
+                
+                var indexFilePath = GetIndexFilePath();
+                var fileText = System.IO.File.Exists(indexFilePath) 
+                    ? System.IO.File.ReadAllText(indexFilePath) 
+                    : $"Index file not found in folder: {_currentFolder}";
+                
+                var overlay = wnd.FindControl<Border>("IndexOverlay");
+                var textBlock = wnd.FindControl<TextBlock>("IndexOverlayTextBlock");
+                var errorBorder = wnd.FindControl<Border>("IndexOverlayErrorBorder");
+                var errorLine = wnd.FindControl<TextBlock>("IndexOverlayErrorLine");
+                
+                if (overlay != null && textBlock != null)
+                {
+                    textBlock.Text = fileText;
+                    overlay.IsVisible = true;
+                    
+                    if (errorBorder != null && errorLine != null)
+                    {
+                        errorLine.Text = errorMessage;
+                        errorBorder.IsVisible = true;
+                    }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.ShowFormatErrorLegacy", ex); }
+        }
+
+        /// <summary>
+        /// Gets the path to the index file (JSON preferred, TXT fallback)
+        /// </summary>
+        private string GetIndexFilePath()
+        {
+            var jsonPath = System.IO.Path.Combine(_currentFolder ?? string.Empty, "_index.json");
+            return System.IO.File.Exists(jsonPath) 
+                ? jsonPath 
+                : System.IO.Path.Combine(_currentFolder ?? string.Empty, "_index.txt");
+        }
+
+        /// <summary>
+        /// Parses legacy _index.txt file format
+        /// </summary>
+        private List<Common.Shared.ArticleLine> ParseLegacyIndexFile(string indexFilePath)
+        {
+            var lines = System.IO.File.ReadAllLines(indexFilePath);
+            var articles = new List<Common.Shared.ArticleLine>();
+            
+            foreach (var line in lines)
+            {
+                var raw = line?.Trim();
+                if (string.IsNullOrEmpty(raw) || raw.StartsWith("#"))
+                    continue;
+                    
+                var parsed = IndexEditor.Shared.IndexFileParser.ParseArticleLine(raw!);
+                if (parsed != null)
+                    articles.Add(parsed);
+            }
+            
+            return articles;
+        }
+
+        /// <summary>
+        /// Updates EditorState and ViewModel with loaded articles
+        /// </summary>
+        private void UpdateEditorStateWithArticles(List<Common.Shared.ArticleLine> articles)
+        {
+            // Prepare articles (ensure measurements, validate, notify)
+            foreach (var article in articles)
+            {
+                PrepareArticle(article);
+            }
+
+            // Update global EditorState
+            IndexEditor.Shared.EditorState.Articles = articles;
+            if (articles.Count > 0)
+                IndexEditor.Shared.EditorState.ActiveArticle = articles[0];
+            IndexEditor.Shared.EditorState.NotifyStateChanged();
+
+            // Update ViewModel's observable collection
             var vm = this.DataContext as EditorStateViewModel;
             if (vm != null)
             {
                 try
                 {
                     vm.Articles.Clear();
-                    foreach (var a in articles)
+                    foreach (var article in articles)
                     {
-                        try
-                        {
-                            if (a.Measurements == null || a.Measurements.Count == 0)
-                                a.Measurements = new System.Collections.Generic.List<string> { string.Empty };
-                            try { a.Validate(); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: a.Validate", ex); }
-                            try { a.NotifyPropertyChanged(nameof(a.Measurements)); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: NotifyPropertyChanged Measurements", ex); }
-                            try { a.NotifyPropertyChanged(nameof(a.Measurements0)); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: NotifyPropertyChanged Measurements0", ex); }
-                        }
-                        catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: per-article setup", ex); }
-                        vm.Articles.Add(a);
+                        vm.Articles.Add(article);
+                    }
+                    
+                    if (articles.Count > 0)
+                    {
+                        vm.SelectedArticle = articles[0];
                     }
                 }
-                catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: update VM articles", ex); }
-                if (articles.Count > 0)
-                {
-                    try { vm.SelectedArticle = articles[0]; } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.LoadArticlesFromIndexFile: set SelectedArticle", ex); }
-                }
+                catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.UpdateEditorStateWithArticles: update VM", ex); }
             }
-            // Also maintain the global EditorState for other components
-            if (articles.Count > 0)
-                IndexEditor.Shared.EditorState.ActiveArticle = articles[0];
-            IndexEditor.Shared.EditorState.NotifyStateChanged();
+        }
+
+        /// <summary>
+        /// Prepares an article for display (ensures measurements, validates, notifies)
+        /// </summary>
+        private void PrepareArticle(Common.Shared.ArticleLine article)
+        {
+            try
+            {
+                if (article.Measurements == null || article.Measurements.Count == 0)
+                    article.Measurements = new System.Collections.Generic.List<string> { string.Empty };
+                    
+                try { article.Validate(); } catch (Exception ex) { DebugLogger.LogException("PrepareArticle: Validate", ex); }
+                try { article.NotifyPropertyChanged(nameof(article.Measurements)); } catch (Exception ex) { DebugLogger.LogException("PrepareArticle: Notify Measurements", ex); }
+                try { article.NotifyPropertyChanged(nameof(article.Measurements0)); } catch (Exception ex) { DebugLogger.LogException("PrepareArticle: Notify Measurements0", ex); }
+            }
+            catch (Exception ex) { DebugLogger.LogException("PrepareArticle: outer", ex); }
         }
 
         // Helper: refresh the bound ViewModel (if present) from the static EditorState.Articles.
@@ -237,19 +349,13 @@ namespace IndexEditor.Views
                 if (vm != null)
                 {
                     try { vm.Articles.Clear(); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: clear vm.Articles", ex); }
-                    foreach (var a in articles)
+                    
+                    foreach (var article in articles)
                     {
-                        try
-                        {
-                            if (a.Measurements == null || a.Measurements.Count == 0)
-                                a.Measurements = new System.Collections.Generic.List<string> { string.Empty };
-                            try { a.Validate(); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: a.Validate", ex); }
-                            try { a.NotifyPropertyChanged(nameof(a.Measurements)); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: notify Measurements", ex); }
-                            try { a.NotifyPropertyChanged(nameof(a.Measurements0)); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: notify Measurements0", ex); }
-                        }
-                        catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: per-article", ex); }
-                        try { vm.Articles.Add(a); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: vm.Articles.Add", ex); }
+                        PrepareArticle(article);
+                        try { vm.Articles.Add(article); } catch (Exception ex) { DebugLogger.LogException("ArticleEditorView.RefreshFromEditorState: vm.Articles.Add", ex); }
                     }
+                    
                     if (vm.SelectedArticle == null && vm.Articles.Count > 0)
                         vm.SelectedArticle = vm.Articles[0];
                 }

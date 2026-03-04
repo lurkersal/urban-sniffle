@@ -29,7 +29,7 @@ namespace IndexEditor.Tests
             var line = "80-85,Model,Louise,Louise Cohen,23,John Allum,35C-23-36";
             File.WriteAllText(indexPath, line + Environment.NewLine);
 
-            var view = new ArticleEditorView();
+            var view = new ArticleEditorView(TestDIHelper.IndexFileService);
             var vm = new EditorStateViewModel();
             view.DataContext = vm;
             // call SetCurrentFolder which loads _index.txt

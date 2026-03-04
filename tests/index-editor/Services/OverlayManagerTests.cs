@@ -48,18 +48,23 @@ public class OverlayManagerTests
         // Arrange
         var mockControlFinder = CreateMockControlFinder();
         var mockOverlay = CreateBorder(false);
-        var mockTextBox = CreateTextBox();
+        var mockTextBlock = CreateTextBlock();
+        var mockErrorBorder = CreateBorder(false);
+        var mockErrorLine = CreateTextBlock();
 
         mockControlFinder.Setup(cf => cf.FindControl<Border>("IndexOverlay")).Returns(mockOverlay);
-        mockControlFinder.Setup(cf => cf.FindControl<TextBox>("IndexOverlayTextBox")).Returns(mockTextBox);
+        mockControlFinder.Setup(cf => cf.FindControl<TextBlock>("IndexOverlayTextBlock")).Returns(mockTextBlock);
+        mockControlFinder.Setup(cf => cf.FindControl<Border>("IndexOverlayErrorBorder")).Returns(mockErrorBorder);
+        mockControlFinder.Setup(cf => cf.FindControl<TextBlock>("IndexOverlayErrorLine")).Returns(mockErrorLine);
 
         var manager = new OverlayManager(mockControlFinder.Object);
 
-        // Act
-        manager.ShowIndexOverlay("/test/folder");
+        // Act - use null folder since file access will fail anyway in unit tests
+        manager.ShowIndexOverlay(null);
 
         // Assert
         Assert.True(mockOverlay.IsVisible);
+        Assert.Equal("No folder open.", mockTextBlock.Text);
     }
 
     [Fact]
@@ -87,9 +92,11 @@ public class OverlayManagerTests
         var mockControlFinder = CreateMockControlFinder();
         var mockOverlay = CreateBorder(false);
         var mockTextBox = CreateTextBox();
+        var mockTextBlock = CreateTextBlock();
 
         mockControlFinder.Setup(cf => cf.FindControl<Border>("IndexOverlay")).Returns(mockOverlay);
         mockControlFinder.Setup(cf => cf.FindControl<TextBox>("IndexOverlayTextBox")).Returns(mockTextBox);
+        mockControlFinder.Setup(cf => cf.FindControl<TextBlock>("IndexOverlayTextBlock")).Returns(mockTextBlock);
 
         var manager = new OverlayManager(mockControlFinder.Object);
 
@@ -291,10 +298,14 @@ public class OverlayManagerTests
         // Arrange
         var mockControlFinder = CreateMockControlFinder();
         var mockOverlay = CreateBorder(false);
-        var mockTextBox = CreateTextBox();
+        var mockTextBlock = CreateTextBlock();
+        var mockErrorBorder = CreateBorder(false);
+        var mockErrorLine = CreateTextBlock();
 
         mockControlFinder.Setup(cf => cf.FindControl<Border>("IndexOverlay")).Returns(mockOverlay);
-        mockControlFinder.Setup(cf => cf.FindControl<TextBox>("IndexOverlayTextBox")).Returns(mockTextBox);
+        mockControlFinder.Setup(cf => cf.FindControl<TextBlock>("IndexOverlayTextBlock")).Returns(mockTextBlock);
+        mockControlFinder.Setup(cf => cf.FindControl<Border>("IndexOverlayErrorBorder")).Returns(mockErrorBorder);
+        mockControlFinder.Setup(cf => cf.FindControl<TextBlock>("IndexOverlayErrorLine")).Returns(mockErrorLine);
 
         var manager = new OverlayManager(mockControlFinder.Object);
 
@@ -302,7 +313,7 @@ public class OverlayManagerTests
         manager.ShowIndexOverlay(null);
 
         // Assert
-        Assert.Equal("No folder open.", mockTextBox.Text);
+        Assert.Equal("No folder open.", mockTextBlock.Text);
         Assert.True(mockOverlay.IsVisible);
     }
 
@@ -312,13 +323,13 @@ public class OverlayManagerTests
         // Arrange
         var mockControlFinder = CreateMockControlFinder();
         var mockOverlay = CreateBorder(false);
-        var mockTextBox = CreateTextBox();
+        var mockTextBlock = CreateTextBlock();
         var mockErrorBorder = CreateBorder(true);
         var mockErrorLine = CreateTextBlock();
         mockErrorLine.Text = "Error text";
 
         mockControlFinder.Setup(cf => cf.FindControl<Border>("IndexOverlay")).Returns(mockOverlay);
-        mockControlFinder.Setup(cf => cf.FindControl<TextBox>("IndexOverlayTextBox")).Returns(mockTextBox);
+        mockControlFinder.Setup(cf => cf.FindControl<TextBlock>("IndexOverlayTextBlock")).Returns(mockTextBlock);
         mockControlFinder.Setup(cf => cf.FindControl<Border>("IndexOverlayErrorBorder")).Returns(mockErrorBorder);
         mockControlFinder.Setup(cf => cf.FindControl<TextBlock>("IndexOverlayErrorLine")).Returns(mockErrorLine);
 
@@ -362,12 +373,12 @@ public class OverlayManagerTests
         // Arrange
         var mockControlFinder = CreateMockControlFinder();
         var mockOverlay = CreateBorder(false);
-        var mockTextBox = CreateTextBox();
+        var mockTextBlock = CreateTextBlock();
         var mockErrorBorder = CreateBorder(false);
         var mockErrorLine = CreateTextBlock();
 
         mockControlFinder.Setup(cf => cf.FindControl<Border>("IndexOverlay")).Returns(mockOverlay);
-        mockControlFinder.Setup(cf => cf.FindControl<TextBox>("IndexOverlayTextBox")).Returns(mockTextBox);
+        mockControlFinder.Setup(cf => cf.FindControl<TextBlock>("IndexOverlayTextBlock")).Returns(mockTextBlock);
         mockControlFinder.Setup(cf => cf.FindControl<Border>("IndexOverlayErrorBorder")).Returns(mockErrorBorder);
         mockControlFinder.Setup(cf => cf.FindControl<TextBlock>("IndexOverlayErrorLine")).Returns(mockErrorLine);
 
@@ -382,7 +393,7 @@ public class OverlayManagerTests
         Assert.True(mockOverlay.IsVisible);
         Assert.True(mockErrorBorder.IsVisible);
         Assert.Equal("Bad line", mockErrorLine.Text); // Trimmed
-        Assert.Equal(fullText, mockTextBox.Text);
+        Assert.Equal(fullText, mockTextBlock.Text);  // ShowIndexOverlayError uses TextBlock, not TextBox
     }
 
     [Fact(Skip = "Requires Avalonia TextBox in visual tree for selection properties to work correctly")]

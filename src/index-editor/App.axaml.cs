@@ -48,6 +48,9 @@ public partial class App : Application
         services.AddSingleton<IndexEditor.Shared.IEditorActions, IndexEditor.Shared.EditorActionsService>();
         services.AddSingleton<IndexEditor.Shared.IToastService, IndexEditor.Shared.DefaultToastService>();
         
+        // File services (new - eliminates duplication)
+        services.AddSingleton<Services.IIndexFileService, Services.IndexFileService>();
+        
         // Register ViewModels and other services
         services.AddSingleton<Views.EditorStateViewModel>();
         services.AddSingleton<Views.MainWindowViewModel>();
@@ -102,7 +105,8 @@ public partial class App : Application
             }
 
             // Resolve MainWindow and viewmodels via DI
-            var mainWindow = new MainWindow(folderToOpen);
+            var indexFileService = serviceProvider.GetRequiredService<Services.IIndexFileService>();
+            var mainWindow = new MainWindow(folderToOpen, indexFileService);
             try
             {
                 var editorVm = serviceProvider.GetRequiredService<Views.EditorStateViewModel>();

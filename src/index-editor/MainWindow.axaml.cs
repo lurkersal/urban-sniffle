@@ -52,6 +52,7 @@ public partial class MainWindow : Window
     private Services.OverlayManager? _overlayManager;
     private Services.LinkDiscoveryService? _linkDiscoveryService;
     private Dictionary<int, List<Common.Shared.MagazineLink>> _discoveredLinks = new();
+    private readonly Services.IIndexFileService? _indexFileService;
 
     /// <summary>
     /// Get all discovered links as a flat list for saving
@@ -61,11 +62,14 @@ public partial class MainWindow : Window
         return _discoveredLinks.Values.SelectMany(l => l).ToList();
     }
 
-    public MainWindow(string? folderToOpen = null)
+    public MainWindow(string? folderToOpen = null) : this(folderToOpen, null) { }
+
+    public MainWindow(string? folderToOpen, Services.IIndexFileService? indexFileService)
     {
         // MainWindow constructor
         Instance = this;
         FolderToOpen = folderToOpen;
+        _indexFileService = indexFileService;
 
         InitializeComponent();
         
@@ -879,169 +883,196 @@ public partial class MainWindow : Window
             { 
                 DebugLogger.LogException("LoadArticlesFromFolder: GetFullPath", ex); 
             }
-            
-            // Parse folder basename for fallback metadata
-            try
-            {
-                var folderName = System.IO.Path.GetFileName(folder.TrimEnd(System.IO.Path.DirectorySeparatorChar));
-                var (mag, vol, num, year) = IndexEditor.Shared.FolderMetadataParser.ParseFolderMetadata(folderName);
-                IndexEditor.Shared.EditorState.CurrentMagazine = mag;
-                IndexEditor.Shared.EditorState.CurrentVolume = vol;
-                IndexEditor.Shared.EditorState.CurrentNumber = num;
-                IndexEditor.Shared.EditorState.CurrentYear = year;
-            }
-            catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: parse folder metadata", ex); }
 
             // Clear discovered links from previous folder
             _discoveredLinks.Clear();
 
-            var articles = new List<Common.Shared.ArticleLine>();
-            string fileMag = IndexEditor.Shared.EditorState.CurrentMagazine ?? string.Empty;
-            string fileVol = IndexEditor.Shared.EditorState.CurrentVolume ?? string.Empty;
-            string fileNum = IndexEditor.Shared.EditorState.CurrentNumber ?? string.Empty;
-            string fileYear = IndexEditor.Shared.EditorState.CurrentYear ?? string.Empty;
+            // ✅ NEW: Use IIndexFileService to load index data
+            string fileMag, fileVol, fileNum, fileYear;
+            List<Common.Shared.ArticleLine> articles;
+            List<Common.Shared.MagazineLink>? loadedLinks;
 
-            // Phase 1: Check for JSON first, fall back to CSV
-            if (Common.Shared.IndexJsonSerializer.JsonExists(folder))
+            if (_indexFileService != null)
             {
-                DebugLogger.Log("LoadArticlesFromFolder: Loading from _index.json");
+                // Use the new centralized service
                 try
                 {
-                    var (mag, vol, num, year, jsonArticles, loadedLinks) = Common.Shared.IndexJsonSerializer.LoadFromJson(folder);
+                    (fileMag, fileVol, fileNum, fileYear, articles, loadedLinks) = _indexFileService.LoadFromFolder(folder);
+                }
+                catch (Exception ex)
+                {
+                    DebugLogger.LogException("LoadArticlesFromFolder: IIndexFileService.LoadFromFolder failed", ex);
+                    IndexEditor.Shared.ToastService.Show("Failed to load index file");
+                    return;
+                }
+            }
+            else
+            {
+                // Fallback: Use old inline code path if service not available (backward compatibility)
+                DebugLogger.Log("LoadArticlesFromFolder: IIndexFileService not available, using legacy code path");
+                
+                // Parse folder basename for fallback metadata
+                try
+                {
+                    var folderName = System.IO.Path.GetFileName(folder.TrimEnd(System.IO.Path.DirectorySeparatorChar));
+                    var (mag, vol, num, year) = IndexEditor.Shared.FolderMetadataParser.ParseFolderMetadata(folderName);
                     fileMag = mag;
                     fileVol = vol;
                     fileNum = num;
                     fileYear = year;
-                    articles = jsonArticles;
-                    
-                    // Load links into discovered links dictionary (already cleared at method start)
-                    if (loadedLinks != null && loadedLinks.Count > 0)
+                }
+                catch (Exception ex) 
+                { 
+                    DebugLogger.LogException("LoadArticlesFromFolder: parse folder metadata", ex);
+                    fileMag = string.Empty;
+                    fileVol = string.Empty;
+                    fileNum = string.Empty;
+                    fileYear = string.Empty;
+                }
+
+                articles = new List<Common.Shared.ArticleLine>();
+                loadedLinks = null;
+
+                // Legacy inline loading code (kept for backward compatibility only)
+                // Phase 1: Check for JSON first, fall back to CSV
+                if (Common.Shared.IndexJsonSerializer.JsonExists(folder))
+                {
+                    DebugLogger.Log("LoadArticlesFromFolder: Loading from _index.json");
+                    try
                     {
-                        foreach (var link in loadedLinks)
-                        {
-                            if (!_discoveredLinks.ContainsKey(link.Page))
-                            {
-                                _discoveredLinks[link.Page] = new List<Common.Shared.MagazineLink>();
-                            }
-                            
-                            // Check if this exact link already exists for this page (deduplicate)
-                            bool isDuplicate = _discoveredLinks[link.Page].Any(l => 
-                                l.Magazine == link.Magazine && 
-                                l.Volume == link.Volume && 
-                                l.Issue == link.Issue);
-                            
-                            if (!isDuplicate)
-                            {
-                                _discoveredLinks[link.Page].Add(link);
-                            }
-                        }
-                        
-                        var totalLinks = _discoveredLinks.Values.Sum(list => list.Count);
-                        DebugLogger.Log($"Loaded {totalLinks} unique links from JSON (deduplicated from {loadedLinks.Count})");
+                        var (mag, vol, num, year, jsonArticles, links) = Common.Shared.IndexJsonSerializer.LoadFromJson(folder);
+                        fileMag = mag;
+                        fileVol = vol;
+                        fileNum = num;
+                        fileYear = year;
+                        articles = jsonArticles;
+                        loadedLinks = links;
+                    }
+                    catch (Exception ex)
+                    {
+                        DebugLogger.LogException("LoadArticlesFromFolder: Failed to load JSON, falling back to CSV", ex);
+                        IndexEditor.Shared.ToastService.Show("Failed to load _index.json, falling back to _index.txt");
                     }
                 }
-                catch (Exception ex)
+                
+                // Fall back to CSV if JSON doesn't exist or failed to load
+                if (articles.Count == 0)
                 {
-                    DebugLogger.LogException("LoadArticlesFromFolder: Failed to load JSON, falling back to CSV", ex);
-                    IndexEditor.Shared.ToastService.Show("Failed to load _index.json, falling back to _index.txt");
-                    // Fall through to CSV loading below
-                }
-            }
-            
-            // Fall back to CSV if JSON doesn't exist or failed to load
-            if (articles.Count == 0)
-            {
-                var indexPath = System.IO.Path.Combine(folder, "_index.txt");
-                if (System.IO.File.Exists(indexPath))
-                {
-                    DebugLogger.Log("LoadArticlesFromFolder: Loading from _index.txt");
-                    var lines = System.IO.File.ReadAllLines(indexPath);
-                    int articleStartIndex = 0;
-                    for (int i = 0; i < lines.Length; i++)
+                    var indexPath = System.IO.Path.Combine(folder, "_index.txt");
+                    if (System.IO.File.Exists(indexPath))
                     {
-                        var raw = lines[i];
-                        if (string.IsNullOrWhiteSpace(raw)) { articleStartIndex = i + 1; continue; }
-                        var trimmed = raw.Trim();
-                        if (trimmed.StartsWith("#"))
-                        {
-                            var content = trimmed.TrimStart('#').Trim();
-                            if (content.StartsWith("Magazine:", StringComparison.OrdinalIgnoreCase))
-                                fileMag = content.Substring("Magazine:".Length).Trim();
-                            else if (content.StartsWith("Volume:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("Vol:", StringComparison.OrdinalIgnoreCase))
-                            {
-                                var val = content.Contains(":" ) ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
-                                fileVol = val.Replace("Volume:", string.Empty).Replace("Vol:", string.Empty).Trim();
-                            }
-                            else if (content.StartsWith("Number:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("No:", StringComparison.OrdinalIgnoreCase))
-                            {
-                                var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
-                                fileNum = val.Replace("Number:", string.Empty).Replace("No:", string.Empty).Trim();
-                            }
-                            else if (content.StartsWith("Year:", StringComparison.OrdinalIgnoreCase))
-                            {
-                                fileYear = content.Substring("Year:".Length).Trim();
-                            }
-                            articleStartIndex = i + 1;
-                            continue;
-                        }
-                        // First non-comment line: try CSV metadata
-                        var parts = IndexFileParser.SplitRespectingEscapedCommas(trimmed);
-                        if (parts.Count >= 3)
-                        {
-                            string Unescape(string s) => s.Replace("\\,", ",");
-                            fileMag = Unescape(parts[0]);
-                            fileVol = Unescape(parts[1]);
-                            fileNum = Unescape(parts[2]);
-                            if (parts.Count >= 4)
-                            {
-                                fileYear = Unescape(parts[3]);
-                            }
-                            articleStartIndex = i + 1;
-                        }
-                        else
-                        {
-                            articleStartIndex = i;
-                        }
-                        break;
-                    }
+                        DebugLogger.Log("LoadArticlesFromFolder: Loading from _index.txt");
+                        var lines = System.IO.File.ReadAllLines(indexPath);
+                        int articleStartIndex = 0;
 
-                    for (int i = articleStartIndex; i < lines.Length; i++)
-                    {
-                        var line = lines[i];
-                        if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#")) continue;
-                        try
+                        for (int i = 0; i < lines.Length; i++)
                         {
-                            var parsed = ParseArticleLine(line);
-                            if (parsed != null) articles.Add(parsed);
-                        }
-                        catch (FormatException fx)
-                        {
-                            // Show error and open index overlay with full file contents for user correction
-                            try { IndexEditor.Shared.ToastService.Show("_index.txt format error: " + fx.Message); } catch { }
-                            
-                            // Use overlay manager to show the error
-                            try
+                            var raw = lines[i];
+                            if (string.IsNullOrWhiteSpace(raw)) { articleStartIndex = i + 1; continue; }
+                            var trimmed = raw.Trim();
+                            if (trimmed.StartsWith("#"))
                             {
-                                var fullText = System.IO.File.ReadAllText(indexPath);
-                                _overlayManager?.ShowIndexOverlayError(line ?? string.Empty, fullText);
+                                var content = trimmed.TrimStart('#').Trim();
+                                if (content.StartsWith("Magazine:", StringComparison.OrdinalIgnoreCase))
+                                    fileMag = content.Substring("Magazine:".Length).Trim();
+                                else if (content.StartsWith("Volume:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("Vol:", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
+                                    fileVol = val.Replace("Volume:", string.Empty).Replace("Vol:", string.Empty).Trim();
+                                }
+                                else if (content.StartsWith("Number:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("No:", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
+                                    fileNum = val.Replace("Number:", string.Empty).Replace("No:", string.Empty).Trim();
+                                }
+                                else if (content.StartsWith("Year:", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    fileYear = content.Substring("Year:".Length).Trim();
+                                }
+                                articleStartIndex = i + 1;
+                                continue;
                             }
-                            catch (Exception ex)
+                            // First non-comment line: try CSV metadata
+                            var parts = IndexFileParser.SplitRespectingEscapedCommas(trimmed);
+                            if (parts.Count >= 3)
                             {
-                                DebugLogger.LogException("LoadArticlesFromFolder: show overlay on format error", ex);
+                                string Unescape(string s) => s.Replace("\\,", ",");
+                                fileMag = Unescape(parts[0]);
+                                fileVol = Unescape(parts[1]);
+                                fileNum = Unescape(parts[2]);
+                                if (parts.Count >= 4)
+                                {
+                                    fileYear = Unescape(parts[3]);
+                                }
+                                articleStartIndex = i + 1;
                             }
-
-                            // Stop further parsing; let the user fix the file
+                            else
+                            {
+                                articleStartIndex = i;
+                            }
                             break;
                         }
+
+                        for (int i = articleStartIndex; i < lines.Length; i++)
+                        {
+                            var line = lines[i];
+                            if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#")) continue;
+                            try
+                            {
+                                var parsed = ParseArticleLine(line);
+                                if (parsed != null) articles.Add(parsed);
+                            }
+                            catch (FormatException fx)
+                            {
+                                try { IndexEditor.Shared.ToastService.Show("_index.txt format error: " + fx.Message); } catch { }
+                                try
+                                {
+                                    var fullText = System.IO.File.ReadAllText(indexPath);
+                                    _overlayManager?.ShowIndexOverlayError(line ?? string.Empty, fullText);
+                                }
+                                catch (Exception ex)
+                                {
+                                    DebugLogger.LogException("LoadArticlesFromFolder: show overlay on format error", ex);
+                                }
+                                break;
+                            }
+                        }
+                        // fileMag, fileVol, fileNum, fileYear are already set above
                     }
                 }
+            }
+
+            // Process loaded links into UI-friendly dictionary
+            if (loadedLinks != null && loadedLinks.Count > 0)
+            {
+                foreach (var link in loadedLinks)
+                {
+                    if (!_discoveredLinks.ContainsKey(link.Page))
+                    {
+                        _discoveredLinks[link.Page] = new List<Common.Shared.MagazineLink>();
+                    }
+                    
+                    // Check if this exact link already exists for this page (deduplicate)
+                    bool isDuplicate = _discoveredLinks[link.Page].Any(l => 
+                        l.Magazine == link.Magazine && 
+                        l.Volume == link.Volume && 
+                        l.Issue == link.Issue);
+                    
+                    if (!isDuplicate)
+                    {
+                        _discoveredLinks[link.Page].Add(link);
+                    }
+                }
+                
+                var totalLinks = _discoveredLinks.Values.Sum(list => list.Count);
+                DebugLogger.Log($"Loaded {totalLinks} unique links from JSON (deduplicated from {loadedLinks.Count})");
             }
 
             // Set EditorState metadata and articles
-            IndexEditor.Shared.EditorState.CurrentMagazine = fileMag;
-            IndexEditor.Shared.EditorState.CurrentVolume = fileVol;
-            IndexEditor.Shared.EditorState.CurrentNumber = fileNum;
-            IndexEditor.Shared.EditorState.CurrentYear = fileYear;
+            IndexEditor.Shared.EditorState.CurrentMagazine = fileMag ?? string.Empty;
+            IndexEditor.Shared.EditorState.CurrentVolume = fileVol ?? string.Empty;
+            IndexEditor.Shared.EditorState.CurrentNumber = fileNum ?? string.Empty;
+            IndexEditor.Shared.EditorState.CurrentYear = fileYear ?? string.Empty;
             IndexEditor.Shared.EditorState.Articles = articles.Where(a => a.Pages != null && a.Pages.Count > 0).OrderBy(a => a.Pages.Min()).ToList();
 
             // Validate segments for missing pages
