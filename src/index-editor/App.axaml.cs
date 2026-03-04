@@ -106,7 +106,12 @@ public partial class App : Application
 
             // Resolve MainWindow and viewmodels via DI
             var indexFileService = serviceProvider.GetRequiredService<Services.IIndexFileService>();
-            var mainWindow = new MainWindow(folderToOpen, indexFileService);
+            // editorState and editorActions already retrieved above for backward compatibility
+            var mainWindow = new MainWindow(folderToOpen, indexFileService, editorState, editorActions);
+            
+            // Create DialogService with MainWindow as owner (after window is created)
+            var dialogService = new Services.DialogService(mainWindow);
+            
             try
             {
                 var editorVm = serviceProvider.GetRequiredService<Views.EditorStateViewModel>();
@@ -119,6 +124,9 @@ public partial class App : Application
                 mainWindow.MainViewModel = mainVm; // assign auxiliary main VM
             }
             catch (Exception ex) { DebugLogger.LogException("App: resolve MainWindowViewModel", ex); }
+
+            // Inject DialogService into MainWindow
+            mainWindow.SetDialogService(dialogService);
 
             desktop.MainWindow = mainWindow;
         }

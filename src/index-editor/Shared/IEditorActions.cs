@@ -49,6 +49,14 @@ namespace IndexEditor.Shared
         /// and updates the article's page collection to include all pages in the segment range.
         /// </summary>
         void EndActiveSegment();
+        
+        /// <summary>
+        /// Deletes the specified article from the articles collection.
+        /// If the article is currently selected, automatically selects the next available article.
+        /// </summary>
+        /// <param name="article">The article to delete</param>
+        /// <returns>The newly selected article, or null if no articles remain</returns>
+        ArticleLine? DeleteArticle(ArticleLine article);
     }
     
     /// <summary>
@@ -357,6 +365,50 @@ namespace IndexEditor.Shared
             }
             catch (Exception ex) { DebugLogger.LogException("EditorActionsService.EndActiveSegment", ex); }
         }
+        
+        public ArticleLine? DeleteArticle(ArticleLine article)
+        {
+            try
+            {
+                if (article == null) return null;
+                
+                // Find the index before deletion
+                int oldIndex = -1;
+                if (_state.Articles != null)
+                {
+                    oldIndex = _state.Articles.IndexOf(article);
+                }
+                
+                // Remove from articles collection
+                _state.Articles?.Remove(article);
+                
+                // Clear active article if it's the one being deleted
+                if (_state.ActiveArticle == article)
+                {
+                    _state.ActiveArticle = null;
+                }
+                
+                // Select the next available article
+                ArticleLine? newSelection = null;
+                if (_state.Articles != null && _state.Articles.Count > 0)
+                {
+                    int newIndex = Math.Min(Math.Max(0, oldIndex), _state.Articles.Count - 1);
+                    newSelection = _state.Articles[newIndex];
+                }
+                
+                // Mark as modified
+                _state.HasUnsavedChanges = true;
+                _state.NotifyStateChanged();
+                
+                return newSelection;
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("EditorActionsService.DeleteArticle", ex);
+                return null;
+            }
+        }
     }
 }
+
 

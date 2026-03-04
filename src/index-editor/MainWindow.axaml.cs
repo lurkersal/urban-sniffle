@@ -53,6 +53,17 @@ public partial class MainWindow : Window
     private Services.LinkDiscoveryService? _linkDiscoveryService;
     private Dictionary<int, List<Common.Shared.MagazineLink>> _discoveredLinks = new();
     private readonly Services.IIndexFileService? _indexFileService;
+    private Services.IDialogService? _dialogService;
+    private readonly IndexEditor.Shared.IEditorState? _editorState;
+    private readonly IndexEditor.Shared.IEditorActions? _editorActions;
+
+    /// <summary>
+    /// Set the dialog service (called from App.axaml.cs after MainWindow is created)
+    /// </summary>
+    public void SetDialogService(Services.IDialogService dialogService)
+    {
+        _dialogService = dialogService;
+    }
 
     /// <summary>
     /// Get all discovered links as a flat list for saving
@@ -62,14 +73,21 @@ public partial class MainWindow : Window
         return _discoveredLinks.Values.SelectMany(l => l).ToList();
     }
 
-    public MainWindow(string? folderToOpen = null) : this(folderToOpen, null) { }
+    public MainWindow(string? folderToOpen = null) : this(folderToOpen, null, null, null) { }
 
-    public MainWindow(string? folderToOpen, Services.IIndexFileService? indexFileService)
+    public MainWindow(string? folderToOpen, Services.IIndexFileService? indexFileService) : this(folderToOpen, indexFileService, null, null) { }
+
+    public MainWindow(string? folderToOpen, Services.IIndexFileService? indexFileService, IndexEditor.Shared.IEditorState? editorState) 
+        : this(folderToOpen, indexFileService, editorState, null) { }
+
+    public MainWindow(string? folderToOpen, Services.IIndexFileService? indexFileService, IndexEditor.Shared.IEditorState? editorState, IndexEditor.Shared.IEditorActions? editorActions)
     {
         // MainWindow constructor
         Instance = this;
         FolderToOpen = folderToOpen;
         _indexFileService = indexFileService;
+        _editorState = editorState;
+        _editorActions = editorActions;
 
         InitializeComponent();
         
@@ -102,10 +120,13 @@ public partial class MainWindow : Window
         // Initialize keyboard shortcut dispatcher with handlers
         try
         {
+            // Use injected _editorState if available, otherwise create a new instance for backward compatibility
+            var editorStateForHandlers = _editorState ?? new IndexEditor.Shared.EditorStateService();
+            
             var handlers = new List<Services.KeyboardHandlers.IKeyboardShortcutHandler>
             {
                 new Services.KeyboardHandlers.SegmentKeyboardHandler(this),
-                new Services.KeyboardHandlers.ArticleKeyboardHandler(this),
+                new Services.KeyboardHandlers.ArticleKeyboardHandler(this, editorStateForHandlers),
                 new Services.KeyboardHandlers.FileKeyboardHandler(this, LoadArticlesFromFolder, _overlayManager),
                 new Services.KeyboardHandlers.NavigationKeyboardHandler(this)
             };
@@ -153,50 +174,71 @@ public partial class MainWindow : Window
                         try
                         {
                             try { DebugLogger.Log("DeleteArticleConfirmBtn.Click invoked"); } catch {}
-                             // Perform deletion of selected article
-                             var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-                             Common.Shared.ArticleLine? toDelete = null;
-                             if (vm != null) toDelete = vm.SelectedArticle;
-                             if (toDelete == null) toDelete = IndexEditor.Shared.EditorState.ActiveArticle;
+                            
+                            // Get article to delete
+                            var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+                            Common.Shared.ArticleLine? toDelete = null;
+                            if (vm != null) toDelete = vm.SelectedArticle;
+                            if (toDelete == null) toDelete = IndexEditor.Shared.EditorState.ActiveArticle;
+                            
                             try { DebugLogger.Log($"toDelete={(toDelete==null?"<null>":toDelete.Title)}"); } catch {}
-                             if (toDelete != null)
-                             {
-                                 try
-                                 {
-                                     // Compute selected index first so we can pick the next sensible selection
-                                     int oldIndex = -1;
-                                     try { if (vm != null) oldIndex = vm.Articles.IndexOf(toDelete); else if (IndexEditor.Shared.EditorState.Articles != null) oldIndex = IndexEditor.Shared.EditorState.Articles.IndexOf(toDelete); } catch { }
-                                     // Remove from shared state
-                                     IndexEditor.Shared.EditorState.Articles?.Remove(toDelete);
-                                     // Mark that we have unsaved changes
-                                     IndexEditor.Shared.EditorState.HasUnsavedChanges = true;
-                                     // Update VM list if present
-                                     if (vm != null)
-                                     {
-                                         try { vm.Articles.Remove(toDelete); } catch { }
-                                         // Choose next selection: prefer previous index if possible, otherwise clamp
-                                         if (vm.Articles.Count > 0)
-                                         {
-                                             int newIndex = Math.Min(Math.Max(0, oldIndex), vm.Articles.Count - 1);
-                                             vm.SelectedArticle = vm.Articles[newIndex];
-                                            try { DebugLogger.Log($"SelectedArticle changed to index {newIndex}: {vm.SelectedArticle?.Title}"); } catch {}
-                                         }
-                                         else vm.SelectedArticle = null;
-                                     }
-                                      // Clear active article/segment if it referred to deleted article
-                                      if (IndexEditor.Shared.EditorState.ActiveArticle == toDelete) IndexEditor.Shared.EditorState.ActiveArticle = null;
-                                      IndexEditor.Shared.EditorState.NotifyStateChanged();
-                                      IndexEditor.Shared.ToastService.Show("Article deleted");
+                            
+                            if (toDelete != null)
+                            {
+                                try
+                                {
+                                    // Use service if available, otherwise use legacy logic
+                                    if (_editorActions != null)
+                                    {
+                                        var newSelection = _editorActions.DeleteArticle(toDelete);
+                                        if (vm != null && newSelection != null)
+                                        {
+                                            vm.SelectedArticle = newSelection;
+                                            try { DebugLogger.Log($"SelectedArticle changed to: {newSelection.Title}"); } catch {}
+                                        }
+                                        else if (vm != null)
+                                        {
+                                            vm.SelectedArticle = null;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        // Legacy fallback path
+                                        int oldIndex = -1;
+                                        try { if (vm != null) oldIndex = vm.Articles.IndexOf(toDelete); else if (IndexEditor.Shared.EditorState.Articles != null) oldIndex = IndexEditor.Shared.EditorState.Articles.IndexOf(toDelete); } catch { }
+                                        
+                                        IndexEditor.Shared.EditorState.Articles?.Remove(toDelete);
+                                        IndexEditor.Shared.EditorState.HasUnsavedChanges = true;
+                                        
+                                        if (vm != null)
+                                        {
+                                            try { vm.Articles.Remove(toDelete); } catch { }
+                                            if (vm.Articles.Count > 0)
+                                            {
+                                                int newIndex = Math.Min(Math.Max(0, oldIndex), vm.Articles.Count - 1);
+                                                vm.SelectedArticle = vm.Articles[newIndex];
+                                                try { DebugLogger.Log($"SelectedArticle changed to index {newIndex}: {vm.SelectedArticle?.Title}"); } catch {}
+                                            }
+                                            else vm.SelectedArticle = null;
+                                        }
+                                        
+                                        if (IndexEditor.Shared.EditorState.ActiveArticle == toDelete) 
+                                            IndexEditor.Shared.EditorState.ActiveArticle = null;
+                                        IndexEditor.Shared.EditorState.NotifyStateChanged();
+                                    }
+                                    
+                                    IndexEditor.Shared.ToastService.Show("Article deleted");
                                     try { DebugLogger.Log("Article deletion completed"); } catch {}
-                                 }
-                                 catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: delete", ex); }
-                             }
-                             try { delOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: hide overlay", ex); }
+                                }
+                                catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: delete", ex); }
+                            }
+                            
+                            try { delOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: hide overlay", ex); }
                             try { DebugLogger.Log("Delete overlay hidden after confirm"); } catch {}
-                         }
-                         catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: outer", ex); }
-                     };
-                 }
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: outer", ex); }
+                    };
+                }
                  if (delCancel != null && delOverlay != null)
                  {
                     delCancel.Click += (s, e) => { try { delOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("DeleteArticleCancelBtn.Click", ex); } };
@@ -524,9 +566,22 @@ public partial class MainWindow : Window
                 try
                 {
                     e.Cancel = true; // Cancel the close temporarily
-                    var result = await IndexEditor.Views.ConfirmDialog.ShowDialog(
-                        this, 
-                        "You have unsaved changes. Do you want to save before quitting?");
+                    
+                    // Use DialogService if available, otherwise fall back to ConfirmDialog
+                    bool result;
+                    if (_dialogService != null)
+                    {
+                        result = await _dialogService.ShowConfirmationAsync(
+                            "You have unsaved changes. Do you want to save before quitting?",
+                            "Unsaved Changes");
+                    }
+                    else
+                    {
+                        // Fallback to direct dialog (backward compatibility)
+                        result = await IndexEditor.Views.ConfirmDialog.ShowDialog(
+                            this, 
+                            "You have unsaved changes. Do you want to save before quitting?");
+                    }
                     
                     if (result)
                     {
@@ -570,26 +625,6 @@ public partial class MainWindow : Window
             catch (Exception ex) { DebugLogger.LogException("OnWindowClosing: save window state", ex); }
         }
         catch (Exception ex) { DebugLogger.LogException("OnWindowClosing: outer", ex); }
-    }
-
-    // Parsing helpers
-    private Common.Shared.ArticleLine? ParseArticleLine(string line)
-    {
-        try
-        {
-            // Delegate parsing to the centralized parser to keep behaviour consistent
-            return IndexEditor.Shared.IndexFileParser.ParseArticleLine(line);
-        }
-        catch (FormatException)
-        {
-            // Bubble up format exceptions for the caller to handle (overlay UI)
-            throw;
-        }
-        catch (Exception ex)
-        {
-            DebugLogger.LogException("MainWindow.ParseArticleLine: delegate parser threw", ex);
-            return null;
-        }
     }
 
     private List<int> ParsePageNumbers(string pageStr, out bool hasError)
@@ -887,159 +922,27 @@ public partial class MainWindow : Window
             // Clear discovered links from previous folder
             _discoveredLinks.Clear();
 
-            // ✅ NEW: Use IIndexFileService to load index data
+            // Use IIndexFileService to load index data
             string fileMag, fileVol, fileNum, fileYear;
             List<Common.Shared.ArticleLine> articles;
             List<Common.Shared.MagazineLink>? loadedLinks;
 
-            if (_indexFileService != null)
+            if (_indexFileService == null)
             {
-                // Use the new centralized service
-                try
-                {
-                    (fileMag, fileVol, fileNum, fileYear, articles, loadedLinks) = _indexFileService.LoadFromFolder(folder);
-                }
-                catch (Exception ex)
-                {
-                    DebugLogger.LogException("LoadArticlesFromFolder: IIndexFileService.LoadFromFolder failed", ex);
-                    IndexEditor.Shared.ToastService.Show("Failed to load index file");
-                    return;
-                }
+                DebugLogger.Log("LoadArticlesFromFolder: ERROR - IIndexFileService is null, cannot load folder");
+                IndexEditor.Shared.ToastService.Show("Service initialization error - cannot load folder");
+                return;
             }
-            else
+
+            try
             {
-                // Fallback: Use old inline code path if service not available (backward compatibility)
-                DebugLogger.Log("LoadArticlesFromFolder: IIndexFileService not available, using legacy code path");
-                
-                // Parse folder basename for fallback metadata
-                try
-                {
-                    var folderName = System.IO.Path.GetFileName(folder.TrimEnd(System.IO.Path.DirectorySeparatorChar));
-                    var (mag, vol, num, year) = IndexEditor.Shared.FolderMetadataParser.ParseFolderMetadata(folderName);
-                    fileMag = mag;
-                    fileVol = vol;
-                    fileNum = num;
-                    fileYear = year;
-                }
-                catch (Exception ex) 
-                { 
-                    DebugLogger.LogException("LoadArticlesFromFolder: parse folder metadata", ex);
-                    fileMag = string.Empty;
-                    fileVol = string.Empty;
-                    fileNum = string.Empty;
-                    fileYear = string.Empty;
-                }
-
-                articles = new List<Common.Shared.ArticleLine>();
-                loadedLinks = null;
-
-                // Legacy inline loading code (kept for backward compatibility only)
-                // Phase 1: Check for JSON first, fall back to CSV
-                if (Common.Shared.IndexJsonSerializer.JsonExists(folder))
-                {
-                    DebugLogger.Log("LoadArticlesFromFolder: Loading from _index.json");
-                    try
-                    {
-                        var (mag, vol, num, year, jsonArticles, links) = Common.Shared.IndexJsonSerializer.LoadFromJson(folder);
-                        fileMag = mag;
-                        fileVol = vol;
-                        fileNum = num;
-                        fileYear = year;
-                        articles = jsonArticles;
-                        loadedLinks = links;
-                    }
-                    catch (Exception ex)
-                    {
-                        DebugLogger.LogException("LoadArticlesFromFolder: Failed to load JSON, falling back to CSV", ex);
-                        IndexEditor.Shared.ToastService.Show("Failed to load _index.json, falling back to _index.txt");
-                    }
-                }
-                
-                // Fall back to CSV if JSON doesn't exist or failed to load
-                if (articles.Count == 0)
-                {
-                    var indexPath = System.IO.Path.Combine(folder, "_index.txt");
-                    if (System.IO.File.Exists(indexPath))
-                    {
-                        DebugLogger.Log("LoadArticlesFromFolder: Loading from _index.txt");
-                        var lines = System.IO.File.ReadAllLines(indexPath);
-                        int articleStartIndex = 0;
-
-                        for (int i = 0; i < lines.Length; i++)
-                        {
-                            var raw = lines[i];
-                            if (string.IsNullOrWhiteSpace(raw)) { articleStartIndex = i + 1; continue; }
-                            var trimmed = raw.Trim();
-                            if (trimmed.StartsWith("#"))
-                            {
-                                var content = trimmed.TrimStart('#').Trim();
-                                if (content.StartsWith("Magazine:", StringComparison.OrdinalIgnoreCase))
-                                    fileMag = content.Substring("Magazine:".Length).Trim();
-                                else if (content.StartsWith("Volume:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("Vol:", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
-                                    fileVol = val.Replace("Volume:", string.Empty).Replace("Vol:", string.Empty).Trim();
-                                }
-                                else if (content.StartsWith("Number:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("No:", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
-                                    fileNum = val.Replace("Number:", string.Empty).Replace("No:", string.Empty).Trim();
-                                }
-                                else if (content.StartsWith("Year:", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    fileYear = content.Substring("Year:".Length).Trim();
-                                }
-                                articleStartIndex = i + 1;
-                                continue;
-                            }
-                            // First non-comment line: try CSV metadata
-                            var parts = IndexFileParser.SplitRespectingEscapedCommas(trimmed);
-                            if (parts.Count >= 3)
-                            {
-                                string Unescape(string s) => s.Replace("\\,", ",");
-                                fileMag = Unescape(parts[0]);
-                                fileVol = Unescape(parts[1]);
-                                fileNum = Unescape(parts[2]);
-                                if (parts.Count >= 4)
-                                {
-                                    fileYear = Unescape(parts[3]);
-                                }
-                                articleStartIndex = i + 1;
-                            }
-                            else
-                            {
-                                articleStartIndex = i;
-                            }
-                            break;
-                        }
-
-                        for (int i = articleStartIndex; i < lines.Length; i++)
-                        {
-                            var line = lines[i];
-                            if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#")) continue;
-                            try
-                            {
-                                var parsed = ParseArticleLine(line);
-                                if (parsed != null) articles.Add(parsed);
-                            }
-                            catch (FormatException fx)
-                            {
-                                try { IndexEditor.Shared.ToastService.Show("_index.txt format error: " + fx.Message); } catch { }
-                                try
-                                {
-                                    var fullText = System.IO.File.ReadAllText(indexPath);
-                                    _overlayManager?.ShowIndexOverlayError(line ?? string.Empty, fullText);
-                                }
-                                catch (Exception ex)
-                                {
-                                    DebugLogger.LogException("LoadArticlesFromFolder: show overlay on format error", ex);
-                                }
-                                break;
-                            }
-                        }
-                        // fileMag, fileVol, fileNum, fileYear are already set above
-                    }
-                }
+                (fileMag, fileVol, fileNum, fileYear, articles, loadedLinks) = _indexFileService.LoadFromFolder(folder);
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("LoadArticlesFromFolder: IIndexFileService.LoadFromFolder failed", ex);
+                IndexEditor.Shared.ToastService.Show("Failed to load index file: " + ex.Message);
+                return;
             }
 
             // Process loaded links into UI-friendly dictionary
