@@ -32,15 +32,6 @@ if [ -f ~/bin/IndexEditor ]; then
     echo "✓ Build successful!"
     echo "Binary: ~/bin/IndexEditor"
     ls -lh ~/bin/IndexEditor
-    echo ""
-    echo "========================================="
-    echo "Now run: IndexEditor"
-    echo "========================================="
-    echo ""
-    echo "Look for these log lines:"
-    echo "  1. 'CategoryComboBox not found in DataTemplate yet, will retry'"
-    echo "  2. 'Successfully set up category ComboBox binding'"
-    echo "  3. 'SelectedCategory GET:'"
 else
     echo ""
     echo "✗ Build failed - binary not created"
