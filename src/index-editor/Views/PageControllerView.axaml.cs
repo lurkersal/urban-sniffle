@@ -118,6 +118,7 @@ namespace IndexEditor.Views
         /// <summary>
         /// Updates the current article information display at the top of the page controller.
         /// Shows article cards for all articles that contain the current page (stacked if multiple).
+        /// Prioritizes showing the currently selected article if it exists.
         /// </summary>
         private void UpdateCurrentArticleDisplay()
         {
@@ -129,27 +130,49 @@ namespace IndexEditor.Views
                 // Clear existing article cards
                 articleCardsContainer.Children.Clear();
 
+                // Get the currently selected article from the view model
+                var vm = this.DataContext as EditorStateViewModel;
+                var selectedArticle = vm?.SelectedArticle;
+
                 // Find all articles that contain the current page
                 var currentPage = EditorState.CurrentPage;
                 var articles = EditorState.Articles
                     .Where(a => a.Pages != null && a.Pages.Contains(currentPage))
                     .ToList();
 
-                if (articles.Count == 0)
+                // Always show articles that are on the current page
+                // If the selected article is on the current page, show it first
+                if (selectedArticle != null && selectedArticle.Pages != null && selectedArticle.Pages.Contains(currentPage))
                 {
-                    // No articles contain this page, leave container empty
-                    return;
-                }
-
-                // Create a card for each article
-                foreach (var article in articles)
-                {
-                    var card = CreateArticleCard(article);
+                    var card = CreateArticleCard(selectedArticle);
                     if (card != null)
                     {
                         articleCardsContainer.Children.Add(card);
                     }
+                    
+                    // Show other articles on this page (excluding the selected one)
+                    foreach (var article in articles.Where(a => !object.ReferenceEquals(a, selectedArticle)))
+                    {
+                        card = CreateArticleCard(article);
+                        if (card != null)
+                        {
+                            articleCardsContainer.Children.Add(card);
+                        }
+                    }
                 }
+                else if (articles.Count > 0)
+                {
+                    // No selected article or it's not on this page, show all articles on the current page
+                    foreach (var article in articles)
+                    {
+                        var card = CreateArticleCard(article);
+                        if (card != null)
+                        {
+                            articleCardsContainer.Children.Add(card);
+                        }
+                    }
+                }
+                // If no articles found on the current page, leave container empty
             }
             catch (Exception ex)
             {
@@ -224,16 +247,24 @@ namespace IndexEditor.Views
                 };
                 contentStack.Children.Add(titleText);
 
-                // Details
+                // Details - show different fields based on category
                 var details = new List<string>();
-                if (!string.IsNullOrWhiteSpace(article.ModelName0))
+                var cat = (article.Category ?? string.Empty).ToLowerInvariant();
+                
+                // Show model name and age only for Model, Cover, Group, Wives, and Interview categories
+                if (cat == "model" || cat == "cover" || cat == "group" || cat == "wives" || cat == "interview")
                 {
-                    details.Add(article.ModelName0);
+                    if (!string.IsNullOrWhiteSpace(article.ModelName0))
+                    {
+                        details.Add(article.ModelName0);
+                    }
+                    if (!string.IsNullOrWhiteSpace(article.Age0))
+                    {
+                        details.Add(article.Age0);
+                    }
                 }
-                if (!string.IsNullOrWhiteSpace(article.Age0))
-                {
-                    details.Add(article.Age0);
-                }
+                
+                // Show contributor for all categories (as photographer, author, illustrator, etc.)
                 if (!string.IsNullOrWhiteSpace(article.Contributor0))
                 {
                     details.Add(article.Contributor0);
