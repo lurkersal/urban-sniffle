@@ -125,10 +125,10 @@ public partial class MainWindow : Window
             
             var handlers = new List<Services.KeyboardHandlers.IKeyboardShortcutHandler>
             {
-                new Services.KeyboardHandlers.SegmentKeyboardHandler(this),
+                new Services.KeyboardHandlers.SegmentKeyboardHandler(this, editorStateForHandlers),
                 new Services.KeyboardHandlers.ArticleKeyboardHandler(this, editorStateForHandlers),
-                new Services.KeyboardHandlers.FileKeyboardHandler(this, LoadArticlesFromFolder, _overlayManager),
-                new Services.KeyboardHandlers.NavigationKeyboardHandler(this)
+                new Services.KeyboardHandlers.FileKeyboardHandler(this, editorStateForHandlers, LoadArticlesFromFolder, _overlayManager),
+                new Services.KeyboardHandlers.NavigationKeyboardHandler(this, editorStateForHandlers)
             };
             _keyboardDispatcher = new Services.KeyboardHandlers.KeyboardShortcutDispatcher(handlers);
         }

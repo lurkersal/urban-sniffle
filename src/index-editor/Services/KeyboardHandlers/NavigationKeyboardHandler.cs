@@ -14,10 +14,12 @@ namespace IndexEditor.Services.KeyboardHandlers;
 public class NavigationKeyboardHandler : IKeyboardShortcutHandler
 {
     private readonly Window? _window;
+    private readonly IEditorState _editorState;
 
-    public NavigationKeyboardHandler(Window? window = null)
+    public NavigationKeyboardHandler(Window? window, IEditorState editorState)
     {
         _window = window;
+        _editorState = editorState ?? throw new ArgumentNullException(nameof(editorState));
     }
 
     public int Priority => 50; // Lower priority than article/segment operations
@@ -45,10 +47,10 @@ public class NavigationKeyboardHandler : IKeyboardShortcutHandler
         {
             // If the Article Editor has focus, let the editor handle the arrow key (do not change page)
             // UNLESS there's an active segment — then we want to navigate pages even from editor fields
-            var hasActiveSegment = EditorState.ActiveSegment != null 
-                                && EditorState.ActiveSegment.IsActive;
+            var hasActiveSegment = _editorState.ActiveSegment != null 
+                                && _editorState.ActiveSegment.IsActive;
                                 
-            if (EditorState.IsArticleEditorFocused && !hasActiveSegment)
+            if (_editorState.IsArticleEditorFocused && !hasActiveSegment)
             {
                 return; // Let the textbox handle it
             }
@@ -66,8 +68,8 @@ public class NavigationKeyboardHandler : IKeyboardShortcutHandler
             }
 
             // Fallback: Simple decrement with minimum of 1
-            EditorState.CurrentPage = Math.Max(1, EditorState.CurrentPage - 1);
-            EditorState.NotifyStateChanged();
+            _editorState.CurrentPage = Math.Max(1, _editorState.CurrentPage - 1);
+            _editorState.NotifyStateChanged();
             
             e.Handled = true;
         }
@@ -83,10 +85,10 @@ public class NavigationKeyboardHandler : IKeyboardShortcutHandler
         {
             // If the Article Editor has focus, let the editor handle the arrow key (do not change page)
             // UNLESS there's an active segment — then we want to navigate pages even from editor fields
-            var hasActiveSegment = EditorState.ActiveSegment != null 
-                                && EditorState.ActiveSegment.IsActive;
+            var hasActiveSegment = _editorState.ActiveSegment != null 
+                                && _editorState.ActiveSegment.IsActive;
                                 
-            if (EditorState.IsArticleEditorFocused && !hasActiveSegment)
+            if (_editorState.IsArticleEditorFocused && !hasActiveSegment)
             {
                 return; // Let the textbox handle it
             }
@@ -104,8 +106,8 @@ public class NavigationKeyboardHandler : IKeyboardShortcutHandler
             }
 
             // Fallback: Simple increment
-            EditorState.CurrentPage = EditorState.CurrentPage + 1;
-            EditorState.NotifyStateChanged();
+            _editorState.CurrentPage = _editorState.CurrentPage + 1;
+            _editorState.NotifyStateChanged();
             
             e.Handled = true;
         }

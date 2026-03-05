@@ -20,10 +20,12 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
     private readonly Window _window;
     private readonly Action<string>? _loadArticlesFromFolder;
     private readonly OverlayManager? _overlayManager;
+    private readonly IEditorState _editorState;
 
-    public FileKeyboardHandler(Window window, Action<string>? loadArticlesFromFolder = null, OverlayManager? overlayManager = null)
+    public FileKeyboardHandler(Window window, IEditorState editorState, Action<string>? loadArticlesFromFolder = null, OverlayManager? overlayManager = null)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
+        _editorState = editorState ?? throw new ArgumentNullException(nameof(editorState));
         _loadArticlesFromFolder = loadArticlesFromFolder;
         _overlayManager = overlayManager;
     }
@@ -67,7 +69,7 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
     {
         try
         {
-            var active = EditorState.ActiveSegment;
+            var active = _editorState.ActiveSegment;
             if (active != null && active.IsActive)
             {
                 ToastService.Show("End or cancel the active segment before opening a new folder");
@@ -75,7 +77,7 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
                 return;
             }
 
-            var start = EditorState.CurrentFolder;
+            var start = _editorState.CurrentFolder;
             
             // Dispatch an async folder picker
             Dispatcher.UIThread.Post(async () =>
@@ -124,7 +126,7 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
                 {
                     try
                     {
-                        var folder = EditorState.CurrentFolder;
+                        var folder = _editorState.CurrentFolder;
                         if (string.IsNullOrWhiteSpace(folder))
                         {
                             ToastService.Show("No folder open; cannot save index");
@@ -151,7 +153,7 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
             }
 
             // Normal save (overlay not visible)
-            var active = EditorState.ActiveSegment;
+            var active = _editorState.ActiveSegment;
             if (active != null && active.IsActive)
             {
                 ToastService.Show("End or cancel the active segment before saving");
@@ -160,7 +162,7 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
             }
 
             // Save the index file directly
-            var saveFolder = EditorState.CurrentFolder;
+            var saveFolder = _editorState.CurrentFolder;
             if (string.IsNullOrWhiteSpace(saveFolder))
             {
                 ToastService.Show("No folder open; cannot save index");
@@ -192,7 +194,7 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
     {
         try
         {
-            var folder = EditorState.CurrentFolder;
+            var folder = _editorState.CurrentFolder;
             if (string.IsNullOrWhiteSpace(folder))
             {
                 ToastService.Show("No folder open");

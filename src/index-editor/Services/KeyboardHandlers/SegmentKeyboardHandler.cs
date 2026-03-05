@@ -16,10 +16,12 @@ namespace IndexEditor.Services.KeyboardHandlers;
 public class SegmentKeyboardHandler : IKeyboardShortcutHandler
 {
     private readonly Window _window;
+    private readonly IEditorState _editorState;
 
-    public SegmentKeyboardHandler(Window window)
+    public SegmentKeyboardHandler(Window window, IEditorState editorState)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
+        _editorState = editorState ?? throw new ArgumentNullException(nameof(editorState));
     }
 
     public int Priority => 100; // High priority for segment operations
@@ -77,7 +79,7 @@ public class SegmentKeyboardHandler : IKeyboardShortcutHandler
             try
             {
                 // Ctrl+Enter: end active segment if present, otherwise focus Title textbox in ArticleEditor (global)
-                var active = EditorState.ActiveSegment;
+                var active = _editorState.ActiveSegment;
                 if (active != null && active.IsActive)
                 {
                     try { EditorActions.EndActiveSegment(); } 
@@ -105,14 +107,14 @@ public class SegmentKeyboardHandler : IKeyboardShortcutHandler
     private bool HandleEnter(KeyEventArgs e)
     {
         // If an active segment exists, end it here
-        var seg = EditorState.ActiveSegment;
+        var seg = _editorState.ActiveSegment;
         if (seg != null && seg.IsActive)
         {
             try
             {
                 // Capture start and intended end for user feedback
                 var start = seg.Start;
-                var end = EditorState.CurrentPage;
+                var end = _editorState.CurrentPage;
                 if (end < start) (start, end) = (end, start);
 
                 // Use EditorActions to end the active segment and update pages
@@ -136,7 +138,7 @@ public class SegmentKeyboardHandler : IKeyboardShortcutHandler
         // No active segment: focus the first editable field in the article editor (Title textbox)
         try
         {
-            try { EditorState.RequestArticleEditorFocus(); } 
+            try { _editorState.RequestArticleEditorFocus(); } 
             catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: RequestArticleEditorFocus", ex); }
         }
         catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: Enter handler", ex); }
@@ -162,8 +164,8 @@ public class SegmentKeyboardHandler : IKeyboardShortcutHandler
 
         try
         {
-            var editorFocused = EditorState.IsArticleEditorFocused;
-            var hadActive = EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive;
+            var editorFocused = _editorState.IsArticleEditorFocused;
+            var hadActive = _editorState.ActiveSegment != null && _editorState.ActiveSegment.IsActive;
 
             // If the editor has focus, ask it to end any inner editing (close dropdowns etc.)
             if (editorFocused)
@@ -238,7 +240,7 @@ public class SegmentKeyboardHandler : IKeyboardShortcutHandler
                             if (lb.SelectedIndex < 0 && lb.ItemCount > 0) lb.SelectedIndex = 0;
                             
                             // Clear editor-focused flag since focus is about to move
-                            try { EditorState.IsArticleEditorFocused = false; } catch { }
+                            try { _editorState.IsArticleEditorFocused = false; } catch { }
 
                             // Retry loop: try several times to set focus
                             bool focused = false;
@@ -322,7 +324,7 @@ public class SegmentKeyboardHandler : IKeyboardShortcutHandler
             
             EditorActions.CancelActiveSegment();
             
-            try { EditorState.NotifyStateChanged(); } 
+            try { _editorState.NotifyStateChanged(); } 
             catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: NotifyStateChanged", ex); }
             
             try { ToastService.Show("Segment cancelled"); } 
