@@ -14,9 +14,13 @@ namespace IndexEditor.Views
 {
     public partial class PageControllerView : UserControl
     {
+        private IndexEditor.Shared.IEditorState _editorState;
         private IPageControllerBridge? _assignedBridge;
-        private List<int> _availablePages = new List<int>();
-        private string? _lastScannedFolder = null;
+        
+        // Injected services (replacing local implementations)
+        private readonly Services.IPageNavigationService _pageNavigationService;
+        private readonly Services.IImageLoadingService _imageLoadingService;
+        private readonly Services.ILinkManagementService _linkManagementService;
 
         public void SetBridge(IPageControllerBridge bridge)
         {
@@ -24,51 +28,26 @@ namespace IndexEditor.Views
         }
 
         /// <summary>
+        /// Inject EditorState after XAML construction (for dependency injection)
+        /// </summary>
+        public void SetEditorState(IndexEditor.Shared.IEditorState editorState)
+        {
+            _editorState = editorState;
+        }
+
+        /// <summary>
         /// Scans the current folder and builds a list of available page numbers from image files.
-        /// Only includes files with integer names (e.g., "42.jpg", "003.png").
+        /// Delegates to PageNavigationService.
         /// </summary>
         private void ScanAvailablePages()
         {
-            _availablePages.Clear();
-            
-            var folder = EditorState.CurrentFolder;
+            var folder = _editorState.CurrentFolder;
             if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
             {
-                _lastScannedFolder = null;
-                UpdateNavigationButtons();
                 return;
             }
 
-            try
-            {
-                var imageExtensions = new[] { ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp" };
-                var files = Directory.GetFiles(folder)
-                    .Where(f => imageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                    .ToList();
-
-                foreach (var file in files)
-                {
-                    var nameWithoutExt = Path.GetFileNameWithoutExtension(file);
-                    // Try to parse the filename as an integer (handles "42", "003", etc.)
-                    if (int.TryParse(nameWithoutExt, out var pageNum) && pageNum > 0)
-                    {
-                        if (!_availablePages.Contains(pageNum))
-                        {
-                            _availablePages.Add(pageNum);
-                        }
-                    }
-                }
-
-                _availablePages.Sort();
-                _lastScannedFolder = folder;
-                
-                DebugLogger.Log($"PageControllerView: Scanned {folder}, found {_availablePages.Count} pages");
-            }
-            catch (Exception ex)
-            {
-                DebugLogger.LogException("PageControllerView.ScanAvailablePages", ex);
-            }
-
+            _pageNavigationService.ScanAvailablePages(folder);
             UpdateNavigationButtons();
         }
 
@@ -84,30 +63,11 @@ namespace IndexEditor.Views
 
                 if (prevBtn == null || nextBtn == null) return;
 
-                if (_availablePages.Count == 0)
-                {
-                    // No pages available, disable both
-                    prevBtn.IsEnabled = false;
-                    nextBtn.IsEnabled = false;
-                    return;
-                }
-
-                var currentPage = EditorState.CurrentPage;
-                var currentIndex = _availablePages.IndexOf(currentPage);
-
-                if (currentIndex < 0)
-                {
-                    // Current page not in list, enable both to allow navigation
-                    prevBtn.IsEnabled = true;
-                    nextBtn.IsEnabled = true;
-                }
-                else
-                {
-                    // Enable prev if not at first page
-                    prevBtn.IsEnabled = currentIndex > 0;
-                    // Enable next if not at last page
-                    nextBtn.IsEnabled = currentIndex < _availablePages.Count - 1;
-                }
+                var currentPage = _editorState.CurrentPage;
+                var navigationState = _pageNavigationService.GetNavigationState(currentPage);
+                
+                prevBtn.IsEnabled = navigationState.CanGoBack;
+                nextBtn.IsEnabled = navigationState.CanGoForward;
             }
             catch (Exception ex)
             {
@@ -135,8 +95,8 @@ namespace IndexEditor.Views
                 var selectedArticle = vm?.SelectedArticle;
 
                 // Find all articles that contain the current page
-                var currentPage = EditorState.CurrentPage;
-                var articles = EditorState.Articles
+                var currentPage = _editorState.CurrentPage;
+                var articles = _editorState.Articles
                     .Where(a => a.Pages != null && a.Pages.Contains(currentPage))
                     .ToList();
 
@@ -309,14 +269,14 @@ namespace IndexEditor.Views
 
         public int Page
         {
-            get => EditorState.CurrentPage;
+            get => _editorState.CurrentPage;
             set
             {
                 var desired = value;
                 var pageInput = this.FindControl<TextBox>("PageInput");
                 
                 // Ensure we have scanned available pages for the current folder
-                var folder = EditorState.CurrentFolder;
+                var folder = _editorState.CurrentFolder;
                 if (!string.IsNullOrWhiteSpace(folder) && folder != _lastScannedFolder)
                 {
                     ScanAvailablePages();
@@ -325,7 +285,7 @@ namespace IndexEditor.Views
                 // If images are enabled, only allow navigation to pages that exist in our scanned list
                 try
                 {
-                    if (IndexEditor.Shared.EditorState.ShowImages)
+                    if (_editorState.ShowImages)
                     {
                         if (!string.IsNullOrWhiteSpace(folder) && _availablePages.Count > 0)
                         {
@@ -369,7 +329,7 @@ namespace IndexEditor.Views
                                     // Reset the textbox to show the actual current page
                                     if (pageInput != null)
                                     {
-                                        pageInput.Text = EditorState.CurrentPage.ToString();
+                                        pageInput.Text = _editorState.CurrentPage.ToString();
                                     }
                                     return;
                                 }
@@ -379,9 +339,9 @@ namespace IndexEditor.Views
                 }
                 catch (Exception ex) { DebugLogger.LogException("PageControllerView.Page: image lookup", ex); }
 
-                EditorState.CurrentPage = desired;
+                _editorState.CurrentPage = desired;
                 if (pageInput != null)
-                    pageInput.Text = EditorState.CurrentPage.ToString();
+                    pageInput.Text = _editorState.CurrentPage.ToString();
                     
                 // Update button states
                 UpdateNavigationButtons();
@@ -392,17 +352,17 @@ namespace IndexEditor.Views
                 // If an active segment exists, update its preview end so UI displays Start → CurrentPage
                 try
                 {
-                    var seg = EditorState.ActiveSegment;
+                    var seg = _editorState.ActiveSegment;
                     if (seg != null && seg.IsActive)
                     {
-                        seg.CurrentPreviewEnd = EditorState.CurrentPage;
+                        seg.CurrentPreviewEnd = _editorState.CurrentPage;
                     }
                 }
                 catch (Exception ex) { DebugLogger.LogException("PageControllerView.Page: update preview end", ex); }
-                // Do NOT update EditorState.ActiveSegment.End here; changing pages should not close the active segment.
+                // Do NOT update _editorState.ActiveSegment.End here; changing pages should not close the active segment.
                 // Notify UI/state but do NOT auto-select an article when the current page changes.
                 // Selection should only occur when the user explicitly presses the Sync button.
-                EditorState.NotifyStateChanged();
+                _editorState.NotifyStateChanged();
                 // Also load the current page image immediately when Page is set
                 try { LoadCurrentPageImage(); } catch (Exception ex) { DebugLogger.LogException("PageControllerView.Page: LoadCurrentPageImage", ex); }
                 
@@ -411,8 +371,25 @@ namespace IndexEditor.Views
             }
         }
 
-        public PageControllerView()
+        /// <summary>
+        /// Parameterless constructor for XAML instantiation
+        /// </summary>
+        public PageControllerView() : this(null, null, null, null) { }
+
+        /// <summary>
+        /// Constructor with optional dependency injection
+        /// </summary>
+        public PageControllerView(
+            IndexEditor.Shared.IEditorState? editorState,
+            Services.IPageNavigationService? pageNavigationService = null,
+            Services.IImageLoadingService? imageLoadingService = null,
+            Services.ILinkManagementService? linkManagementService = null)
         {
+            _editorState = editorState ?? new IndexEditor.Shared.EditorStateService();
+            _pageNavigationService = pageNavigationService ?? new Services.PageNavigationService();
+            _imageLoadingService = imageLoadingService ?? new Services.ImageLoadingService();
+            _linkManagementService = linkManagementService ?? new Services.LinkManagementService();
+            
             System.Console.WriteLine("[DEBUG] PageControllerView: constructor");
             InitializeComponent();
 
@@ -459,38 +436,12 @@ namespace IndexEditor.Views
                 {
                     try
                     {
-                        // Ensure pages are scanned
-                        var folder = EditorState.CurrentFolder;
-                        if (!string.IsNullOrWhiteSpace(folder) && folder != _lastScannedFolder)
+                        var currentPage = _editorState.CurrentPage;
+                        var prevPage = _pageNavigationService.GetPreviousPage(currentPage);
+                        
+                        if (prevPage.HasValue)
                         {
-                            ScanAvailablePages();
-                        }
-
-                        if (_availablePages.Count == 0)
-                        {
-                            // No available pages, do nothing
-                            return;
-                        }
-
-                        var currentPage = EditorState.CurrentPage;
-                        var currentIndex = _availablePages.IndexOf(currentPage);
-
-                        if (currentIndex > 0)
-                        {
-                            // Go to previous page in the list
-                            Page = _availablePages[currentIndex - 1];
-                        }
-                        else if (currentIndex < 0)
-                        {
-                            // Current page not in list, find closest page before it
-                            var prevPage = _availablePages
-                                .Where(p => p < currentPage)
-                                .OrderByDescending(p => p)
-                                .FirstOrDefault();
-                            if (prevPage > 0)
-                            {
-                                Page = prevPage;
-                            }
+                            Page = prevPage.Value;
                         }
                     }
                     catch (Exception ex) { DebugLogger.LogException("PageControllerView.PrevBtn.Click", ex); }
@@ -500,38 +451,12 @@ namespace IndexEditor.Views
                 {
                     try
                     {
-                        // Ensure pages are scanned
-                        var folder = EditorState.CurrentFolder;
-                        if (!string.IsNullOrWhiteSpace(folder) && folder != _lastScannedFolder)
+                        var currentPage = _editorState.CurrentPage;
+                        var nextPage = _pageNavigationService.GetNextPage(currentPage);
+                        
+                        if (nextPage.HasValue)
                         {
-                            ScanAvailablePages();
-                        }
-
-                        if (_availablePages.Count == 0)
-                        {
-                            // No available pages, do nothing
-                            return;
-                        }
-
-                        var currentPage = EditorState.CurrentPage;
-                        var currentIndex = _availablePages.IndexOf(currentPage);
-
-                        if (currentIndex >= 0 && currentIndex < _availablePages.Count - 1)
-                        {
-                            // Go to next page in the list
-                            Page = _availablePages[currentIndex + 1];
-                        }
-                        else if (currentIndex < 0)
-                        {
-                            // Current page not in list, find closest page after it
-                            var nextPage = _availablePages
-                                .Where(p => p > currentPage)
-                                .OrderBy(p => p)
-                                .FirstOrDefault();
-                            if (nextPage > 0)
-                            {
-                                Page = nextPage;
-                            }
+                            Page = nextPage.Value;
                         }
                     }
                     catch (Exception ex) { DebugLogger.LogException("PageControllerView.NextBtn.Click", ex); }
@@ -540,7 +465,7 @@ namespace IndexEditor.Views
             if (pageInput != null)
             {
                 pageInput.KeyDown += (s, ke) => { if (ke.Key == Avalonia.Input.Key.Enter && int.TryParse(pageInput.Text, out var v) && v > 0) Page = v; };
-                pageInput.Text = EditorState.CurrentPage.ToString();
+                pageInput.Text = _editorState.CurrentPage.ToString();
             }
 
             void UpdateUi()
@@ -550,7 +475,7 @@ namespace IndexEditor.Views
             }
 
             // Subscribe to state changes to refresh UI
-            EditorState.StateChanged += () => Dispatcher.UIThread.Post(() =>
+            _editorState.StateChanged += () => Dispatcher.UIThread.Post(() =>
             {
                 try
                 {
@@ -559,7 +484,7 @@ namespace IndexEditor.Views
                     // they become available for navigation
                     ScanAvailablePages();
                     
-                    if (pageInput != null) pageInput.Text = EditorState.CurrentPage.ToString();
+                    if (pageInput != null) pageInput.Text = _editorState.CurrentPage.ToString();
                     UpdateUi();
                     UpdateNavigationButtons();
                     UpdateCurrentArticleDisplay();
@@ -596,26 +521,26 @@ namespace IndexEditor.Views
         }
 
         // Ends the current active segment (if any) by setting its End to CurrentPage, updating the article pages,
-        // syncing the view-model, clearing ActiveSegment and notifying the EditorState.
+        // syncing the view-model, clearing ActiveSegment and notifying the _editorState.
         public void EndActiveSegment()
         {
             try
             {
                 DebugLogger.Log("EndActiveSegment: invoked");
                 Console.WriteLine("[DEBUG] EndActiveSegment: invoked");
-                if (EditorState.ActiveSegment == null || !EditorState.ActiveSegment.IsActive)
+                if (_editorState.ActiveSegment == null || !_editorState.ActiveSegment.IsActive)
                 {
                     DebugLogger.Log("EndActiveSegment: no active segment to end");
                     return;
                 }
 
-                var start = EditorState.ActiveSegment.Start;
-                var end = EditorState.CurrentPage;
+                var start = _editorState.ActiveSegment.Start;
+                var end = _editorState.CurrentPage;
                 if (end < start) (start, end) = (end, start);
                 DebugLogger.Log($"EndActiveSegment: start={start} end={end}");
                 Console.WriteLine($"[DEBUG] EndActiveSegment: start={start} end={end}");
 
-                var art = EditorState.ActiveArticle;
+                var art = _editorState.ActiveArticle;
                 if (art != null)
                 {
                     var newPages = new List<int>(art.Pages ?? new List<int>());
@@ -644,12 +569,12 @@ namespace IndexEditor.Views
                 }
 
                 // Close and clear the active segment
-                if (EditorState.ActiveSegment != null)
+                if (_editorState.ActiveSegment != null)
                 {
-                    EditorState.ActiveSegment.End = EditorState.CurrentPage;
-                    EditorState.ActiveSegment.CurrentPreviewEnd = null;
-                    DebugLogger.Log($"EndActiveSegment: set ActiveSegment.End={EditorState.CurrentPage}");
-                    Console.WriteLine($"[DEBUG] EndActiveSegment: set ActiveSegment.End={EditorState.CurrentPage}");
+                    _editorState.ActiveSegment.End = _editorState.CurrentPage;
+                    _editorState.ActiveSegment.CurrentPreviewEnd = null;
+                    DebugLogger.Log($"EndActiveSegment: set ActiveSegment.End={_editorState.CurrentPage}");
+                    Console.WriteLine($"[DEBUG] EndActiveSegment: set ActiveSegment.End={_editorState.CurrentPage}");
                 }
                 
                 // Validate segments for missing pages
@@ -657,7 +582,7 @@ namespace IndexEditor.Views
                 {
                     try
                     {
-                        var folder = EditorState.CurrentFolder;
+                        var folder = _editorState.CurrentFolder;
                         if (!string.IsNullOrWhiteSpace(folder))
                         {
                             art.ValidateSegments(folder, (f, p) => IndexEditor.Shared.ImageHelper.ImageExists(f, p));
@@ -666,8 +591,8 @@ namespace IndexEditor.Views
                     catch (Exception ex) { DebugLogger.LogException("EndActiveSegment: validate segments", ex); }
                 }
                 
-                EditorState.ActiveSegment = null;
-                EditorState.NotifyStateChanged();
+                _editorState.ActiveSegment = null;
+                _editorState.NotifyStateChanged();
                 DebugLogger.Log("EndActiveSegment: completed and cleared ActiveSegment");
                 Console.WriteLine("[DEBUG] EndActiveSegment: completed and cleared ActiveSegment");
             }
@@ -684,15 +609,18 @@ namespace IndexEditor.Views
             var pageInput = this.FindControl<TextBox>("PageInput");
             var missing = this.FindControl<TextBlock>("ImageMissingText");
             if (img == null) return;
+            
             img.Source = null;
+            
             // Respect CLI flag to hide images
-            if (!IndexEditor.Shared.EditorState.ShowImages)
+            if (!_editorState.ShowImages)
             {
                 if (missing != null) { missing.Text = "Images disabled (--no-images)"; missing.IsVisible = true; }
                 if (pageInput != null) pageInput.Foreground = Brushes.Gray;
                 return;
             }
-            var folder = EditorState.CurrentFolder;
+            
+            var folder = _editorState.CurrentFolder;
             if (string.IsNullOrWhiteSpace(folder))
             {
                 // No folder: show missing message
@@ -700,91 +628,39 @@ namespace IndexEditor.Views
                 if (pageInput != null) pageInput.Foreground = Brushes.Red;
                 return;
             }
-            var page = EditorState.CurrentPage;
-            var path = IndexEditor.Shared.ImageHelper.FindImagePath(folder, page);
-            if (path != null)
+            
+            var page = _editorState.CurrentPage;
+            var loadResult = _imageLoadingService.LoadPageImage(page);
+            
+            if (loadResult.Success && loadResult.Bitmap != null)
             {
-                try
-                {
-                    var src = new Avalonia.Media.Imaging.Bitmap(path);
-                    img.Source = src;
-
-                    // Set high quality interpolation mode for better image rendering
-                    RenderOptions.SetBitmapInterpolationMode(img, Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality);
-                    
-                    if (missing != null) missing.IsVisible = false;
-                    if (pageInput != null) pageInput.Foreground = Brushes.Black;
-                }
-                catch (Exception ex)
-                {
-                    // Failed to load image (logged)
-                    DebugLogger.LogException("PageControllerView.LoadCurrentPageImage: load failed", ex);
-                    if (missing != null) { missing.Text = $"Failed to load image: {Path.GetFileName(path)}"; missing.IsVisible = true; }
-                    if (pageInput != null) pageInput.Foreground = Brushes.Red;
-                }
+                img.Source = loadResult.Bitmap;
+                
+                // Set high quality interpolation mode for better image rendering
+                RenderOptions.SetBitmapInterpolationMode(img, Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality);
+                
+                if (missing != null) missing.IsVisible = false;
+                if (pageInput != null) pageInput.Foreground = Brushes.Black;
             }
             else
             {
-                // Image not found for this page
-                if (missing != null) { missing.Text = $"Page {page} not found"; missing.IsVisible = true; }
+                // Image not found or failed to load
+                if (missing != null) 
+                { 
+                    missing.Text = loadResult.ErrorMessage ?? $"Page {page} not found"; 
+                    missing.IsVisible = true; 
+                }
                 if (pageInput != null) pageInput.Foreground = Brushes.Red;
             }
         }
 
-
-        // Find nearest existing page scanning in one direction
-        private int? FindNearestExistingPage(string folder, int startPage, int direction)
-        {
-            // direction: -1 backward, +1 forward
-            if (direction == 0) return null;
-            int attempts = 0;
-            int page = startPage;
-            // search up to 2000 pages to avoid infinite loops
-            while (attempts < 2000 && page > 0)
-            {
-                try
-                {
-                    if (IndexEditor.Shared.ImageHelper.FindImagePath(folder, page) != null) return page;
-                }
-                catch (Exception ex) { DebugLogger.LogException("FindNearestExistingPage: lookup", ex); }
-                page += direction;
-                attempts++;
-            }
-            return null;
-        }
-
-        // Find nearest existing page by searching both directions outward from the start page.
-        private int? FindNearestExistingPageBothDirections(string folder, int startPage)
-        {
-            // quick check for exact match
-            try
-            {
-                if (IndexEditor.Shared.ImageHelper.FindImagePath(folder, startPage) != null) return startPage;
-            }
-            catch (Exception ex) { DebugLogger.LogException("FindNearestExistingPageBothDirections: exact check", ex); }
-            int maxRadius = 2000;
-            for (int r = 1; r <= maxRadius; r++)
-            {
-                var forward = startPage + r;
-                if (forward > 0)
-                {
-                    try { if (IndexEditor.Shared.ImageHelper.FindImagePath(folder, forward) != null) return forward; } catch (Exception ex) { DebugLogger.LogException("FindNearestExistingPageBothDirections: forward", ex); }
-                }
-                var backward = startPage - r;
-                if (backward > 0)
-                {
-                    try { if (IndexEditor.Shared.ImageHelper.FindImagePath(folder, backward) != null) return backward; } catch (Exception ex) { DebugLogger.LogException("FindNearestExistingPageBothDirections: backward", ex); }
-                }
-            }
-            return null;
-        }
 
         // Public API: create a new article (mirrors NewArticle button behavior)
         public void CreateNewArticle()
         {
             try
             {
-                if (EditorState.ActiveSegment != null && EditorState.ActiveSegment.IsActive)
+                if (_editorState.ActiveSegment != null && _editorState.ActiveSegment.IsActive)
                 {
                     IndexEditor.Shared.ToastService.Show("End or cancel the active segment before adding a new article");
                     return;
@@ -792,19 +668,19 @@ namespace IndexEditor.Views
 
                 // Create the article and insert into the shared EditorState
                 var article = new Common.Shared.ArticleLine();
-                article.Pages = new List<int> { EditorState.CurrentPage };
-                if (EditorState.Articles == null)
-                    EditorState.Articles = new List<Common.Shared.ArticleLine> { article };
+                article.Pages = new List<int> { _editorState.CurrentPage };
+                if (_editorState.Articles == null)
+                    _editorState.Articles = new List<Common.Shared.ArticleLine> { article };
                 else
                 {
-                    int insertIndex = EditorState.Articles.FindIndex(a => a.Pages != null && a.Pages.Count > 0 && a.Pages.Min() > article.Pages.Min());
+                    int insertIndex = _editorState.Articles.FindIndex(a => a.Pages != null && a.Pages.Count > 0 && a.Pages.Min() > article.Pages.Min());
                     if (insertIndex == -1)
-                        EditorState.Articles.Add(article);
+                        _editorState.Articles.Add(article);
                     else
-                        EditorState.Articles.Insert(insertIndex, article);
+                        _editorState.Articles.Insert(insertIndex, article);
                 }
 
-                EditorState.ActiveArticle = article;
+                _editorState.ActiveArticle = article;
 
                 // Attach a single-page CLOSED segment for the current page and do NOT make it active.
                 // First, guard against duplicate segments for the same page (defensive: CreateNewArticle may be invoked twice).
@@ -819,7 +695,7 @@ namespace IndexEditor.Views
                             {
                                 var start = s.Start;
                                 var end = s.End ?? s.Start;
-                                if (EditorState.CurrentPage >= start && EditorState.CurrentPage <= end)
+                                if (_editorState.CurrentPage >= start && _editorState.CurrentPage <= end)
                                 {
                                     alreadyHas = true;
                                     break;
@@ -832,23 +708,23 @@ namespace IndexEditor.Views
                 catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: outer segment check", ex); }
                 if (!alreadyHas)
                 {
-                    var seg = new Common.Shared.Segment(EditorState.CurrentPage);
+                    var seg = new Common.Shared.Segment(_editorState.CurrentPage);
                     // Close immediately (single-page) and mark as not-new so it behaves like an existing segment
-                    seg.End = EditorState.CurrentPage;
+                    seg.End = _editorState.CurrentPage;
                     seg.WasNew = false;
                     if (article.Segments == null) article.Segments = new System.Collections.ObjectModel.ObservableCollection<Common.Shared.Segment>();
                     article.Segments.Add(seg);
-                    DebugLogger.Log($"PageController.CreateNewArticle: Added closed segment for page {EditorState.CurrentPage}");
+                    DebugLogger.Log($"PageController.CreateNewArticle: Added closed segment for page {_editorState.CurrentPage}");
                 }
                 else
                 {
-                    DebugLogger.Log($"PageController.CreateNewArticle: Skipped adding duplicate segment for page {EditorState.CurrentPage}");
+                    DebugLogger.Log($"PageController.CreateNewArticle: Skipped adding duplicate segment for page {_editorState.CurrentPage}");
                 }
 
                 // Ensure the article pages include the page (article.Pages was already initialized to this page),
                 // then notify so view-models and UI update.
-                EditorState.NotifyStateChanged();
-                try { IndexEditor.Shared.EditorState.RequestArticleEditorFocus(); DebugLogger.Log("PageController.CreateNewArticle: requested ArticleEditor focus"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: RequestArticleEditorFocus", ex); }
+                _editorState.NotifyStateChanged();
+                try { _editorState.RequestArticleEditorFocus(); DebugLogger.Log("PageController.CreateNewArticle: requested ArticleEditor focus"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: RequestArticleEditorFocus", ex); }
 
                 // Notify user of success
                 try { IndexEditor.Shared.ToastService.Show("New article created"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: toast", ex); }
@@ -901,7 +777,7 @@ namespace IndexEditor.Views
                                             await System.Threading.Tasks.Task.Delay(120).ConfigureAwait(false);
                                             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                                             {
-                                                try { IndexEditor.Shared.EditorState.NotifyStateChanged(); System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: re-notified EditorState after selection"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: re-notify", ex); }
+                                                try { _editorState.NotifyStateChanged(); System.Console.WriteLine("[DEBUG] PageController.CreateNewArticle: re-notified EditorState after selection"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: re-notify", ex); }
                                             });
                                         }
                                         catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: re-notify background", ex); }
@@ -911,7 +787,7 @@ namespace IndexEditor.Views
                                 catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: re-notify scheduling", ex); }
 
                                 // Also request ArticleEditor focus explicitly so any ArticleEditor instance can react
-                                try { IndexEditor.Shared.EditorState.RequestArticleEditorFocus(); Console.WriteLine("[DEBUG] PageController.CreateNewArticle: RequestArticleEditorFocus called after scheduling"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: RequestArticleEditorFocus after schedule", ex); }
+                                try { _editorState.RequestArticleEditorFocus(); Console.WriteLine("[DEBUG] PageController.CreateNewArticle: RequestArticleEditorFocus called after scheduling"); } catch (Exception ex) { DebugLogger.LogException("CreateNewArticle: RequestArticleEditorFocus after schedule", ex); }
 
                                 // Forceful focus: directly find the ArticleEditor control on the window and repeatedly call its focus helpers
                                 try
@@ -1085,8 +961,8 @@ namespace IndexEditor.Views
         {
             try
             {
-                var folder = EditorState.CurrentFolder;
-                if (!string.IsNullOrWhiteSpace(folder) && IndexEditor.Shared.EditorState.ShowImages)
+                var folder = _editorState.CurrentFolder;
+                if (!string.IsNullOrWhiteSpace(folder) && _editorState.ShowImages)
                 {
                     // Ensure pages are scanned
                     if (folder != _lastScannedFolder)
@@ -1096,7 +972,7 @@ namespace IndexEditor.Views
 
                     if (_availablePages.Count > 0)
                     {
-                        var currentPage = EditorState.CurrentPage;
+                        var currentPage = _editorState.CurrentPage;
                         var currentIndex = _availablePages.IndexOf(currentPage);
 
                         if (currentIndex > 0)
@@ -1121,7 +997,7 @@ namespace IndexEditor.Views
                 else
                 {
                     // No folder or images disabled: just decrement
-                    Page = Math.Max(1, EditorState.CurrentPage - 1);
+                    Page = Math.Max(1, _editorState.CurrentPage - 1);
                 }
             }
             catch (Exception ex) { DebugLogger.LogException("MoveLeft", ex); }
@@ -1131,8 +1007,8 @@ namespace IndexEditor.Views
         {
             try
             {
-                var folder = EditorState.CurrentFolder;
-                if (!string.IsNullOrWhiteSpace(folder) && IndexEditor.Shared.EditorState.ShowImages)
+                var folder = _editorState.CurrentFolder;
+                if (!string.IsNullOrWhiteSpace(folder) && _editorState.ShowImages)
                 {
                     // Ensure pages are scanned
                     if (folder != _lastScannedFolder)
@@ -1142,7 +1018,7 @@ namespace IndexEditor.Views
 
                     if (_availablePages.Count > 0)
                     {
-                        var currentPage = EditorState.CurrentPage;
+                        var currentPage = _editorState.CurrentPage;
                         var currentIndex = _availablePages.IndexOf(currentPage);
 
                         if (currentIndex >= 0 && currentIndex < _availablePages.Count - 1)
@@ -1167,7 +1043,7 @@ namespace IndexEditor.Views
                 else
                 {
                     // No folder or images disabled: just increment
-                    Page = IndexEditor.Shared.EditorState.CurrentPage + 1;
+                    Page = _editorState.CurrentPage + 1;
                 }
             }
             catch (Exception ex) { DebugLogger.LogException("MoveRight", ex); }
@@ -1203,8 +1079,8 @@ namespace IndexEditor.Views
                 
                 if (showMethod != null)
                 {
-                    showMethod.Invoke(mainWindow, new object[] { img.Source, EditorState.CurrentPage });
-                    DebugLogger.Log($"PageControllerView.OnImageDoubleTapped: Invoked ShowFullscreenImage for page {EditorState.CurrentPage}");
+                    showMethod.Invoke(mainWindow, new object[] { img.Source, _editorState.CurrentPage });
+                    DebugLogger.Log($"PageControllerView.OnImageDoubleTapped: Invoked ShowFullscreenImage for page {_editorState.CurrentPage}");
                 }
                 else
                 {
@@ -1243,7 +1119,7 @@ namespace IndexEditor.Views
                 
                 if (linkIndicator == null) return;
 
-                var currentPage = EditorState.CurrentPage;
+                var currentPage = _editorState.CurrentPage;
                 if (_pageLinks.TryGetValue(currentPage, out var links) && links.Count > 0)
                 {
                     linkIndicator.IsVisible = true;

@@ -20,6 +20,19 @@ public partial class MainWindow : Window
     
     public string? FolderToOpen { get; }
 
+    // Service fields
+    private IndexEditor.Shared.IKeyboardShortcutService? _shortcutService;
+    private Services.KeyboardHandlers.KeyboardShortcutDispatcher? _keyboardDispatcher;
+    private Services.FullscreenImageService? _fullscreenService;
+    private Services.OverlayManager? _overlayManager;
+    private Services.LinkDiscoveryService? _linkDiscoveryService;
+    private Dictionary<int, List<Common.Shared.MagazineLink>> _discoveredLinks = new();
+    private readonly Services.IIndexFileService? _indexFileService;
+    private Services.IDialogService? _dialogService;
+    private readonly IndexEditor.Shared.IEditorState? _editorState;
+    private readonly IndexEditor.Shared.IEditorActions? _editorActions;
+    private Services.IFileOperationsService? _fileOperationsService;
+
     private Views.MainWindowViewModel? _mainViewModel;
     public Views.MainWindowViewModel? MainViewModel
     {
@@ -45,17 +58,6 @@ public partial class MainWindow : Window
     }
 
     public MainWindow() : this(null) { }
-
-    private IndexEditor.Shared.IKeyboardShortcutService? _shortcutService;
-    private Services.KeyboardHandlers.KeyboardShortcutDispatcher? _keyboardDispatcher;
-    private Services.FullscreenImageService? _fullscreenService;
-    private Services.OverlayManager? _overlayManager;
-    private Services.LinkDiscoveryService? _linkDiscoveryService;
-    private Dictionary<int, List<Common.Shared.MagazineLink>> _discoveredLinks = new();
-    private readonly Services.IIndexFileService? _indexFileService;
-    private Services.IDialogService? _dialogService;
-    private readonly IndexEditor.Shared.IEditorState? _editorState;
-    private readonly IndexEditor.Shared.IEditorActions? _editorActions;
 
     /// <summary>
     /// Set the dialog service (called from App.axaml.cs after MainWindow is created)
@@ -89,6 +91,12 @@ public partial class MainWindow : Window
         _editorState = editorState;
         _editorActions = editorActions;
 
+        // Initialize FileOperationsService if we have an IIndexFileService
+        if (_indexFileService != null)
+        {
+            _fileOperationsService = new Services.FileOperationsService(_indexFileService, _editorState);
+        }
+
         InitializeComponent();
         
         // Initialize services
@@ -110,12 +118,29 @@ public partial class MainWindow : Window
             var pcControl = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
             if (pcControl != null)
             {
+                // Inject EditorState if available
+                if (_editorState != null)
+                {
+                    pcControl.SetEditorState(_editorState);
+                }
+                
                 // Create bridge implementation and assign to VM (SetBridge call is unnecessary)
                 var bridge = new PageControllerBridge(pcControl);
                 try { if (this.DataContext is Views.MainWindowViewModel mwvm) mwvm.PageControllerBridge = bridge; } catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: assign bridge to VM", ex); }
             }
         }
         catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire PageControllerBridge", ex); }
+
+        // Inject EditorState into ArticleList
+        try
+        {
+            var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
+            if (articleList != null && _editorState != null)
+            {
+                articleList.SetEditorState(_editorState);
+            }
+        }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: inject ArticleList EditorState", ex); }
 
         // Initialize keyboard shortcut dispatcher with handlers
         try
@@ -674,7 +699,13 @@ public partial class MainWindow : Window
 
     private bool ImageExistsInFolder(string folder, int pageNumber)
     {
-        // Use ImageHelper.ImageExists to check all possible filename patterns
+        // Use FileOperationsService if available
+        if (_fileOperationsService != null)
+        {
+            return _fileOperationsService.ImageExists(folder, pageNumber);
+        }
+
+        // Fallback: Use ImageHelper.ImageExists to check all possible filename patterns
         return IndexEditor.Shared.ImageHelper.ImageExists(folder, pageNumber);
     }
 
@@ -904,9 +935,85 @@ public partial class MainWindow : Window
         try
         {
             if (string.IsNullOrWhiteSpace(folder)) return;
-            
+
+            // Use FileOperationsService if available
+            if (_fileOperationsService != null)
+            {
+                try
+                {
+                    // Clear discovered links from previous folder
+                    _discoveredLinks.Clear();
+
+                    // Load folder using service
+                    _discoveredLinks = _fileOperationsService.LoadFolder(folder);
+
+                    // Update VM collection if present
+                    try
+                    {
+                        var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+                        if (vm != null)
+                        {
+                            vm.Articles.Clear();
+                            foreach (var a in IndexEditor.Shared.EditorState.Articles) vm.Articles.Add(a);
+                            // If nothing is selected yet, select the first article so the editor shows content
+                            if (vm.SelectedArticle == null && vm.Articles.Count > 0)
+                            {
+                                try { vm.SelectedArticle = vm.Articles[0]; } catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: set SelectedArticle", ex); }
+                            }
+                        }
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: update VM", ex); }
+
+                    // Update PageControllerView with loaded links
+                    try
+                    {
+                        var pcView = this.FindControl<Views.PageControllerView>("PageControllerControl");
+                        pcView?.UpdateDiscoveredLinks(_discoveredLinks);
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: update PageController with loaded links", ex); }
+
+                    // Check if links exist - if so, show button instead of auto-starting discovery
+                    try
+                    {
+                        if (_discoveredLinks.Count > 0)
+                        {
+                            // Links already exist, show button to optionally re-scan
+                            var startBtn = this.FindControl<Button>("StartLinkDiscoveryBtn");
+                            var statusText = this.FindControl<TextBlock>("StatusText");
+
+                            if (startBtn != null)
+                            {
+                                startBtn.IsVisible = true;
+                                startBtn.Content = "Re-scan for Links";
+                            }
+
+                            if (statusText != null)
+                            {
+                                var linkCount = _discoveredLinks.Values.Sum(l => l.Count);
+                                statusText.Text = $"Loaded {linkCount} link(s) from index file";
+                            }
+                        }
+                        else
+                        {
+                            // No links exist, auto-start discovery
+                            var magazineName = IndexEditor.Shared.EditorState.CurrentMagazine ?? "Unknown";
+                            _linkDiscoveryService?.StartDiscovery(folder, magazineName);
+                        }
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: link discovery logic", ex); }
+
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    DebugLogger.LogException("LoadArticlesFromFolder: FileOperationsService.LoadFolder failed", ex);
+                    // Fall through to legacy implementation
+                }
+            }
+
+            // LEGACY FALLBACK: Use old implementation if FileOperationsService is not available
             DebugLogger.Log($"LoadArticlesFromFolder: Input folder: '{folder}'");
-            
+
             // Normalize to absolute path to avoid issues with relative paths like './'
             try
             {
@@ -914,9 +1021,9 @@ public partial class MainWindow : Window
                 folder = System.IO.Path.GetFullPath(folder);
                 DebugLogger.Log($"LoadArticlesFromFolder: Normalized '{originalFolder}' to '{folder}'");
             }
-            catch (Exception ex) 
-            { 
-                DebugLogger.LogException("LoadArticlesFromFolder: GetFullPath", ex); 
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("LoadArticlesFromFolder: GetFullPath", ex);
             }
 
             // Clear discovered links from previous folder
@@ -954,19 +1061,19 @@ public partial class MainWindow : Window
                     {
                         _discoveredLinks[link.Page] = new List<Common.Shared.MagazineLink>();
                     }
-                    
+
                     // Check if this exact link already exists for this page (deduplicate)
-                    bool isDuplicate = _discoveredLinks[link.Page].Any(l => 
-                        l.Magazine == link.Magazine && 
-                        l.Volume == link.Volume && 
+                    bool isDuplicate = _discoveredLinks[link.Page].Any(l =>
+                        l.Magazine == link.Magazine &&
+                        l.Volume == link.Volume &&
                         l.Issue == link.Issue);
-                    
+
                     if (!isDuplicate)
                     {
                         _discoveredLinks[link.Page].Add(link);
                     }
                 }
-                
+
                 var totalLinks = _discoveredLinks.Values.Sum(list => list.Count);
                 DebugLogger.Log($"Loaded {totalLinks} unique links from JSON (deduplicated from {loadedLinks.Count})");
             }
@@ -1028,13 +1135,13 @@ public partial class MainWindow : Window
             catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: choose first image", ex); IndexEditor.Shared.EditorState.CurrentPage = 1; }
 
             IndexEditor.Shared.EditorState.NotifyStateChanged();
-            
+
             // Clear unsaved changes flag since we just loaded from disk
             IndexEditor.Shared.EditorState.HasUnsavedChanges = false;
-            
+
             // Persist the folder as the most-recently opened so future runs can default to it
             try { IndexEditor.Shared.RecentFolderStore.SetLastOpenedFolder(folder); } catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: persist recent folder", ex); }
-            
+
             // Update PageControllerView with loaded links
             try
             {
@@ -1042,7 +1149,7 @@ public partial class MainWindow : Window
                 pcView?.UpdateDiscoveredLinks(_discoveredLinks);
             }
             catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: update PageController with loaded links", ex); }
-            
+
             // Check if links exist - if so, show button instead of auto-starting discovery
             try
             {
@@ -1051,13 +1158,13 @@ public partial class MainWindow : Window
                     // Links already exist, show button to optionally re-scan
                     var startBtn = this.FindControl<Button>("StartLinkDiscoveryBtn");
                     var statusText = this.FindControl<TextBlock>("StatusText");
-                    
+
                     if (startBtn != null)
                     {
                         startBtn.IsVisible = true;
                         startBtn.Content = "Re-scan for Links";
                     }
-                    
+
                     if (statusText != null)
                     {
                         var linkCount = _discoveredLinks.Values.Sum(l => l.Count);

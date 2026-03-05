@@ -1,7 +1,38 @@
 # Index Editor Refactoring Progress Report
 **Date:** March 5, 2026  
-**Session:** Evening Extended Refactoring  
-**Status:** 🎉 MAJOR MILESTONE ACHIEVED - Zero Build Warnings!
+**Session:** Evening Extended Refactoring (Continued after Rider restart - Part 2)
+**Status:** 🚀 MAJOR PROGRESS - Service Extraction Complete!
+
+---
+
+## 🎯 Latest Update (13:45 - Service Extraction Phase)
+
+### New Services Created (Extracted from PageControllerView)
+**Status:** ✅ 3 new services created and registered in DI
+
+1. **PageNavigationService** (`Services/PageNavigationService.cs`)
+   - Extracted page scanning logic from PageControllerView
+   - Manages available pages list
+   - Provides previous/next page navigation
+   - Finds nearest existing pages
+   - **Lines:** ~225 
+   - **Status:** ✅ Compiled and registered in DI
+
+2. **ImageLoadingService** (`Services/ImageLoadingService.cs`)
+   - Extracted image loading from PageControllerView
+   - Handles bitmap creation
+   - Manages image file lookups with various naming patterns
+   - **Lines:** ~107
+   - **Status:** ✅ Compiled and registered in DI
+
+3. **LinkManagementService** (`Services/LinkManagementService.cs`)
+   - Extracted link management from PageControllerView
+   - Manages magazine cross-references
+   - Provides link lookup by page
+   - **Lines:** ~113
+   - **Status:** ✅ Compiled and registered in DI
+
+**Total Lines Extracted:** ~445 lines ready to be removed from PageControllerView
 
 ---
 
@@ -38,7 +69,28 @@ All keyboard handlers now use dependency-injected `IEditorState` instead of stat
 - Explicit dependencies (constructor injection)
 - Reduced coupling (no static singletons)
 
-### 2. Documentation Created
+### 2. PageControllerView Migration (COMPLETE)
+**Status:** ✅ Migrated to dependency injection
+
+**Changes Made:**
+- Added `IEditorState` parameter to constructor
+- Added explicit parameterless constructor for XAML
+- Added `SetEditorState()` injection method for post-construction DI
+- Replaced all static `EditorState.Instance` references with instance field `_editorState`
+- Updated MainWindow to inject EditorState after XAML instantiation
+- Fixed namespace issues (IEditorState is in IndexEditor.Shared, not Services)
+
+**Lines Modified:** ~50  
+**Static References Removed:** 18  
+**Build Status:** ✅ Builds successfully with 0 warnings
+
+**Benefits:**
+- PageControllerView is now fully testable
+- No static dependencies remaining
+- Proper separation of concerns
+- Compatible with XAML instantiation
+
+### 3. Documentation Created
 - ✅ KEYBOARD_HANDLER_MIGRATION_PATTERN.md
 - ✅ ARTICLEKEYBOARDHANDLER_MIGRATION_COMPLETE.md
 - ✅ KEYBOARD_HANDLERS_MIGRATION_COMPLETE.md
@@ -52,9 +104,15 @@ All keyboard handlers now use dependency-injected `IEditorState` instead of stat
 
 #### Static State Anti-Pattern
 - **Before:** 10% complete (IEditorState interface only)
-- **After:** 50% complete (+40%)
+- **After:** 55% complete (+45%)
 - **Target:** 100% (eliminate all static state)
-- **Remaining Work:** ~26 files with static dependencies
+- **Remaining Work:** ~25 files with static dependencies
+
+**Completed:**
+- ✅ Created IEditorState interface
+- ✅ Migrated all 4 keyboard handlers
+- ✅ Migrated PageControllerView (18 static refs removed)
+- ✅ Established migration pattern
 
 #### God Object (MainWindow)
 - **Size:** 1,308 lines
@@ -93,11 +151,12 @@ All keyboard handlers now use dependency-injected `IEditorState` instead of stat
 ---
 
 ### Issue 2: Static State Anti-Pattern
-**Status:** 🔄 In Progress (50% complete)
+**Status:** 🔄 In Progress (55% complete)
 
 **Completed:**
 - ✅ Created IEditorState interface
 - ✅ Migrated all 4 keyboard handlers
+- ✅ Migrated PageControllerView
 - ✅ Established migration pattern
 - ✅ Created comprehensive documentation
 
@@ -107,7 +166,7 @@ All keyboard handlers now use dependency-injected `IEditorState` instead of stat
 - ⏳ Remove static EditorState wrapper
 - ⏳ Complete DI throughout application
 
-**Estimated Time:** 12-16 hours
+**Estimated Time:** 10-14 hours
 
 ---
 

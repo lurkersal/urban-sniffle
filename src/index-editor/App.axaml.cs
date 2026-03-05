@@ -51,6 +51,11 @@ public partial class App : Application
         // File services (new - eliminates duplication)
         services.AddSingleton<Services.IIndexFileService, Services.IndexFileService>();
         
+        // Page and image services (extracted from PageControllerView)
+        services.AddSingleton<Services.IPageNavigationService, Services.PageNavigationService>();
+        services.AddSingleton<Services.IImageLoadingService, Services.ImageLoadingService>();
+        services.AddSingleton<Services.ILinkManagementService, Services.LinkManagementService>();
+        
         // Register ViewModels and other services
         services.AddSingleton<Views.EditorStateViewModel>();
         services.AddSingleton<Views.MainWindowViewModel>();
