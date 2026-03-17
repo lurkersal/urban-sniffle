@@ -26,7 +26,7 @@ public partial class MainWindow : Window
     private Services.FullscreenImageService? _fullscreenService;
     private Services.OverlayManager? _overlayManager;
     private Services.LinkDiscoveryService? _linkDiscoveryService;
-    private Dictionary<int, List<Common.Shared.MagazineLink>> _discoveredLinks = new();
+    private Services.LinkDiscoveryUIService? _linkDiscoveryUIService;
     private readonly Services.IIndexFileService? _indexFileService;
     private Services.IDialogService? _dialogService;
     private readonly IndexEditor.Shared.IEditorState? _editorState;
@@ -72,7 +72,8 @@ public partial class MainWindow : Window
     /// </summary>
     public List<Common.Shared.MagazineLink> GetDiscoveredLinks()
     {
-        return _discoveredLinks.Values.SelectMany(l => l).ToList();
+        return _linkDiscoveryUIService?.DiscoveredLinks.Values.SelectMany(l => l).ToList() 
+            ?? new List<Common.Shared.MagazineLink>();
     }
 
     public MainWindow(string? folderToOpen = null) : this(folderToOpen, null, null, null) { }
@@ -105,11 +106,12 @@ public partial class MainWindow : Window
             _fullscreenService = new Services.FullscreenImageService(this);
             _overlayManager = new Services.OverlayManager(this);
             _linkDiscoveryService = new Services.LinkDiscoveryService();
+            _linkDiscoveryUIService = new Services.LinkDiscoveryUIService(this, _editorState ?? new IndexEditor.Shared.EditorStateService());
             
             // Wire up link discovery events
-            _linkDiscoveryService.ProgressChanged += OnLinkDiscoveryProgress;
-            _linkDiscoveryService.LinkDiscovered += OnLinkDiscovered;
-            _linkDiscoveryService.DiscoveryCompleted += OnLinkDiscoveryCompleted;
+            _linkDiscoveryService.ProgressChanged += _linkDiscoveryUIService.OnLinkDiscoveryProgress;
+            _linkDiscoveryService.LinkDiscovered += _linkDiscoveryUIService.OnLinkDiscovered;
+            _linkDiscoveryService.DiscoveryCompleted += _linkDiscoveryUIService.OnLinkDiscoveryCompleted;
         }
         catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: init services", ex); }
         // After InitializeComponent, wire view-specific bridges
@@ -460,9 +462,9 @@ public partial class MainWindow : Window
                             startBtn.IsVisible = false;
                             
                             // Clear existing links when user manually starts/re-scans
-                            _discoveredLinks.Clear();
+                            _linkDiscoveryUIService?.ClearDiscoveredLinks();
                             var pcView = this.FindControl<Views.PageControllerView>("PageControllerControl");
-                            pcView?.UpdateDiscoveredLinks(_discoveredLinks);
+                            pcView?.UpdateDiscoveredLinks(_linkDiscoveryUIService?.DiscoveredLinks ?? new Dictionary<int, List<Common.Shared.MagazineLink>>());
                             
                             _linkDiscoveryService?.StartDiscovery(folder, magazineName);
                         }
@@ -942,10 +944,13 @@ public partial class MainWindow : Window
                 try
                 {
                     // Clear discovered links from previous folder
-                    _discoveredLinks.Clear();
+                    _linkDiscoveryUIService?.ClearDiscoveredLinks();
 
                     // Load folder using service
-                    _discoveredLinks = _fileOperationsService.LoadFolder(folder);
+                    var discoveredLinks = _fileOperationsService.LoadFolder(folder);
+                    
+                    // Load discovered links into UI service
+                    _linkDiscoveryUIService?.LoadLinksFromIndex(discoveredLinks.Values.SelectMany(l => l).ToList());
 
                     // Update VM collection if present
                     try
@@ -968,30 +973,16 @@ public partial class MainWindow : Window
                     try
                     {
                         var pcView = this.FindControl<Views.PageControllerView>("PageControllerControl");
-                        pcView?.UpdateDiscoveredLinks(_discoveredLinks);
+                        pcView?.UpdateDiscoveredLinks(_linkDiscoveryUIService?.DiscoveredLinks ?? new Dictionary<int, List<Common.Shared.MagazineLink>>());
                     }
                     catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: update PageController with loaded links", ex); }
 
                     // Check if links exist - if so, show button instead of auto-starting discovery
                     try
                     {
-                        if (_discoveredLinks.Count > 0)
+                        if ((_linkDiscoveryUIService?.DiscoveredLinks.Count ?? 0) > 0)
                         {
-                            // Links already exist, show button to optionally re-scan
-                            var startBtn = this.FindControl<Button>("StartLinkDiscoveryBtn");
-                            var statusText = this.FindControl<TextBlock>("StatusText");
-
-                            if (startBtn != null)
-                            {
-                                startBtn.IsVisible = true;
-                                startBtn.Content = "Re-scan for Links";
-                            }
-
-                            if (statusText != null)
-                            {
-                                var linkCount = _discoveredLinks.Values.Sum(l => l.Count);
-                                statusText.Text = $"Loaded {linkCount} link(s) from index file";
-                            }
+                            _linkDiscoveryUIService?.ShowLinksLoadedFromIndex();
                         }
                         else
                         {
@@ -1027,7 +1018,7 @@ public partial class MainWindow : Window
             }
 
             // Clear discovered links from previous folder
-            _discoveredLinks.Clear();
+            _linkDiscoveryUIService?.ClearDiscoveredLinks();
 
             // Use IIndexFileService to load index data
             string fileMag, fileVol, fileNum, fileYear;
@@ -1052,31 +1043,8 @@ public partial class MainWindow : Window
                 return;
             }
 
-            // Process loaded links into UI-friendly dictionary
-            if (loadedLinks != null && loadedLinks.Count > 0)
-            {
-                foreach (var link in loadedLinks)
-                {
-                    if (!_discoveredLinks.ContainsKey(link.Page))
-                    {
-                        _discoveredLinks[link.Page] = new List<Common.Shared.MagazineLink>();
-                    }
-
-                    // Check if this exact link already exists for this page (deduplicate)
-                    bool isDuplicate = _discoveredLinks[link.Page].Any(l =>
-                        l.Magazine == link.Magazine &&
-                        l.Volume == link.Volume &&
-                        l.Issue == link.Issue);
-
-                    if (!isDuplicate)
-                    {
-                        _discoveredLinks[link.Page].Add(link);
-                    }
-                }
-
-                var totalLinks = _discoveredLinks.Values.Sum(list => list.Count);
-                DebugLogger.Log($"Loaded {totalLinks} unique links from JSON (deduplicated from {loadedLinks.Count})");
-            }
+            // Process loaded links into UI service
+            _linkDiscoveryUIService?.LoadLinksFromIndex(loadedLinks);
 
             // Set EditorState metadata and articles
             IndexEditor.Shared.EditorState.CurrentMagazine = fileMag ?? string.Empty;
@@ -1146,30 +1114,16 @@ public partial class MainWindow : Window
             try
             {
                 var pcView = this.FindControl<Views.PageControllerView>("PageControllerControl");
-                pcView?.UpdateDiscoveredLinks(_discoveredLinks);
+                pcView?.UpdateDiscoveredLinks(_linkDiscoveryUIService?.DiscoveredLinks ?? new Dictionary<int, List<Common.Shared.MagazineLink>>());
             }
             catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: update PageController with loaded links", ex); }
 
             // Check if links exist - if so, show button instead of auto-starting discovery
             try
             {
-                if (_discoveredLinks.Count > 0)
+                if ((_linkDiscoveryUIService?.DiscoveredLinks.Count ?? 0) > 0)
                 {
-                    // Links already exist, show button to optionally re-scan
-                    var startBtn = this.FindControl<Button>("StartLinkDiscoveryBtn");
-                    var statusText = this.FindControl<TextBlock>("StatusText");
-
-                    if (startBtn != null)
-                    {
-                        startBtn.IsVisible = true;
-                        startBtn.Content = "Re-scan for Links";
-                    }
-
-                    if (statusText != null)
-                    {
-                        var linkCount = _discoveredLinks.Values.Sum(l => l.Count);
-                        statusText.Text = $"Loaded {linkCount} link(s) from index file";
-                    }
+                    _linkDiscoveryUIService?.ShowLinksLoadedFromIndex();
                 }
                 else
                 {
@@ -1185,125 +1139,6 @@ public partial class MainWindow : Window
             DebugLogger.LogException("LoadArticlesFromFolder failed", ex);
             Console.WriteLine("[ERROR] LoadArticlesFromFolder failed: " + ex);
         }
-    }
-
-    private void OnLinkDiscoveryProgress(object? sender, Services.LinkDiscoveryProgressEventArgs e)
-    {
-        try
-        {
-            Dispatcher.UIThread.Post(() =>
-            {
-                try
-                {
-                    var progress = this.FindControl<ProgressBar>("LinkDiscoveryProgress");
-                    var status = this.FindControl<TextBlock>("LinkDiscoveryStatus");
-                    var statusText = this.FindControl<TextBlock>("StatusText");
-                    
-                    if (progress != null && status != null)
-                    {
-                        progress.IsVisible = true;
-                        status.IsVisible = true;
-                        progress.Value = e.PercentComplete;
-                        status.Text = $"Scanning for links: {e.ProcessedPages}/{e.TotalPages} pages";
-                    }
-                    
-                    if (statusText != null)
-                    {
-                        statusText.Text = $"Discovering links... {e.PercentComplete}%";
-                    }
-                }
-                catch (Exception ex) { DebugLogger.LogException("OnLinkDiscoveryProgress UI update", ex); }
-            });
-        }
-        catch (Exception ex) { DebugLogger.LogException("OnLinkDiscoveryProgress", ex); }
-    }
-
-    private void OnLinkDiscovered(object? sender, Services.LinkDiscoveredEventArgs e)
-    {
-        try
-        {
-            // Add to discovered links dictionary
-            if (!_discoveredLinks.ContainsKey(e.Page))
-            {
-                _discoveredLinks[e.Page] = new List<Common.Shared.MagazineLink>();
-            }
-            
-            // Check if this exact link already exists for this page (deduplicate)
-            bool isDuplicate = _discoveredLinks[e.Page].Any(l => 
-                l.Magazine == e.Magazine && 
-                l.Volume == e.Volume && 
-                l.Issue == e.Issue);
-            
-            if (!isDuplicate)
-            {
-                _discoveredLinks[e.Page].Add(new Common.Shared.MagazineLink
-                {
-                    Page = e.Page,
-                    Magazine = e.Magazine,
-                    Volume = e.Volume,
-                    Issue = e.Issue
-                });
-                
-                DebugLogger.Log($"Link discovered on page {e.Page}: {e.Magazine} Vol.{e.Volume} No.{e.Issue}");
-                
-                // Update PageControllerView with current links
-                Dispatcher.UIThread.Post(() =>
-                {
-                    try
-                    {
-                        var pcView = this.FindControl<Views.PageControllerView>("PageControllerControl");
-                        pcView?.UpdateDiscoveredLinks(_discoveredLinks);
-                    }
-                    catch (Exception ex) { DebugLogger.LogException("OnLinkDiscovered: update PageController", ex); }
-                });
-            }
-            else
-            {
-                DebugLogger.Log($"Duplicate link skipped on page {e.Page}: {e.Magazine} Vol.{e.Volume} No.{e.Issue}");
-            }
-        }
-        catch (Exception ex) { DebugLogger.LogException("OnLinkDiscovered", ex); }
-    }
-
-    private void OnLinkDiscoveryCompleted(object? sender, EventArgs e)
-    {
-        try
-        {
-            Dispatcher.UIThread.Post(() =>
-            {
-                try
-                {
-                    var progress = this.FindControl<ProgressBar>("LinkDiscoveryProgress");
-                    var status = this.FindControl<TextBlock>("LinkDiscoveryStatus");
-                    var statusText = this.FindControl<TextBlock>("StatusText");
-                    
-                    if (progress != null && status != null)
-                    {
-                        progress.IsVisible = false;
-                        status.IsVisible = false;
-                    }
-                    
-                    if (statusText != null)
-                    {
-                        var linkCount = _discoveredLinks.Values.Sum(list => list.Count);
-                        statusText.Text = linkCount > 0 
-                            ? $"Found {linkCount} link(s) on {_discoveredLinks.Count} page(s)" 
-                            : "Ready";
-                        
-                        // Mark index as modified if links were discovered
-                        if (linkCount > 0)
-                        {
-                            IndexEditor.Shared.EditorState.HasUnsavedChanges = true;
-                            DebugLogger.Log($"Index file marked as modified due to {linkCount} discovered link(s)");
-                        }
-                    }
-                    
-                    DebugLogger.Log($"Link discovery completed. Found {_discoveredLinks.Count} pages with links.");
-                }
-                catch (Exception ex) { DebugLogger.LogException("OnLinkDiscoveryCompleted UI update", ex); }
-            });
-        }
-        catch (Exception ex) { DebugLogger.LogException("OnLinkDiscoveryCompleted", ex); }
     }
 
     // Helper: delete currently selected article (VM selected or EditorState active) and close delete overlay
@@ -1339,77 +1174,5 @@ public partial class MainWindow : Window
             try { var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay"); if (delOverlay != null) delOverlay.IsVisible = false; } catch { }
         }
         catch (Exception ex) { DebugLogger.LogException("DeleteSelectedArticleAndCloseOverlay", ex); }
-    }
-
-    // Handle Ctrl+Up shortcut: navigate to the previous article
-    private bool HandleCtrlUpShortcut(KeyEventArgs ke)
-    {
-        try
-        {
-            DebugLogger.Log("Shortcut Ctrl+Up invoked");
-            if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) { DebugLogger.Log("ArticleEditor focused - ignoring Ctrl+Up"); return false; }
-            var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-            List<Common.Shared.ArticleLine>? list = null;
-            if (vm != null) list = vm.Articles.ToList();
-            else if (IndexEditor.Shared.EditorState.Articles != null) list = new List<Common.Shared.ArticleLine>(IndexEditor.Shared.EditorState.Articles);
-            if (list == null || list.Count == 0) { DebugLogger.Log("No articles to navigate"); return true; }
-            int curIndex = -1;
-            if (vm != null && vm.SelectedArticle != null) curIndex = list.IndexOf(vm.SelectedArticle);
-            if (curIndex == -1 && IndexEditor.Shared.EditorState.ActiveArticle != null) curIndex = list.IndexOf(IndexEditor.Shared.EditorState.ActiveArticle);
-            if (curIndex == -1) curIndex = list.FindIndex(a => a.Pages != null && a.Pages.Contains(IndexEditor.Shared.EditorState.CurrentPage));
-            if (curIndex == -1) curIndex = 0;
-            int target = Math.Max(0, curIndex - 1);
-            if (target == curIndex) { DebugLogger.Log("Already at first article"); return true; }
-            var targetArticle = list[target];
-            if (vm != null)
-            {
-                try { vm.SelectedArticle = targetArticle; } catch { }
-                try { vm.NavigateToArticle(targetArticle); } catch (Exception ex) { DebugLogger.LogException("MainWindow: NavigateToArticle (Ctrl+Up)", ex); }
-            }
-            else
-            {
-                try { IndexEditor.Shared.EditorState.ActiveArticle = targetArticle; } catch { }
-                try { int? pick = IndexEditor.Shared.ImageHelper.FindFirstImageInFolder(IndexEditor.Shared.EditorState.CurrentFolder ?? string.Empty, targetArticle.Pages != null && targetArticle.Pages.Count > 0 ? targetArticle.Pages.Min() : 1, 2000); if (pick.HasValue) IndexEditor.Shared.EditorState.CurrentPage = pick.Value; else if (targetArticle.Pages != null && targetArticle.Pages.Count > 0) IndexEditor.Shared.EditorState.CurrentPage = targetArticle.Pages.Min(); IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Up fallback navigation", ex); }
-            }
-            DebugLogger.Log($"Ctrl+Up navigated to article index {target}");
-        }
-        catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Up handler", ex); }
-        return true;
-    }
-
-    // Handle Ctrl+Down shortcut: navigate to the next article
-    private bool HandleCtrlDownShortcut(KeyEventArgs ke)
-    {
-        try
-        {
-            DebugLogger.Log("Shortcut Ctrl+Down invoked");
-            if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) { DebugLogger.Log("ArticleEditor focused - ignoring Ctrl+Down"); return false; }
-            var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-            List<Common.Shared.ArticleLine>? list = null;
-            if (vm != null) list = vm.Articles.ToList();
-            else if (IndexEditor.Shared.EditorState.Articles != null) list = new List<Common.Shared.ArticleLine>(IndexEditor.Shared.EditorState.Articles);
-            if (list == null || list.Count == 0) { DebugLogger.Log("No articles to navigate"); return true; }
-            int curIndex = -1;
-            if (vm != null && vm.SelectedArticle != null) curIndex = list.IndexOf(vm.SelectedArticle);
-            if (curIndex == -1 && IndexEditor.Shared.EditorState.ActiveArticle != null) curIndex = list.IndexOf(IndexEditor.Shared.EditorState.ActiveArticle);
-            if (curIndex == -1) curIndex = list.FindIndex(a => a.Pages != null && a.Pages.Contains(IndexEditor.Shared.EditorState.CurrentPage));
-            if (curIndex == -1) curIndex = 0;
-            int target = Math.Min(list.Count - 1, curIndex + 1);
-            if (target == curIndex) { DebugLogger.Log("Already at last article"); return true; }
-            var targetArticle = list[target];
-            if (vm != null)
-            {
-                try { vm.SelectedArticle = targetArticle; } catch { }
-                try { vm.NavigateToArticle(targetArticle); } catch (Exception ex) { DebugLogger.LogException("MainWindow: NavigateToArticle (Ctrl+Down)", ex); }
-            }
-            else
-            {
-                try { IndexEditor.Shared.EditorState.ActiveArticle = targetArticle; } catch { }
-                try { int? pick = IndexEditor.Shared.ImageHelper.FindFirstImageInFolder(IndexEditor.Shared.EditorState.CurrentFolder ?? string.Empty, targetArticle.Pages != null && targetArticle.Pages.Count > 0 ? targetArticle.Pages.Min() : 1, 2000); if (pick.HasValue) IndexEditor.Shared.EditorState.CurrentPage = pick.Value; else if (targetArticle.Pages != null && targetArticle.Pages.Count > 0) IndexEditor.Shared.EditorState.CurrentPage = targetArticle.Pages.Min(); IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Down fallback navigation", ex); }
-            }
-            DebugLogger.Log($"Ctrl+Down navigated to article index {target}");
-        }
-        catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Down handler", ex); }
-        return true;
     }
 }

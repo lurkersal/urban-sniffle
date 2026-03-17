@@ -7,25 +7,46 @@ using IndexEditor.Views;
 namespace IndexEditor.Services.KeyboardHandlers;
 
 /// <summary>
-/// Handles keyboard shortcuts related to page navigation.
+/// Handles keyboard shortcuts related to page and article navigation.
 /// - Left Arrow: Previous page
 /// - Right Arrow: Next page
+/// - Ctrl+Up: Previous article
+/// - Ctrl+Down: Next article
 /// </summary>
 public class NavigationKeyboardHandler : IKeyboardShortcutHandler
 {
     private readonly Window? _window;
     private readonly IEditorState _editorState;
+    private readonly IArticleNavigationService? _articleNavigationService;
 
     public NavigationKeyboardHandler(Window? window, IEditorState editorState)
     {
         _window = window;
         _editorState = editorState ?? throw new ArgumentNullException(nameof(editorState));
+        
+        // Create article navigation service if we have a window
+        if (_window != null)
+        {
+            _articleNavigationService = new ArticleNavigationService(_window, _editorState);
+        }
     }
 
     public int Priority => 50; // Lower priority than article/segment operations
 
     public bool TryHandle(KeyEventArgs e)
     {
+        // Ctrl+Up: Previous article
+        if (e.Key == Key.Up && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            return _articleNavigationService?.NavigateToPreviousArticle() ?? false;
+        }
+
+        // Ctrl+Down: Next article
+        if (e.Key == Key.Down && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            return _articleNavigationService?.NavigateToNextArticle() ?? false;
+        }
+
         if (e.Key == Key.Left)
         {
             HandleLeftArrow(e);

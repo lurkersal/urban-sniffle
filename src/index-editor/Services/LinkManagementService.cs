@@ -76,10 +76,7 @@ namespace IndexEditor.Services
 
             foreach (var link in links)
             {
-                if (!int.TryParse(link.Page, out var pageNum))
-                {
-                    continue;
-                }
+                var pageNum = link.Page;
 
                 if (!_pageLinks.ContainsKey(pageNum))
                 {
