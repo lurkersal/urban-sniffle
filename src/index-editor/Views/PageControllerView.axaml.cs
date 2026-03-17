@@ -18,14 +18,17 @@ namespace IndexEditor.Views
         private IPageControllerBridge? _assignedBridge;
         
         // Injected services (replacing local implementations)
-        private readonly Services.IPageNavigationService _pageNavigationService;
-        private readonly Services.IImageLoadingService _imageLoadingService;
-        private readonly Services.ILinkManagementService _linkManagementService;
-        private readonly Services.IArticleCardRenderer _articleCardRenderer;
-        private readonly Services.IArticleDisplayCoordinator _articleDisplayCoordinator;
-        private readonly Services.IArticleFocusManager _articleFocusManager;
-        private readonly Services.ISegmentManagementService _segmentManagementService;
-        private readonly Services.IPageNavigationCoordinator _pageNavigationCoordinator;
+        private Services.IPageNavigationService _pageNavigationService;
+        private Services.IImageLoadingService _imageLoadingService;
+        private Services.ILinkManagementService _linkManagementService;
+        private Services.IArticleCardRenderer _articleCardRenderer;
+        private Services.IArticleDisplayCoordinator _articleDisplayCoordinator;
+        private Services.IArticleFocusManager _articleFocusManager;
+        private Services.ISegmentManagementService _segmentManagementService;
+        private Services.IPageNavigationCoordinator _pageNavigationCoordinator;
+        
+        // Store the StateChanged handler so we can unsubscribe/resubscribe when EditorState changes
+        private Action? _stateChangedHandler;
 
         public void SetBridge(IPageControllerBridge bridge)
         {
@@ -37,7 +40,34 @@ namespace IndexEditor.Views
         /// </summary>
         public void SetEditorState(IndexEditor.Shared.IEditorState editorState)
         {
+            // Unsubscribe from old EditorState if we have a handler
+            if (_stateChangedHandler != null && _editorState != null)
+            {
+                _editorState.StateChanged -= _stateChangedHandler;
+            }
+            
             _editorState = editorState;
+            var folder = _editorState?.CurrentFolder ?? "(null)";
+            System.Console.WriteLine($"[DEBUG] PageControllerView.SetEditorState: CurrentFolder = '{folder}'");
+            DebugLogger.Log($"PageControllerView.SetEditorState: CurrentFolder = '{folder}'");
+            
+            // Re-subscribe to the new EditorState
+            if (_stateChangedHandler != null && _editorState != null)
+            {
+                _editorState.StateChanged += _stateChangedHandler;
+                System.Console.WriteLine("[DEBUG] PageControllerView.SetEditorState: Re-subscribed to StateChanged");
+                DebugLogger.Log("PageControllerView.SetEditorState: Re-subscribed to StateChanged");
+                
+                // Trigger an immediate update to load the current state
+                try
+                {
+                    _stateChangedHandler.Invoke();
+                }
+                catch (Exception ex)
+                {
+                    DebugLogger.LogException("PageControllerView.SetEditorState: initial state update", ex);
+                }
+            }
         }
 
         /// <summary>
@@ -212,37 +242,86 @@ namespace IndexEditor.Views
         }
 
         /// <summary>
-        /// Parameterless constructor for XAML instantiation
+        /// Parameterless constructor for XAML instantiation.
+        /// Services should be injected via SetServices() after construction for proper DI.
         /// </summary>
-        public PageControllerView() : this(null, null, null, null, null, null, null, null, null) { }
+        public PageControllerView()
+        {
+            // Default initialization for XAML - services can be injected later via SetServices
+            _editorState = new IndexEditor.Shared.EditorStateService();
+            _pageNavigationService = new Services.PageNavigationService();
+            _imageLoadingService = new Services.ImageLoadingService();
+            _linkManagementService = new Services.LinkManagementService();
+            _articleCardRenderer = new Services.ArticleCardRenderer();
+            _articleDisplayCoordinator = new Services.ArticleDisplayCoordinator(_editorState, _articleCardRenderer);
+            _articleFocusManager = new Services.ArticleFocusManager(_editorState);
+            _segmentManagementService = new Services.SegmentManagementService(_editorState);
+            _pageNavigationCoordinator = new Services.PageNavigationCoordinator(_editorState, _pageNavigationService);
+            
+            System.Console.WriteLine("[DEBUG] PageControllerView: parameterless constructor (XAML)");
+            InitializeComponent();
+            InitializeUI();
+        }
 
         /// <summary>
-        /// Constructor with optional dependency injection
+        /// Constructor with full dependency injection (for unit testing or programmatic creation)
         /// </summary>
         public PageControllerView(
-            IndexEditor.Shared.IEditorState? editorState,
-            Services.IPageNavigationService? pageNavigationService = null,
-            Services.IImageLoadingService? imageLoadingService = null,
-            Services.ILinkManagementService? linkManagementService = null,
-            Services.IArticleCardRenderer? articleCardRenderer = null,
-            Services.IArticleDisplayCoordinator? articleDisplayCoordinator = null,
-            Services.IArticleFocusManager? articleFocusManager = null,
-            Services.ISegmentManagementService? segmentManagementService = null,
-            Services.IPageNavigationCoordinator? pageNavigationCoordinator = null)
+            IndexEditor.Shared.IEditorState editorState,
+            Services.IPageNavigationService pageNavigationService,
+            Services.IImageLoadingService imageLoadingService,
+            Services.ILinkManagementService linkManagementService,
+            Services.IArticleCardRenderer articleCardRenderer,
+            Services.IArticleDisplayCoordinator articleDisplayCoordinator,
+            Services.IArticleFocusManager articleFocusManager,
+            Services.ISegmentManagementService segmentManagementService,
+            Services.IPageNavigationCoordinator pageNavigationCoordinator)
         {
-            _editorState = editorState ?? new IndexEditor.Shared.EditorStateService();
-            _pageNavigationService = pageNavigationService ?? new Services.PageNavigationService();
-            _imageLoadingService = imageLoadingService ?? new Services.ImageLoadingService();
-            _linkManagementService = linkManagementService ?? new Services.LinkManagementService();
-            _articleCardRenderer = articleCardRenderer ?? new Services.ArticleCardRenderer();
-            _articleDisplayCoordinator = articleDisplayCoordinator ?? new Services.ArticleDisplayCoordinator(_editorState, _articleCardRenderer);
-            _articleFocusManager = articleFocusManager ?? new Services.ArticleFocusManager(_editorState);
-            _segmentManagementService = segmentManagementService ?? new Services.SegmentManagementService(_editorState);
-            _pageNavigationCoordinator = pageNavigationCoordinator ?? new Services.PageNavigationCoordinator(_editorState, _pageNavigationService);
+            _editorState = editorState ?? throw new ArgumentNullException(nameof(editorState));
+            _pageNavigationService = pageNavigationService ?? throw new ArgumentNullException(nameof(pageNavigationService));
+            _imageLoadingService = imageLoadingService ?? throw new ArgumentNullException(nameof(imageLoadingService));
+            _linkManagementService = linkManagementService ?? throw new ArgumentNullException(nameof(linkManagementService));
+            _articleCardRenderer = articleCardRenderer ?? throw new ArgumentNullException(nameof(articleCardRenderer));
+            _articleDisplayCoordinator = articleDisplayCoordinator ?? throw new ArgumentNullException(nameof(articleDisplayCoordinator));
+            _articleFocusManager = articleFocusManager ?? throw new ArgumentNullException(nameof(articleFocusManager));
+            _segmentManagementService = segmentManagementService ?? throw new ArgumentNullException(nameof(segmentManagementService));
+            _pageNavigationCoordinator = pageNavigationCoordinator ?? throw new ArgumentNullException(nameof(pageNavigationCoordinator));
             
-            System.Console.WriteLine("[DEBUG] PageControllerView: constructor");
+            System.Console.WriteLine("[DEBUG] PageControllerView: full DI constructor");
             InitializeComponent();
-
+            InitializeUI();
+        }
+        
+        /// <summary>
+        /// Inject services after XAML construction (called from MainWindow)
+        /// </summary>
+        public void SetServices(
+            Services.IPageNavigationService pageNavigationService,
+            Services.IImageLoadingService imageLoadingService,
+            Services.ILinkManagementService linkManagementService,
+            Services.IArticleCardRenderer articleCardRenderer,
+            Services.IArticleDisplayCoordinator articleDisplayCoordinator,
+            Services.IArticleFocusManager articleFocusManager,
+            Services.ISegmentManagementService segmentManagementService,
+            Services.IPageNavigationCoordinator pageNavigationCoordinator)
+        {
+            _pageNavigationService = pageNavigationService ?? throw new ArgumentNullException(nameof(pageNavigationService));
+            _imageLoadingService = imageLoadingService ?? throw new ArgumentNullException(nameof(imageLoadingService));
+            _linkManagementService = linkManagementService ?? throw new ArgumentNullException(nameof(linkManagementService));
+            _articleCardRenderer = articleCardRenderer ?? throw new ArgumentNullException(nameof(articleCardRenderer));
+            _articleDisplayCoordinator = articleDisplayCoordinator ?? throw new ArgumentNullException(nameof(articleDisplayCoordinator));
+            _articleFocusManager = articleFocusManager ?? throw new ArgumentNullException(nameof(articleFocusManager));
+            _segmentManagementService = segmentManagementService ?? throw new ArgumentNullException(nameof(segmentManagementService));
+            _pageNavigationCoordinator = pageNavigationCoordinator ?? throw new ArgumentNullException(nameof(pageNavigationCoordinator));
+            
+            System.Console.WriteLine("[DEBUG] PageControllerView: services injected via SetServices");
+        }
+        
+        /// <summary>
+        /// Initialize UI controls and event handlers (extracted from constructor)
+        /// </summary>
+        private void InitializeUI()
+        {
             var prevBtn = this.FindControl<Button>("PrevPageBtn");
             var nextBtn = this.FindControl<Button>("NextPageBtn");
             var pageInput = this.FindControl<TextBox>("PageInput");
@@ -324,8 +403,8 @@ namespace IndexEditor.Views
                 // Active article/segment are displayed in the ArticleEditor now
             }
 
-            // Subscribe to state changes to refresh UI
-            _editorState.StateChanged += () => Dispatcher.UIThread.Post(() =>
+            // Create and store the StateChanged handler so it can be unsubscribed/resubscribed if EditorState changes
+            _stateChangedHandler = () => Dispatcher.UIThread.Post(() =>
             {
                 try
                 {
@@ -342,6 +421,9 @@ namespace IndexEditor.Views
                 }
                 catch (Exception ex) { DebugLogger.LogException("PageControllerView.StateChanged handler", ex); }
             });
+            
+            // Subscribe to state changes to refresh UI
+            _editorState.StateChanged += _stateChangedHandler;
 
             // Initial sync
             UpdateUi();
@@ -398,6 +480,9 @@ namespace IndexEditor.Views
             }
             
             var folder = _editorState.CurrentFolder;
+            System.Console.WriteLine($"[DEBUG] LoadCurrentPageImage: folder = '{folder ?? "(null)"}'");
+            DebugLogger.Log($"LoadCurrentPageImage: folder = '{folder ?? "(null)"}'");
+            
             if (string.IsNullOrWhiteSpace(folder))
             {
                 // No folder: show missing message

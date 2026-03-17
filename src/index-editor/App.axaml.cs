@@ -19,29 +19,19 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
-        // Configure logging for application
-        try
-        {
-            var factory = LoggerFactory.Create(builder =>
-            {
-                builder.AddSimpleConsole(options =>
-                {
-                    options.SingleLine = true;
-                    options.TimestampFormat = "HH:mm:ss ";
-                });
-                builder.SetMinimumLevel(LogLevel.Debug);
-            });
-            DebugLogger.Initialize(factory);
-            DebugLogger.Log("Logging initialized");
-        }
-        catch (Exception ex)
-        {
-            // Ensure any initialization errors are logged
-            try { DebugLogger.LogException("App.OnFrameworkInitializationCompleted: initialize logging", ex); } catch (Exception logEx) { try { DebugLogger.Log($"Failed to log during App init: {logEx}"); } catch {} }
-        }
-
-        // Setup DI
+        // Setup DI (must happen before logging initialization so we can register logging)
         var services = new ServiceCollection();
+        
+        // Register logging services FIRST (required by other services)
+        services.AddLogging(builder =>
+        {
+            builder.AddSimpleConsole(options =>
+            {
+                options.SingleLine = true;
+                options.TimestampFormat = "HH:mm:ss ";
+            });
+            builder.SetMinimumLevel(LogLevel.Debug);
+        });
         
         // Core services
         services.AddSingleton<IndexEditor.Shared.IEditorState, IndexEditor.Shared.EditorStateService>();
@@ -56,6 +46,15 @@ public partial class App : Application
         services.AddSingleton<Services.IImageLoadingService, Services.ImageLoadingService>();
         services.AddSingleton<Services.ILinkManagementService, Services.LinkManagementService>();
         
+        // Article display and management services (Phase 1 refactoring)
+        services.AddSingleton<Services.IArticleCardRenderer, Services.ArticleCardRenderer>();
+        services.AddSingleton<Services.IArticleDisplayCoordinator, Services.ArticleDisplayCoordinator>();
+        services.AddSingleton<Services.IArticleFocusManager, Services.ArticleFocusManager>();
+        
+        // Segment and navigation services (Phase 2 refactoring)
+        services.AddSingleton<Services.ISegmentManagementService, Services.SegmentManagementService>();
+        services.AddSingleton<Services.IPageNavigationCoordinator, Services.PageNavigationCoordinator>();
+        
         // Register ViewModels and other services
         services.AddSingleton<Views.EditorStateViewModel>();
         services.AddSingleton<Views.MainWindowViewModel>();
@@ -65,6 +64,19 @@ public partial class App : Application
         
         // Build provider
         var serviceProvider = services.BuildServiceProvider();
+        
+        // Initialize DebugLogger with the DI-configured logging factory
+        try
+        {
+            var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
+            DebugLogger.Initialize(loggerFactory);
+            DebugLogger.Log("Logging initialized");
+        }
+        catch (Exception ex)
+        {
+            // Fallback logging if DebugLogger initialization fails
+            Console.WriteLine($"Failed to initialize DebugLogger: {ex.Message}");
+        }
 
         // Set static providers for backwards-compatible static API
         ToastService.Provider = serviceProvider.GetRequiredService<IndexEditor.Shared.IToastService>();

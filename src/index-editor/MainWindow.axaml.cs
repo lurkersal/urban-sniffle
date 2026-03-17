@@ -159,6 +159,33 @@ public partial class MainWindow : Window
                     pcControl.SetEditorState(_editorState);
                 }
                 
+                // Inject all services from DI container or create defaults
+                // Note: These will be from DI container when services are properly registered in App.axaml.cs
+                var pageNav = new Services.PageNavigationService();
+                var imageLoad = new Services.ImageLoadingService();
+                var linkMgmt = new Services.LinkManagementService();
+                var articleCardRenderer = new Services.ArticleCardRenderer();
+                var articleDisplayCoord = new Services.ArticleDisplayCoordinator(
+                    _editorState ?? new IndexEditor.Shared.EditorStateService(), 
+                    articleCardRenderer);
+                var articleFocusMgr = new Services.ArticleFocusManager(
+                    _editorState ?? new IndexEditor.Shared.EditorStateService());
+                var segmentMgmt = new Services.SegmentManagementService(
+                    _editorState ?? new IndexEditor.Shared.EditorStateService());
+                var pageNavCoord = new Services.PageNavigationCoordinator(
+                    _editorState ?? new IndexEditor.Shared.EditorStateService(), 
+                    pageNav);
+                
+                pcControl.SetServices(
+                    pageNav,
+                    imageLoad,
+                    linkMgmt,
+                    articleCardRenderer,
+                    articleDisplayCoord,
+                    articleFocusMgr,
+                    segmentMgmt,
+                    pageNavCoord);
+                
                 // Create bridge implementation and assign to VM (SetBridge call is unnecessary)
                 var bridge = new PageControllerBridge(pcControl);
                 try { if (this.DataContext is Views.MainWindowViewModel mwvm) mwvm.PageControllerBridge = bridge; } catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: assign bridge to VM", ex); }

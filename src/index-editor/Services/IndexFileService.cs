@@ -52,7 +52,16 @@ public class IndexFileService : IIndexFileService
         }
         else
         {
-            throw new FileNotFoundException($"No index file found in folder: {normalizedPath}");
+            // No index file found - parse metadata from folder name and return empty data
+            _logger.LogInformation("LoadFromFolder: No index file found, parsing metadata from folder name");
+            
+            var folderName = Path.GetFileName(normalizedPath);
+            var (magazine, volume, number, year) = IndexEditor.Shared.FolderMetadataParser.ParseFolderMetadata(folderName);
+            
+            _logger.LogInformation("LoadFromFolder: Parsed from folder name - Magazine: '{Magazine}', Vol: '{Volume}', Num: '{Number}', Year: '{Year}'",
+                magazine, volume, number, year);
+            
+            return (magazine, volume, number, year, new List<ArticleLine>(), new List<MagazineLink>());
         }
     }
 
