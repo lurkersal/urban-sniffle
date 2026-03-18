@@ -43,7 +43,7 @@ public class BabepediaService
             // Babepedia URL format: https://www.babepedia.com/babe/Model_Name
             var requestedUrl = $"https://www.babepedia.com/babe/{Uri.EscapeDataString(cleanName)}";
 
-            DebugLogger.Log($"BabepediaService: Checking URL: {requestedUrl}");
+            DebugLogger.Debug($"BabepediaService: Checking URL: {requestedUrl}");
 
             var response = await _httpClient.GetAsync(requestedUrl);
 
@@ -51,8 +51,8 @@ public class BabepediaService
             // We need to check if the final URL after redirects is different from what we requested
             var finalUrl = response.RequestMessage?.RequestUri?.ToString() ?? requestedUrl;
             
-            DebugLogger.Log($"BabepediaService: Requested: {requestedUrl}");
-            DebugLogger.Log($"BabepediaService: Final URL: {finalUrl}");
+            DebugLogger.Debug($"BabepediaService: Requested: {requestedUrl}");
+            DebugLogger.Debug($"BabepediaService: Final URL: {finalUrl}");
 
             // Check if we got redirected to a search page
             bool wasRedirectedToSearch = finalUrl.Contains("/search/", StringComparison.OrdinalIgnoreCase);
@@ -62,17 +62,18 @@ public class BabepediaService
             // 2. We were NOT redirected to a search page
             bool exists = response.IsSuccessStatusCode && !wasRedirectedToSearch;
 
-            DebugLogger.Log($"BabepediaService: {modelName} -> Status: {response.StatusCode}, Redirected to search: {wasRedirectedToSearch}, Exists: {exists}");
+            DebugLogger.Debug($"BabepediaService: {modelName} -> Status: {response.StatusCode}, Redirected to search: {wasRedirectedToSearch}, Exists: {exists}");
 
             return (exists, exists ? finalUrl : string.Empty);
         }
         catch (TaskCanceledException)
         {
-            DebugLogger.Log($"BabepediaService: Timeout checking {modelName}");
+            DebugLogger.Debug($"BabepediaService: Timeout checking {modelName}");
             return (false, string.Empty);
         }
         catch (Exception ex)
         {
+            DebugLogger.Warning($"BabepediaService: Error checking {modelName}");
             DebugLogger.LogException($"BabepediaService: Error checking {modelName}", ex);
             return (false, string.Empty);
         }
@@ -113,5 +114,7 @@ public class BabepediaService
         }
     }
 }
+
+
 
 

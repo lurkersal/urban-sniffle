@@ -30,7 +30,7 @@ public partial class App : Application
                 options.SingleLine = true;
                 options.TimestampFormat = "HH:mm:ss ";
             });
-            builder.SetMinimumLevel(LogLevel.Debug);
+            builder.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Debug);
         });
         
         // Core services

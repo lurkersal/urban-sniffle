@@ -323,12 +323,12 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
             var vm = _window.DataContext as EditorStateViewModel;
             if (vm != null)
             {
-                DebugLogger.Log("FileKeyboardHandler: Ctrl+B - Checking babepedia for selected article");
+                DebugLogger.Debug("FileKeyboardHandler: Ctrl+B - Checking babepedia for selected article");
                 vm.CheckBabepediaForSelectedArticle();
             }
             else
             {
-                DebugLogger.Log("FileKeyboardHandler: Ctrl+B - No ViewModel found");
+                DebugLogger.Debug("FileKeyboardHandler: Ctrl+B - No ViewModel found");
                 ToastService.Show("Cannot check babepedia - no article selected");
             }
         }

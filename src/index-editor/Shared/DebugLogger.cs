@@ -4,12 +4,22 @@ using Microsoft.Extensions.Logging;
 
 namespace IndexEditor.Shared
 {
+    public enum LogLevel
+    {
+        Debug = 0,
+        Info = 1,
+        Warning = 2,
+        Error = 3,
+        None = 4
+    }
+
     internal static class DebugLogger
     {
         private static ILoggerFactory? _factory;
         private static ILogger? _logger;
         private static readonly object _initLock = new object();
         private static string? _logPath;
+        private static LogLevel _minLogLevel = LogLevel.Info; // Default to Info
 
         static DebugLogger()
         {
@@ -24,6 +34,19 @@ namespace IndexEditor.Shared
 
             // Defer creating ILoggerFactory until Initialize is called; keep console fallback.
         }
+
+        /// <summary>
+        /// Set the minimum log level. Messages below this level will be suppressed.
+        /// </summary>
+        public static void SetMinimumLogLevel(LogLevel level)
+        {
+            _minLogLevel = level;
+        }
+
+        /// <summary>
+        /// Get the current minimum log level.
+        /// </summary>
+        public static LogLevel GetMinimumLogLevel() => _minLogLevel;
 
         public static void Initialize(ILoggerFactory factory)
         {
@@ -54,18 +77,53 @@ namespace IndexEditor.Shared
             }
         }
 
+        private static bool ShouldLog(LogLevel level)
+        {
+            return level >= _minLogLevel;
+        }
+
+        public static void Debug(string message)
+        {
+            if (!ShouldLog(LogLevel.Debug)) return;
+            LogInternal(message, Microsoft.Extensions.Logging.LogLevel.Debug);
+        }
+
         public static void Log(string message)
+        {
+            Info(message); // Default Log() to Info level
+        }
+
+        public static void Info(string message)
+        {
+            if (!ShouldLog(LogLevel.Info)) return;
+            LogInternal(message, Microsoft.Extensions.Logging.LogLevel.Information);
+        }
+
+        public static void Warning(string message)
+        {
+            if (!ShouldLog(LogLevel.Warning)) return;
+            LogInternal(message, Microsoft.Extensions.Logging.LogLevel.Warning);
+        }
+
+        public static void Error(string message)
+        {
+            if (!ShouldLog(LogLevel.Error)) return;
+            LogInternal(message, Microsoft.Extensions.Logging.LogLevel.Error);
+        }
+
+        private static void LogInternal(string message, Microsoft.Extensions.Logging.LogLevel level)
         {
             try
             {
                 if (_logger == null) EnsureFallbackLogger();
                 if (_logger != null)
                 {
-                    _logger.LogInformation(message);
+                    _logger.Log(level, message);
                 }
                 else
                 {
-                    var line = $"[{DateTime.Now:O}] {message}";
+                    var levelStr = level.ToString().ToUpper();
+                    var line = $"[{DateTime.Now:O}] [{levelStr}] {message}";
                     Console.WriteLine(line);
                     if (_logPath != null)
                     {
@@ -81,6 +139,8 @@ namespace IndexEditor.Shared
 
         public static void LogException(string context, Exception ex)
         {
+            if (!ShouldLog(LogLevel.Error)) return;
+            
             try
             {
                 if (_logger == null) EnsureFallbackLogger();
@@ -90,7 +150,7 @@ namespace IndexEditor.Shared
                 }
                 else
                 {
-                    var text = $"[{DateTime.Now:O}] EXCEPTION in {context}: {ex.GetType().FullName}: {ex.Message}\n{ex.StackTrace}";
+                    var text = $"[{DateTime.Now:O}] [ERROR] EXCEPTION in {context}: {ex.GetType().FullName}: {ex.Message}\n{ex.StackTrace}";
                     Console.WriteLine(text);
                     if (_logPath != null)
                     {
