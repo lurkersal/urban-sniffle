@@ -156,6 +156,9 @@ public class FolderLoadingService : IFolderLoadingService
             .OrderBy(a => a.Pages.Min())
             .ToList();
 
+        // Notify UI components (like TopBar) that state has changed
+        _editorState.NotifyStateChanged();
+
         // Validate segments for missing pages
         try
         {

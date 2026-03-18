@@ -99,6 +99,9 @@ public class FileOperationsService : IFileOperationsService
         state.CurrentYear = fileYear ?? string.Empty;
         state.Articles = articles.Where(a => a.Pages != null && a.Pages.Count > 0).OrderBy(a => a.Pages.Min()).ToList();
 
+        // Notify UI components (like TopBar) that state has changed
+        state.NotifyStateChanged();
+
         // Validate segments for missing pages
         try
         {

@@ -52,15 +52,16 @@ public class IndexFileService : IIndexFileService
         }
         else
         {
-            // No index file found - parse metadata from folder name and return empty data
-            _logger.LogInformation("LoadFromFolder: No index file found, parsing metadata from folder name");
+            // No index file exists - parse metadata from folder name
+            _logger.LogInformation("LoadFromFolder: No index file found, parsing folder name for metadata");
             
             var folderName = Path.GetFileName(normalizedPath);
             var (magazine, volume, number, year) = IndexEditor.Shared.FolderMetadataParser.ParseFolderMetadata(folderName);
             
-            _logger.LogInformation("LoadFromFolder: Parsed from folder name - Magazine: '{Magazine}', Vol: '{Volume}', Num: '{Number}', Year: '{Year}'",
+            _logger.LogInformation("LoadFromFolder: Parsed metadata - Magazine: '{Magazine}', Vol: '{Volume}', Num: '{Number}', Year: '{Year}'",
                 magazine, volume, number, year);
             
+            // Return empty article and link lists with parsed metadata
             return (magazine, volume, number, year, new List<ArticleLine>(), new List<MagazineLink>());
         }
     }
@@ -171,23 +172,61 @@ public class IndexFileService : IIndexFileService
         string volume = "—";
         string number = "—";
         string year = "—";
+        
+        int articleStartIndex = 0;
 
-        // Parse header for metadata (volume, issue, etc.)
-        if (lines.Length > 0 && lines[0].StartsWith("#"))
+        // Parse metadata from first non-comment line (CSV format: Magazine,Volume,Number or Magazine,Volume,Number,Year)
+        for (int i = 0; i < lines.Length; i++)
         {
-            // Parse metadata from first line: # Magazine Name Vol X No Y
-            var headerParts = lines[0].TrimStart('#').Trim().Split(new[] { "Vol", "No" }, StringSplitOptions.None);
-            if (headerParts.Length >= 3)
+            var line = lines[i].Trim();
+            
+            // Skip empty lines and comments
+            if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
             {
-                magazine = headerParts[0].Trim();
-                volume = headerParts[1].Trim();
-                number = headerParts[2].Trim();
+                continue;
             }
+
+            // First non-comment line: try CSV metadata
+            var parts = IndexEditor.Shared.IndexFileParser.SplitRespectingEscapedCommas(line);
+            if (parts.Count >= 3)
+            {
+                // Unescape comma escaping
+                string Unescape(string s) => s.Replace("\\,", ",");
+                
+                magazine = Unescape(parts[0]);
+                volume = Unescape(parts[1]);
+                number = Unescape(parts[2]);
+                
+                // If 4th field exists, use it as year
+                if (parts.Count >= 4 && !string.IsNullOrWhiteSpace(parts[3]))
+                {
+                    year = Unescape(parts[3]);
+                }
+                else
+                {
+                    // No year in file, try to parse from folder name
+                    var folderName = Path.GetFileName(folderPath);
+                    var (_, _, _, folderYear) = IndexEditor.Shared.FolderMetadataParser.ParseFolderMetadata(folderName);
+                    year = folderYear;
+                }
+                
+                _logger.LogInformation("LoadFromTxtFile: Parsed metadata - Magazine: '{Magazine}', Vol: '{Volume}', Num: '{Number}', Year: '{Year}'",
+                    magazine, volume, number, year);
+                
+                articleStartIndex = i + 1;
+                break;
+            }
+            
+            // If first non-comment line doesn't have 3+ parts, it might be an article - don't skip it
+            articleStartIndex = i;
+            break;
         }
 
-        // Parse articles
-        foreach (var line in lines)
+        // Parse articles starting after metadata line
+        for (int i = articleStartIndex; i < lines.Length; i++)
         {
+            var line = lines[i];
+            
             if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
             {
                 continue;
