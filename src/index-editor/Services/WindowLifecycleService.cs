@@ -28,17 +28,20 @@ public class WindowLifecycleService : IWindowLifecycleService
     private readonly Window _window;
     private readonly IEditorState _editorState;
     private readonly IDialogService? _dialogService;
+    private readonly LinkDiscoveryService? _linkDiscoveryService;
     private readonly Func<System.Collections.Generic.List<Common.Shared.MagazineLink>>? _getDiscoveredLinks;
 
     public WindowLifecycleService(
         Window window,
         IEditorState editorState,
         IDialogService? dialogService = null,
+        LinkDiscoveryService? linkDiscoveryService = null,
         Func<System.Collections.Generic.List<Common.Shared.MagazineLink>>? getDiscoveredLinks = null)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
         _editorState = editorState ?? throw new ArgumentNullException(nameof(editorState));
         _dialogService = dialogService;
+        _linkDiscoveryService = linkDiscoveryService;
         _getDiscoveredLinks = getDiscoveredLinks;
     }
 
@@ -67,6 +70,25 @@ public class WindowLifecycleService : IWindowLifecycleService
     {
         try
         {
+            // Check if link discovery scan is in progress
+            if (_linkDiscoveryService?.IsScanning ?? false)
+            {
+                bool shouldWait = await PromptForScanInProgressAsync("A link discovery scan is currently in progress. Do you want to wait for it to complete before exiting?");
+                
+                if (shouldWait)
+                {
+                    // User chose to wait - don't close the window
+                    ToastService.Show("Waiting for scan to complete. Close the window again when ready.");
+                    return false; // Don't allow window to close
+                }
+                else
+                {
+                    // User chose to cancel scan and exit
+                    _linkDiscoveryService?.StopDiscovery();
+                    ToastService.Show("Link discovery scan cancelled.");
+                }
+            }
+            
             // Check for unsaved changes and prompt user
             if (_editorState.HasUnsavedChanges)
             {
@@ -189,6 +211,29 @@ public class WindowLifecycleService : IWindowLifecycleService
         catch (Exception ex)
         {
             DebugLogger.LogException("WindowLifecycleService.PromptForSaveAsync", ex);
+            return false;
+        }
+    }
+
+    private async Task<bool> PromptForScanInProgressAsync(string message)
+    {
+        try
+        {
+            bool result;
+            if (_dialogService != null)
+            {
+                result = await _dialogService.ShowConfirmationAsync(message, "Link Discovery Scan In Progress");
+            }
+            else
+            {
+                // Fallback to direct dialog (backward compatibility)
+                result = await ConfirmDialog.ShowDialog(_window, message);
+            }
+            return result;
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException("WindowLifecycleService.PromptForScanInProgressAsync", ex);
             return false;
         }
     }

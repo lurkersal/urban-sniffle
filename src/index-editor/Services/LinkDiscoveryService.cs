@@ -13,6 +13,11 @@ namespace IndexEditor.Services
         public event EventHandler<LinkDiscoveredEventArgs>? LinkDiscovered;
         public event EventHandler? DiscoveryCompleted;
 
+        /// <summary>
+        /// Gets whether a link discovery scan is currently in progress.
+        /// </summary>
+        public bool IsScanning => _cts != null && !_cts.IsCancellationRequested;
+
         public void StartDiscovery(string folder, string magazineName)
         {
             StopDiscovery();

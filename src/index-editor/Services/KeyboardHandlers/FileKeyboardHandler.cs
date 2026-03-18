@@ -21,13 +21,20 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
     private readonly Action<string>? _loadArticlesFromFolder;
     private readonly OverlayManager? _overlayManager;
     private readonly IEditorState _editorState;
+    private readonly LinkDiscoveryService? _linkDiscoveryService;
 
-    public FileKeyboardHandler(Window window, IEditorState editorState, Action<string>? loadArticlesFromFolder = null, OverlayManager? overlayManager = null)
+    public FileKeyboardHandler(
+        Window window, 
+        IEditorState editorState, 
+        Action<string>? loadArticlesFromFolder = null, 
+        OverlayManager? overlayManager = null,
+        LinkDiscoveryService? linkDiscoveryService = null)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
         _editorState = editorState ?? throw new ArgumentNullException(nameof(editorState));
         _loadArticlesFromFolder = loadArticlesFromFolder;
         _overlayManager = overlayManager;
+        _linkDiscoveryService = linkDiscoveryService;
     }
 
     public int Priority => 80; // High priority for file operations
@@ -77,33 +84,43 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
                 return;
             }
 
-            var start = _editorState.CurrentFolder;
-            
-            // Dispatch an async folder picker
-            Dispatcher.UIThread.Post(async () =>
+            // Check if link discovery scan is in progress
+            if (_linkDiscoveryService?.IsScanning ?? false)
             {
-                try
+                // Dispatch async dialog on UI thread
+                Dispatcher.UIThread.Post(async () =>
                 {
-                    string? path = null;
                     try
                     {
-                        path = await FolderPicker.PickFolderAsync(_window, start);
+                        bool shouldWait = await ConfirmDialog.ShowDialog(
+                            _window,
+                            "A link discovery scan is currently in progress. Do you want to wait for it to complete before opening a new folder?");
+                        
+                        if (!shouldWait)
+                        {
+                            // User chose to cancel scan and proceed
+                            _linkDiscoveryService?.StopDiscovery();
+                            ToastService.Show("Link discovery scan cancelled.");
+                            
+                            // Now proceed with opening folder
+                            await OpenFolderAsync();
+                        }
+                        else
+                        {
+                            ToastService.Show("Waiting for scan to complete. Try opening again when scan finishes.");
+                        }
                     }
                     catch (Exception ex)
                     {
-                        DebugLogger.LogException("FileKeyboardHandler: PickFolderAsync", ex);
+                        DebugLogger.LogException("FileKeyboardHandler: scan check dialog", ex);
                     }
+                });
+                e.Handled = true;
+                return;
+            }
 
-                    if (!string.IsNullOrWhiteSpace(path))
-                    {
-                        _loadArticlesFromFolder?.Invoke(path);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    DebugLogger.LogException("FileKeyboardHandler: Ctrl+O async handler", ex);
-                }
-            });
+            // No scan in progress, proceed with opening
+            Dispatcher.UIThread.Post(async () => await OpenFolderAsync());
         }
         catch (Exception ex)
         {
@@ -111,6 +128,32 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
         }
         
         e.Handled = true;
+    }
+
+    private async System.Threading.Tasks.Task OpenFolderAsync()
+    {
+        try
+        {
+            var start = _editorState.CurrentFolder;
+            string? path = null;
+            try
+            {
+                path = await FolderPicker.PickFolderAsync(_window, start);
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("FileKeyboardHandler: PickFolderAsync", ex);
+            }
+
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                _loadArticlesFromFolder?.Invoke(path);
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException("FileKeyboardHandler: OpenFolderAsync", ex);
+        }
     }
 
     private void HandleCtrlS(KeyEventArgs e)

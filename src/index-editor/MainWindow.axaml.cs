@@ -74,6 +74,7 @@ public partial class MainWindow : Window
             this,
             _editorState ?? new IndexEditor.Shared.EditorStateService(),
             _dialogService,
+            _linkDiscoveryService,
             GetDiscoveredLinks);
     }
 
@@ -144,6 +145,7 @@ public partial class MainWindow : Window
                 this,
                 _editorState ?? new IndexEditor.Shared.EditorStateService(),
                 _dialogService,
+                _linkDiscoveryService,
                 GetDiscoveredLinks);
         }
         catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: init services", ex); }
@@ -214,7 +216,7 @@ public partial class MainWindow : Window
             {
                 new Services.KeyboardHandlers.SegmentKeyboardHandler(this, editorStateForHandlers),
                 new Services.KeyboardHandlers.ArticleKeyboardHandler(this, editorStateForHandlers),
-                new Services.KeyboardHandlers.FileKeyboardHandler(this, editorStateForHandlers, LoadArticlesFromFolder, _overlayManager),
+                new Services.KeyboardHandlers.FileKeyboardHandler(this, editorStateForHandlers, LoadArticlesFromFolder, _overlayManager, _linkDiscoveryService),
                 new Services.KeyboardHandlers.NavigationKeyboardHandler(this, editorStateForHandlers)
             };
             _keyboardDispatcher = new Services.KeyboardHandlers.KeyboardShortcutDispatcher(handlers);
