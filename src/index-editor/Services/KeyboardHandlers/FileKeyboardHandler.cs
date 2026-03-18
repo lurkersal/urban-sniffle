@@ -62,6 +62,13 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
             return true;
         }
 
+        // Ctrl+B: Check babepedia for selected article
+        if (e.Key == Key.B && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            HandleCtrlB(e);
+            return true;
+        }
+
         // F11: Toggle fullscreen
         if (e.Key == Key.F11)
         {
@@ -305,6 +312,31 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
         _window.WindowState = _window.WindowState == Avalonia.Controls.WindowState.FullScreen 
             ? Avalonia.Controls.WindowState.Normal 
             : Avalonia.Controls.WindowState.FullScreen;
+        e.Handled = true;
+    }
+
+    private void HandleCtrlB(KeyEventArgs e)
+    {
+        try
+        {
+            // Get the EditorStateViewModel from the window's DataContext
+            var vm = _window.DataContext as EditorStateViewModel;
+            if (vm != null)
+            {
+                DebugLogger.Log("FileKeyboardHandler: Ctrl+B - Checking babepedia for selected article");
+                vm.CheckBabepediaForSelectedArticle();
+            }
+            else
+            {
+                DebugLogger.Log("FileKeyboardHandler: Ctrl+B - No ViewModel found");
+                ToastService.Show("Cannot check babepedia - no article selected");
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException("FileKeyboardHandler: Ctrl+B handler", ex);
+        }
+        
         e.Handled = true;
     }
 }

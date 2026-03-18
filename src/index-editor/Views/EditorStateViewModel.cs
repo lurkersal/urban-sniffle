@@ -154,6 +154,9 @@ namespace IndexEditor.Views
                         var pagesTextStr = _selectedArticle?.PagesText ?? "(null)";
                         DebugLogger.Log($"SelectedArticle set. current.Title='{_selectedArticle?.Title}', Category='{_selectedArticle?.Category}', Contributor0='{_selectedArticle?.Contributor0}', Pages=[{pagesStr}], PagesText='{pagesTextStr}'"); 
                     } catch {}
+                    
+                    // Note: Babepedia check removed from automatic selection - now triggered manually
+                    
                       // Force the ArticleLine to notify all UI-bound properties changed so TextBox bindings refresh
                       // Suppress HasUnsavedChanges during this refresh since no actual data is changing
                       try
@@ -597,6 +600,80 @@ namespace IndexEditor.Views
                 });
             }
             catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.OnEditorStateChanged", ex); }
+        }
+
+        /// <summary>
+        /// Manually check babepedia.com for the currently selected article
+        /// </summary>
+        public void CheckBabepediaForSelectedArticle()
+        {
+            if (_selectedArticle != null)
+            {
+                CheckBabepediaAsync(_selectedArticle);
+            }
+            else
+            {
+                IndexEditor.Shared.ToastService.Show("No article selected");
+            }
+        }
+
+        /// <summary>
+        /// Check babepedia.com for a specific article's model
+        /// </summary>
+        public async void CheckBabepediaAsync(Common.Shared.ArticleLine article)
+        {
+            try
+            {
+                DebugLogger.Log($"CheckBabepediaAsync: Called for article '{article.Title}' (Category: {article.Category})");
+                
+                // Only check Model and Cover categories
+                if (article.Category != "Model" && article.Category != "Cover")
+                {
+                    DebugLogger.Log($"CheckBabepediaAsync: Skipping - not a Model or Cover article");
+                    return;
+                }
+
+                DebugLogger.Log($"CheckBabepediaAsync: Starting babepedia check for Model/Cover article");
+                var (exists, modelName, url) = await IndexEditor.Services.BabepediaService.CheckArticleModelAsync(article);
+                DebugLogger.Log($"CheckBabepediaAsync: Result - exists={exists}, modelName='{modelName}', url='{url}'");
+
+                if (exists)
+                {
+                    // Log to debug
+                    DebugLogger.Log($"BABEPEDIA: Model '{modelName}' found at {url}");
+                    
+                    // Show debug popup on UI thread
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        try
+                        {
+                            // Find the main window
+                            var mainWindow = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                                ? desktop.MainWindow
+                                : null;
+
+                            if (mainWindow != null)
+                            {
+                                BabepediaDebugDialog.ShowDialog(mainWindow, modelName, url);
+                            }
+                            else
+                            {
+                                // Fallback to toast if we can't find the main window
+                                IndexEditor.Shared.ToastService.Show($"✓ Babepedia: {modelName}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            DebugLogger.LogException("CheckBabepediaAsync: Show babepedia dialog", ex);
+                            IndexEditor.Shared.ToastService.Show($"✓ Babepedia: {modelName}");
+                        }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("CheckBabepediaAsync", ex);
+            }
         }
     }
 }
