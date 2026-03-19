@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -97,15 +98,52 @@ public partial class App : Application
             if (desktop.Args is { Length: > 0 })
             {
                 var args = desktop.Args.ToList();
+                
+                // Handle --no-images flag
                 if (args.Contains("--no-images"))
                 {
                     IndexEditor.Shared.EditorState.ShowImages = false;
 #pragma warning restore CS0618 // Type or member is obsolete
                     args = args.Where(a => a != "--no-images").ToList();
                 }
-                if (args.Count > 0)
+                
+                // Filter out arguments that are handled in Program.cs (not folder paths)
+                var filteredArgs = new List<string>();
+                for (int i = 0; i < args.Count; i++)
                 {
-                    folderToOpen = args[0];
+                    var arg = args[i];
+                    
+                    // Skip --log-level/-l and its value
+                    if (arg == "--log-level" || arg == "-l")
+                    {
+                        i++; // Skip next argument (the log level value)
+                        continue;
+                    }
+                    
+                    // Skip --demo flag
+                    if (arg == "--demo")
+                    {
+                        continue;
+                    }
+                    
+                    // Skip known log level values if they appear standalone
+                    if (arg == "debug" || arg == "info" || arg == "warning" || arg == "error" || arg == "none")
+                    {
+                        // Only skip if preceded by --log-level (already handled above)
+                        // But keep if it's actually a folder path
+                        if (i > 0 && (args[i - 1] == "--log-level" || args[i - 1] == "-l"))
+                        {
+                            continue; // Already skipped in the loop above
+                        }
+                    }
+                    
+                    filteredArgs.Add(arg);
+                }
+                
+                // Take the first remaining argument as the folder path
+                if (filteredArgs.Count > 0)
+                {
+                    folderToOpen = filteredArgs[0];
                 }
             }
 
