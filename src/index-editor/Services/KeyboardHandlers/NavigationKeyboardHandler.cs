@@ -35,6 +35,13 @@ public class NavigationKeyboardHandler : IKeyboardShortcutHandler
 
     public bool TryHandle(KeyEventArgs e)
     {
+        // When the article editor has focus, don't handle any navigation keys
+        // to allow normal text editing (cursor movement, dropdown navigation, etc.)
+        if (_editorState.IsArticleEditorFocused)
+        {
+            return false;
+        }
+
         // Ctrl+Up: Previous article
         if (e.Key == Key.Up && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
@@ -66,15 +73,6 @@ public class NavigationKeyboardHandler : IKeyboardShortcutHandler
     {
         try
         {
-            // If the Article Editor has focus, let the editor handle the arrow key (do not change page)
-            // UNLESS there's an active segment — then we want to navigate pages even from editor fields
-            var hasActiveSegment = _editorState.ActiveSegment != null 
-                                && _editorState.ActiveSegment.IsActive;
-                                
-            if (_editorState.IsArticleEditorFocused && !hasActiveSegment)
-            {
-                return; // Let the textbox handle it
-            }
 
             // Use PageController's MoveLeft if available (respects available pages list)
             if (_window != null)
@@ -104,15 +102,6 @@ public class NavigationKeyboardHandler : IKeyboardShortcutHandler
     {
         try
         {
-            // If the Article Editor has focus, let the editor handle the arrow key (do not change page)
-            // UNLESS there's an active segment — then we want to navigate pages even from editor fields
-            var hasActiveSegment = _editorState.ActiveSegment != null 
-                                && _editorState.ActiveSegment.IsActive;
-                                
-            if (_editorState.IsArticleEditorFocused && !hasActiveSegment)
-            {
-                return; // Let the textbox handle it
-            }
 
             // Use PageController's MoveRight if available (respects available pages list)
             if (_window != null)

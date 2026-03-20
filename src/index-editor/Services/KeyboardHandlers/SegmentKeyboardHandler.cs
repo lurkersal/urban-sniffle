@@ -1,7 +1,9 @@
 using System;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using IndexEditor.Shared;
 
 namespace IndexEditor.Services.KeyboardHandlers;
@@ -28,31 +30,39 @@ public class SegmentKeyboardHandler : IKeyboardShortcutHandler
 
     public bool TryHandle(KeyEventArgs e)
     {
-        // Ctrl+A: Add segment at current page (global)
+        // Esc: Always handle escape - either cancel segment or exit editor focus
+        if (e.Key == Key.Escape)
+        {
+            return HandleEscape(e);
+        }
+
+        // When the article editor has focus, don't intercept any shortcuts except ESC
+        // to allow normal text editing (Ctrl+A for Select All, Ctrl+C/V for copy/paste, etc.)
+        if (_editorState.IsArticleEditorFocused)
+        {
+            return false;
+        }
+
+        // Ctrl+A: Add segment at current page (only when editor is NOT focused)
         if (e.Key == Key.A && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             HandleCtrlA(e);
             return true;
         }
 
-        // Ctrl+Enter: End active segment or focus title
+        // Ctrl+Enter: End active segment or focus title (only when editor is NOT focused)
         if (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             HandleCtrlEnter(e);
             return true;
         }
 
-        // Enter: End active segment or focus article editor
+        // Enter: End active segment or focus article editor (only when editor NOT focused)
         if (e.Key == Key.Enter && !e.KeyModifiers.HasFlag(KeyModifiers.Control) && !e.KeyModifiers.HasFlag(KeyModifiers.Alt))
         {
             return HandleEnter(e);
         }
 
-        // Esc: Cancel active segment, move focus, or exit fullscreen
-        if (e.Key == Key.Escape)
-        {
-            return HandleEscape(e);
-        }
 
         return false;
     }
@@ -167,7 +177,7 @@ public class SegmentKeyboardHandler : IKeyboardShortcutHandler
             var editorFocused = _editorState.IsArticleEditorFocused;
             var hadActive = _editorState.ActiveSegment != null && _editorState.ActiveSegment.IsActive;
 
-            // If the editor has focus, ask it to end any inner editing (close dropdowns etc.)
+            // If the editor has focus, ask it to end any inner editing (close dropdowns, clear selections)
             if (editorFocused)
             {
                 EndArticleEditing();
@@ -200,16 +210,42 @@ public class SegmentKeyboardHandler : IKeyboardShortcutHandler
         return false;
     }
 
+    /// <summary>
+    /// Ends article editing when ESC is pressed - moves focus away from editor and clears text selections.
+    /// </summary>
     private void EndArticleEditing()
     {
         try
         {
+            // Try direct FindControl first (for backward compatibility)
             var aeCtrl = _window.FindControl<Views.ArticleEditor>("ArticleEditorControl") 
                       ?? _window.FindControl<Views.ArticleEditor>("ArticleEditor");
+            
+            // If not found, search the visual tree (needed when control is inside DataTemplate)
+            if (aeCtrl == null)
+            {
+                try
+                {
+                    var editors = _window.GetVisualDescendants().OfType<Views.ArticleEditor>().ToList();
+                    if (editors.Count > 0)
+                    {
+                        aeCtrl = editors[0]; // Use the first one
+                    }
+                }
+                catch (Exception ex)
+                {
+                    DebugLogger.LogException("SegmentKeyboardHandler.EndArticleEditing: visual tree search", ex);
+                }
+            }
+            
             if (aeCtrl != null)
             {
                 try { aeCtrl.EndEdit(); } 
                 catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: EndEdit on Esc", ex); }
+            }
+            else
+            {
+                DebugLogger.Log("[WARNING] SegmentKeyboardHandler.EndArticleEditing: ArticleEditor control not found");
             }
         }
         catch (Exception ex) { DebugLogger.LogException("SegmentKeyboardHandler: EndEdit lookup on Esc", ex); }

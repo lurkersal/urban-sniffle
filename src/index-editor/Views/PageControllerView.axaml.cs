@@ -532,6 +532,10 @@ namespace IndexEditor.Views
                 var article = new Common.Shared.ArticleLine();
                 article.Pages = new List<int> { _editorState.CurrentPage };
                 
+                // Refresh UI bindings to ensure all fields are properly initialized and
+                // any stale values from the previously selected article are cleared
+                article.RefreshUIBindings();
+                
                 if (_editorState.Articles == null)
                 {
                     _editorState.Articles = new List<Common.Shared.ArticleLine> { article };

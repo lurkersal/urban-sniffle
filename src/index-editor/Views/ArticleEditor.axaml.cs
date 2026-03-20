@@ -315,33 +315,65 @@ namespace IndexEditor.Views
             catch (Exception ex) { DebugLogger.LogException("ArticleEditor.TriggerOverlayFlash: outer", ex); }
         }
 
+        // Helper method to clear focus and selections from all TextBox controls
+        /// <summary>
+        /// Clears text selections in all TextBoxes and makes them invisible by setting SelectionBrush to Transparent.
+        /// This is called when the user presses ESC to exit editing mode.
+        /// </summary>
+        private void ClearAllTextSelections()
+        {
+            try
+            {
+                var textBoxes = new System.Collections.Generic.List<TextBox>();
+                
+                // Try to find TextBoxes via ContentControl first (works when inside DataTemplate)
+                var host = this.FindControl<ContentControl>("EditorContent");
+                if (host?.Content is Avalonia.Controls.Control hostContent)
+                {
+                    textBoxes = hostContent.GetLogicalDescendants().OfType<TextBox>().ToList();
+                }
+                else
+                {
+                    // Fallback: search entire visual tree of this ArticleEditor
+                    textBoxes = this.GetVisualDescendants().OfType<TextBox>().ToList();
+                }
+                
+                if (textBoxes.Count == 0) return;
+                
+                foreach (var tb in textBoxes)
+                {
+                    try 
+                    {
+                        // Clear selection and caret position
+                        tb.SelectionStart = 0;
+                        tb.SelectionEnd = 0;
+                        tb.CaretIndex = 0;
+                        
+                        // Hide selection by making it transparent
+                        tb.SelectionBrush = Brushes.Transparent;
+                        tb.SelectionForegroundBrush = tb.Foreground;
+                        
+                        // Force visual refresh to ensure changes are visible
+                        tb.InvalidateVisual();
+                    } 
+                    catch (Exception ex) 
+                    { 
+                        DebugLogger.LogException($"ArticleEditor.ClearAllTextSelections: TextBox {tb.Name}", ex); 
+                    }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditor.ClearAllTextSelections", ex); }
+        }
+
         // End editing in the article editor: close open dropdowns and move focus away so edits stop.
         public void EndEdit()
         {
             try
             {
-                // Close any open ComboBox dropdowns inside the editor
-                try
-                {
-                    var host = this.FindControl<ContentControl>("EditorContent");
-                    if (host?.Content is Avalonia.Controls.Control hostContent)
-                    {
-                        foreach (var cb in hostContent.GetLogicalDescendants().OfType<ComboBox>())
-                        {
-                            try { cb.IsDropDownOpen = false; } catch { }
-                        }
-                        foreach (var tb in hostContent.GetLogicalDescendants().OfType<TextBox>())
-                        {
-                            // Optionally trigger LostFocus by moving focus off the textbox later
-                        }
-                    }
-                }
-                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.EndEdit: close dropdowns", ex); }
-
-                // Clear editor-focused flag so global handlers know editor is no longer focused
+                // Clear editor-focused flag FIRST
                 try { IndexEditor.Shared.EditorState.IsArticleEditorFocused = false; } catch { }
 
-                // Move keyboard focus to the invisible host to remove focus from inner editor controls
+                // Move keyboard focus away from editor controls immediately
                 try
                 {
                     var wnd = this.VisualRoot as Window;
@@ -351,18 +383,36 @@ namespace IndexEditor.Views
                         if (host != null)
                         {
                             host.Focus();
-                            return;
                         }
-                        // Fallback: focus the window itself
-                        wnd.Focus();
+                        else
+                        {
+                            wnd.Focus();
+                        }
                     }
                 }
-                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.EndEdit: move focus to host/window", ex); }
+                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.EndEdit: move focus", ex); }
+
+                // Close any open ComboBox dropdowns
+                try
+                {
+                    var host = this.FindControl<ContentControl>("EditorContent");
+                    if (host?.Content is Avalonia.Controls.Control hostContent)
+                    {
+                        foreach (var cb in hostContent.GetLogicalDescendants().OfType<ComboBox>())
+                        {
+                            try { cb.IsDropDownOpen = false; } catch { }
+                        }
+                    }
+                }
+                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.EndEdit: close dropdowns", ex); }
+
+                // Clear all text selections synchronously
+                ClearAllTextSelections();
             }
             catch (Exception ex) { DebugLogger.LogException("ArticleEditor.EndEdit: outer", ex); }
         }
 
-        // Flash a control briefly so the user can see which control got focus (debugging aid)
+        // Flash a control briefly so the user can see which control got focus (visual debugging aid)
         private void FlashControl(Control ctrl)
         {
             if (ctrl == null) return;
@@ -374,7 +424,6 @@ namespace IndexEditor.Views
                     // Save originals and apply highlight depending on concrete control type
                     if (ctrl is TextBox tb)
                     {
-                        DebugLogger.Log("[DEBUG] ArticleEditor.FlashControl: flashing TextBox");
                         var origBg = tb.Background;
                         var origBorder = tb.BorderBrush;
                         tb.Background = Brushes.LightGoldenrodYellow;
@@ -395,7 +444,6 @@ namespace IndexEditor.Views
                     }
                     else if (ctrl is ComboBox cb)
                     {
-                        DebugLogger.Log("[DEBUG] ArticleEditor.FlashControl: flashing ComboBox");
                         var origBg = cb.Background;
                         cb.Background = Brushes.LightGoldenrodYellow;
                         _ = System.Threading.Tasks.Task.Run(async () =>
@@ -409,7 +457,6 @@ namespace IndexEditor.Views
                     }
                     else if (ctrl is Border br)
                     {
-                        DebugLogger.Log("[DEBUG] ArticleEditor.FlashControl: flashing Border");
                         var origBg = br.Background;
                         br.Background = Brushes.LightGoldenrodYellow;
                         _ = System.Threading.Tasks.Task.Run(async () =>
@@ -423,7 +470,6 @@ namespace IndexEditor.Views
                     }
                     else if (ctrl is Panel p)
                     {
-                        DebugLogger.Log("[DEBUG] ArticleEditor.FlashControl: flashing Panel");
                         var origBg = p.Background;
                         p.Background = Brushes.LightGoldenrodYellow;
                         _ = System.Threading.Tasks.Task.Run(async () =>
@@ -444,6 +490,9 @@ namespace IndexEditor.Views
         {
             try
             {
+                // Clear text selections when article changes to prevent selection from persisting
+                ClearAllTextSelections();
+                
                 // Post to UI thread and start a background retry loop to focus Title when the DataTemplate is realized.
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
@@ -501,6 +550,24 @@ namespace IndexEditor.Views
                 });
             }
             catch (Exception ex) { DebugLogger.LogException("ArticleEditor.OnEditorStateChanged: outermost", ex); }
+        }
+
+        /// <summary>
+        /// Restores normal SelectionBrush when a TextBox receives focus, allowing normal text selection.
+        /// This reverses the Transparent brush set by ClearAllTextSelections().
+        /// </summary>
+        private void OnTextBoxGotFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is TextBox tb)
+                {
+                    // Restore default SelectionBrush by clearing the local value
+                    tb.ClearValue(TextBox.SelectionBrushProperty);
+                    tb.ClearValue(TextBox.SelectionForegroundBrushProperty);
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnTextBoxGotFocus", ex); }
         }
 
         // Event handler for Pages TextBox LostFocus - trigger validation when editing is complete

@@ -16,6 +16,13 @@
         <local:ShowMeasurementsConverter x:Key="ShowMeasurements" />
         <local:ShowContributorCategoryConverter x:Key="ShowContributor" />
     </UserControl.Resources>
+    <UserControl.Styles>
+        <!-- Style to hide selection when TextBox is not focused -->
+        <Style Selector="TextBox:not(:focus)">
+            <Setter Property="SelectionBrush" Value="Transparent" />
+            <Setter Property="SelectionForegroundBrush" Value="{Binding $self.Foreground}" />
+        </Style>
+    </UserControl.Styles>
     <Grid Margin="8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -35,7 +42,8 @@
                                 <!-- Title row (now first) -->
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                                     <TextBlock Text="Title:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                    <TextBox Name="TitleTextBox" Text="{Binding Title, Mode=TwoWay}" Width="360" LostFocus="OnTitleTextBoxLostFocus" />
+                                    <TextBox Name="TitleTextBox" Text="{Binding Title, Mode=TwoWay}" Width="360" 
+                                             GotFocus="OnTextBoxGotFocus" LostFocus="OnTitleTextBoxLostFocus" />
                                 </StackPanel>
 
                                 <!-- Category row -->
@@ -56,17 +64,20 @@
                                 <!-- Model/Cover rows -->
                                 <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter=&quot;2&quot;}">
                                     <TextBlock Text="Model:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                    <TextBox Name="ModelNameTextBox" Text="{Binding ModelName0, Mode=TwoWay}" Width="360" LostFocus="OnModelNameTextBoxLostFocus" />
+                                    <TextBox Name="ModelNameTextBox" Text="{Binding ModelName0, Mode=TwoWay}" Width="360" 
+                                             GotFocus="OnTextBoxGotFocus" LostFocus="OnModelNameTextBoxLostFocus" />
                                 </StackPanel>
 
                                 <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowAge}}">
                                     <TextBlock Text="Age:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                    <TextBox Name="AgeTextBox" Text="{Binding Age0, Mode=TwoWay}" Width="120" LostFocus="OnAgeTextBoxLostFocus" />
+                                    <TextBox Name="AgeTextBox" Text="{Binding Age0, Mode=TwoWay}" Width="120" 
+                                             GotFocus="OnTextBoxGotFocus" LostFocus="OnAgeTextBoxLostFocus" />
                                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowMeasurements}}">
                     <TextBlock Text="Measurements:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                    <TextBox Name="MeasurementsTextBox" Width="240" LostFocus="OnMeasurementsTextBoxLostFocus">
+                    <TextBox Name="MeasurementsTextBox" Width="240" 
+                             GotFocus="OnTextBoxGotFocus" LostFocus="OnMeasurementsTextBoxLostFocus">
                         <TextBox.Text>
                             <Binding Path="Measurements0" Mode="TwoWay" UpdateSourceTrigger="LostFocus" />
                         </TextBox.Text>
@@ -82,13 +93,16 @@
                                 <!-- Unified contributor row (field 6). Label changes depending on category via FieldLabelConverter. -->
                                 <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowContributor}}">
                                     <TextBlock Text="{Binding Category, Converter={StaticResource FieldLabelConverter}, ConverterParameter=Photographer}" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                    <TextBox Name="ContributorTextBox" Text="{Binding Contributor0, Mode=TwoWay}" Width="360" LostFocus="OnContributorTextBoxLostFocus" />
+                                    <TextBox Name="ContributorTextBox" Text="{Binding Contributor0, Mode=TwoWay}" Width="360" 
+                                             GotFocus="OnTextBoxGotFocus" LostFocus="OnContributorTextBoxLostFocus" />
                                 </StackPanel>
 
                                 <!-- Pages row -->
                                 <StackPanel Orientation="Horizontal" Margin="0,4">
                                     <TextBlock Text="Pages:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                    <TextBox Name="PagesTextBox" Text="{Binding PagesText, Mode=TwoWay}" Width="240" BorderBrush="{Binding HasPagesError, Converter={StaticResource FieldErrorToBrushConverter}}" LostFocus="OnPagesTextBoxLostFocus" />
+                                    <TextBox Name="PagesTextBox" Text="{Binding PagesText, Mode=TwoWay}" Width="240" 
+                                             BorderBrush="{Binding HasPagesError, Converter={StaticResource FieldErrorToBrushConverter}}" 
+                                             GotFocus="OnTextBoxGotFocus" LostFocus="OnPagesTextBoxLostFocus" />
                                 </StackPanel>
                             </StackPanel>
                         </Border>

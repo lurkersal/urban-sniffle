@@ -759,6 +759,13 @@ public partial class MainWindow : Window
         {
             if (_articleDeletionService == null) return;
             
+            // Don't handle Delete key when article editor is focused - allow normal text deletion
+            var editorState = _editorState ?? new IndexEditor.Shared.EditorStateService();
+            if (editorState.IsArticleEditorFocused)
+            {
+                return;
+            }
+            
             if (!_articleDeletionService.CanDeleteArticle())
             {
                 // Check if we should show a message about active segment

@@ -30,6 +30,13 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
 
     public bool TryHandle(KeyEventArgs e)
     {
+        // When the article editor has focus, don't handle any shortcuts
+        // to allow normal text editing (except those explicitly allowed in FileKeyboardHandler)
+        if (_editorState.IsArticleEditorFocused)
+        {
+            return false;
+        }
+
         // Ctrl+N: Create new article
         if (e.Key == Key.N && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {

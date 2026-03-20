@@ -41,35 +41,45 @@ public class FileKeyboardHandler : IKeyboardShortcutHandler
 
     public bool TryHandle(KeyEventArgs e)
     {
-        // Ctrl+O: Open folder
+        // When the article editor has focus, only Ctrl+S and Ctrl+O should override editor input.
+        // All other keys should be passed to the editor for normal text editing.
+        bool editorFocused = _editorState.IsArticleEditorFocused;
+
+        // Ctrl+O: Open folder - allow even when editor is focused
         if (e.Key == Key.O && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             HandleCtrlO(e);
             return true;
         }
 
-        // Ctrl+S: Save index file
+        // Ctrl+S: Save index file - allow even when editor is focused
         if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             HandleCtrlS(e);
             return true;
         }
 
-        // Ctrl+I: Toggle index file overlay
+        // When editor is focused, don't handle any other shortcuts - let them pass to text boxes
+        if (editorFocused)
+        {
+            return false;
+        }
+
+        // Ctrl+I: Toggle index file overlay (blocked when editor focused)
         if (e.Key == Key.I && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             HandleCtrlI(e);
             return true;
         }
 
-        // Ctrl+B: Check babepedia for selected article
+        // Ctrl+B: Check babepedia for selected article (blocked when editor focused)
         if (e.Key == Key.B && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             HandleCtrlB(e);
             return true;
         }
 
-        // F11: Toggle fullscreen
+        // F11: Toggle fullscreen (blocked when editor focused)
         if (e.Key == Key.F11)
         {
             HandleF11(e);
