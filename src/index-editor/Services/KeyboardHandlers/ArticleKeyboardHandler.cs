@@ -65,6 +65,13 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
             return true;
         }
 
+        // Ctrl+B: Check Babepedia for the selected article's model
+        if (e.Key == Key.B && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            HandleCtrlB(e);
+            return true;
+        }
+
         // Up/Down arrows: Navigate article list (when article list has focus)
         if (e.Key == Key.Up || e.Key == Key.Down)
         {
@@ -441,6 +448,161 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
         catch (Exception ex)
         {
             DebugLogger.LogException("ArticleKeyboardHandler: NavigateToArticle inner", ex);
+        }
+    }
+
+    private void HandleCtrlB(KeyEventArgs e)
+    {
+        try
+        {
+            DebugLogger.Log("Ctrl+B: Check Babepedia for selected article");
+
+            var vm = _window.DataContext as EditorStateViewModel;
+            var article = vm?.SelectedArticle ?? _editorState.ActiveArticle;
+
+            if (article == null)
+            {
+                UpdateStatusBar("No article selected", null);
+                e.Handled = true;
+                return;
+            }
+
+            // Only check Model and Cover categories
+            if (article.Category != "Model" && article.Category != "Cover")
+            {
+                UpdateStatusBar($"Article '{article.DisplayTitle}' is not a Model or Cover article", null);
+                e.Handled = true;
+                return;
+            }
+
+            // Get the first model name
+            var modelName = article.ModelNames?.FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(modelName))
+            {
+                UpdateStatusBar($"No model name found for '{article.DisplayTitle}'", null);
+                e.Handled = true;
+                return;
+            }
+
+            // Show "Checking..." message
+            UpdateStatusBar($"Checking Babepedia for {modelName}...", null);
+
+            // Perform the check asynchronously
+            System.Threading.Tasks.Task.Run(async () =>
+            {
+                try
+                {
+                    var (exists, url) = await IndexEditor.Services.BabepediaService.CheckModelPageAsync(modelName);
+
+                    // Update status bar on UI thread
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        if (exists)
+                        {
+                            UpdateStatusBar($"✓ Babepedia: {modelName}", url);
+                            DebugLogger.Info($"Babepedia link found: {url}");
+                        }
+                        else
+                        {
+                            UpdateStatusBar($"✗ Babepedia: {modelName} not found", null);
+                            DebugLogger.Debug($"Babepedia: {modelName} not found");
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    DebugLogger.LogException("ArticleKeyboardHandler: Babepedia check task", ex);
+                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        UpdateStatusBar($"Error checking Babepedia for {modelName}", null);
+                    });
+                }
+            });
+
+            e.Handled = true;
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException("ArticleKeyboardHandler: Ctrl+B handler", ex);
+            UpdateStatusBar("Error performing Babepedia check", null);
+        }
+    }
+
+    private void UpdateStatusBar(string message, string? clickableUrl)
+    {
+        try
+        {
+            var statusText = _window.FindControl<TextBlock>("StatusText");
+            var statusLink = _window.FindControl<TextBlock>("StatusLink");
+            
+            if (statusText != null)
+            {
+                statusText.Text = message;
+            }
+
+            if (statusLink != null)
+            {
+                if (!string.IsNullOrWhiteSpace(clickableUrl))
+                {
+                    // Show clickable link
+                    statusLink.Text = clickableUrl;
+                    statusLink.IsVisible = true;
+                    
+                    // Remove any existing handlers to avoid duplicates
+                    statusLink.PointerPressed -= OnStatusLinkClicked;
+                    
+                    // Store the URL as a tag for the click handler
+                    statusLink.Tag = clickableUrl;
+                    
+                    // Wire up click handler
+                    statusLink.PointerPressed += OnStatusLinkClicked;
+                }
+                else
+                {
+                    // Hide link
+                    statusLink.IsVisible = false;
+                    statusLink.Text = string.Empty;
+                    statusLink.Tag = null;
+                    statusLink.PointerPressed -= OnStatusLinkClicked;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException("ArticleKeyboardHandler: UpdateStatusBar", ex);
+        }
+    }
+
+    private void OnStatusLinkClicked(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        try
+        {
+            if (sender is TextBlock tb && tb.Tag is string url && !string.IsNullOrWhiteSpace(url))
+            {
+                DebugLogger.Log($"Opening Babepedia URL: {url}");
+                
+                // Open URL in default browser
+                try
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = url,
+                        UseShellExecute = true
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                    
+                    DebugLogger.Info($"Opened Babepedia URL in browser: {url}");
+                }
+                catch (Exception ex)
+                {
+                    DebugLogger.LogException("ArticleKeyboardHandler: Open URL in browser", ex);
+                    ToastService.Show($"Failed to open URL: {ex.Message}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            DebugLogger.LogException("ArticleKeyboardHandler: OnStatusLinkClicked", ex);
         }
     }
 }

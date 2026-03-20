@@ -114,6 +114,7 @@
                                 <TextBlock Text="↑ / ↓: Change active article" />
                                 <TextBlock Text="E: focus category combo" />
                                 <TextBlock Text="Ctrl+I: Toggle editable _index.txt overlay" />
+                                <TextBlock Text="Ctrl+B: Check Babepedia for selected article's model" />
                                 <TextBlock Text="" />
                                 <TextBlock Text="Segments" FontWeight="Bold" FontSize="14" />
                                 <TextBlock TextWrapping="Wrap">A segment is a contiguous set of pages that belong to an article. Use Ctrl+A to start or open a segment for the current article on the current page. While a segment is active, selection of other articles is locked and page changes update the active segment end. End the segment with Enter or Ctrl+Enter, or cancel with Esc.</TextBlock>
@@ -175,11 +176,17 @@
 
         <!-- Status Bar -->
         <Border Grid.Row="2" Grid.ColumnSpan="3" Background="#F5F5F5" BorderBrush="#CCCCCC" BorderThickness="0,1,0,0" Padding="8,4">
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                <TextBlock x:Name="StatusText" Grid.Column="0" Text="Ready" VerticalAlignment="Center" />
-                <ProgressBar x:Name="LinkDiscoveryProgress" Grid.Column="1" Margin="10,0" Minimum="0" Maximum="100" Value="0" IsVisible="False" Height="16" />
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,*">
+                <!-- Left side: Link discovery status -->
+                <TextBlock x:Name="LinkDiscoveryStatus" Grid.Column="0" Text="" VerticalAlignment="Center" IsVisible="False" />
+                <ProgressBar x:Name="LinkDiscoveryProgress" Grid.Column="1" Margin="10,0" Minimum="0" Maximum="100" Value="0" IsVisible="False" Height="16" Width="120" />
                 <Button x:Name="StartLinkDiscoveryBtn" Grid.Column="2" Content="Scan for Links" Margin="10,0" IsVisible="False" Padding="8,4" />
-                <TextBlock x:Name="LinkDiscoveryStatus" Grid.Column="3" Text="" VerticalAlignment="Center" IsVisible="False" />
+                
+                <!-- Center: Babepedia status (uses spacer columns 3 and 6 to center) -->
+                <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock x:Name="StatusText" Text="Ready" VerticalAlignment="Center" />
+                    <TextBlock x:Name="StatusLink" Text="" VerticalAlignment="Center" Foreground="Blue" TextDecorations="Underline" Cursor="Hand" IsVisible="False" Margin="10,0,0,0" />
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>
