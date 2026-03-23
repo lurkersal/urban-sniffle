@@ -254,16 +254,21 @@ public class FolderLoadingService : IFolderLoadingService
     {
         try
         {
-            if ((_linkDiscoveryUIService?.DiscoveredLinks.Count ?? 0) > 0)
+            var linksCount = _linkDiscoveryUIService?.DiscoveredLinks.Count ?? 0;
+            
+            if (linksCount > 0)
             {
-                // Links already exist, show button to optionally re-scan
+                // Links already exist (loaded from JSON), show button to optionally re-scan
+                // DO NOT auto-start discovery - user can manually trigger it if desired
                 _linkDiscoveryUIService?.ShowLinksLoadedFromIndex();
+                DebugLogger.Log($"FolderLoadingService: {linksCount} links already loaded from index, skipping auto-scan");
             }
             else
             {
                 // No links exist, auto-start discovery
                 var magazineName = _editorState.CurrentMagazine ?? "Unknown";
                 _linkDiscoveryService?.StartDiscovery(folder, magazineName);
+                DebugLogger.Log($"FolderLoadingService: No links loaded, auto-starting link discovery scan");
             }
         }
         catch (Exception ex)

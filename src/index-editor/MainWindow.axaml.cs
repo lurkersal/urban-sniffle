@@ -119,6 +119,9 @@ public partial class MainWindow : Window
             _linkDiscoveryService = new Services.LinkDiscoveryService();
             _linkDiscoveryUIService = new Services.LinkDiscoveryUIService(this, _editorState ?? new IndexEditor.Shared.EditorStateService());
             
+            // Initialize BottomBarService for status messages
+            Services.BottomBarService.Initialize(this);
+            
             // Wire up link discovery events
             _linkDiscoveryService.ProgressChanged += _linkDiscoveryUIService.OnLinkDiscoveryProgress;
             _linkDiscoveryService.LinkDiscovered += _linkDiscoveryUIService.OnLinkDiscovered;

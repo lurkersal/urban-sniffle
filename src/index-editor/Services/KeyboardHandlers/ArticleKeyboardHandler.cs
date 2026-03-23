@@ -462,7 +462,7 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
 
             if (article == null)
             {
-                UpdateStatusBar("No article selected", null);
+                Services.BottomBarService.ShowMessage("No article selected", false);
                 e.Handled = true;
                 return;
             }
@@ -470,7 +470,7 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
             // Only check Model and Cover categories
             if (article.Category != "Model" && article.Category != "Cover")
             {
-                UpdateStatusBar($"Article '{article.DisplayTitle}' is not a Model or Cover article", null);
+                Services.BottomBarService.ShowMessage($"Article '{article.DisplayTitle}' is not a Model or Cover article", false);
                 e.Handled = true;
                 return;
             }
@@ -479,13 +479,13 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
             var modelName = article.ModelNames?.FirstOrDefault();
             if (string.IsNullOrWhiteSpace(modelName))
             {
-                UpdateStatusBar($"No model name found for '{article.DisplayTitle}'", null);
+                Services.BottomBarService.ShowMessage($"No model name found for '{article.DisplayTitle}'", false);
                 e.Handled = true;
                 return;
             }
 
             // Show "Checking..." message
-            UpdateStatusBar($"Checking Babepedia for {modelName}...", null);
+            Services.BottomBarService.ShowMessage($"Checking Babepedia for {modelName}...", false);
 
             // Perform the check asynchronously
             System.Threading.Tasks.Task.Run(async () =>
@@ -494,28 +494,22 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
                 {
                     var (exists, url) = await IndexEditor.Services.BabepediaService.CheckModelPageAsync(modelName);
 
-                    // Update status bar on UI thread
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    // The BottomBarService handles UI thread dispatching
+                    if (exists && !string.IsNullOrWhiteSpace(url))
                     {
-                        if (exists)
-                        {
-                            UpdateStatusBar($"✓ Babepedia: {modelName}", url);
-                            DebugLogger.Info($"Babepedia link found: {url}");
-                        }
-                        else
-                        {
-                            UpdateStatusBar($"✗ Babepedia: {modelName} not found", null);
-                            DebugLogger.Debug($"Babepedia: {modelName} not found");
-                        }
-                    });
+                        Services.BottomBarService.ShowMessageWithLink($"✓ Babepedia: {modelName}", url, true);
+                        DebugLogger.Info($"Babepedia link found: {url}");
+                    }
+                    else
+                    {
+                        Services.BottomBarService.ShowMessage($"✗ Babepedia: {modelName} not found", false);
+                        DebugLogger.Debug($"Babepedia: {modelName} not found");
+                    }
                 }
                 catch (Exception ex)
                 {
                     DebugLogger.LogException("ArticleKeyboardHandler: Babepedia check task", ex);
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        UpdateStatusBar($"Error checking Babepedia for {modelName}", null);
-                    });
+                    Services.BottomBarService.ShowMessage($"Error checking Babepedia for {modelName}", false);
                 }
             });
 
@@ -524,7 +518,7 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
         catch (Exception ex)
         {
             DebugLogger.LogException("ArticleKeyboardHandler: Ctrl+B handler", ex);
-            UpdateStatusBar("Error performing Babepedia check", null);
+            Services.BottomBarService.ShowMessage("Error performing Babepedia check", false);
         }
     }
 

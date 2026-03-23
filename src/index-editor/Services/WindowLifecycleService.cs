@@ -131,6 +131,34 @@ public class WindowLifecycleService : IWindowLifecycleService
                     _window.Width = st.Width > 0 ? st.Width : _window.Width;
                     _window.Height = st.Height > 0 ? st.Height : _window.Height;
                 }
+
+                // Restore column widths if they were saved
+                if (st.Column0Width > 0 && st.Column1Width > 0 && st.Column2Width > 0)
+                {
+                    try
+                    {
+                        var mainGrid = _window.FindControl<Grid>("MainGrid");
+                        if (mainGrid != null && mainGrid.ColumnDefinitions.Count >= 3)
+                        {
+                            mainGrid.ColumnDefinitions[0] = new ColumnDefinition(st.Column0Width, GridUnitType.Star);
+                            mainGrid.ColumnDefinitions[1] = new ColumnDefinition(st.Column1Width, GridUnitType.Star);
+                            mainGrid.ColumnDefinitions[2] = new ColumnDefinition(st.Column2Width, GridUnitType.Star);
+                            DebugLogger.Log($"WindowLifecycleService: Restored column widths: {st.Column0Width:F2}, {st.Column1Width:F2}, {st.Column2Width:F2}");
+                        }
+                        else
+                        {
+                            DebugLogger.Log("WindowLifecycleService: MainGrid not found or has insufficient columns");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        DebugLogger.LogException("WindowLifecycleService.RestoreWindowState: restore column widths", ex);
+                    }
+                }
+                else
+                {
+                    DebugLogger.Log($"WindowLifecycleService: Column widths not saved (col0={st.Column0Width}, col1={st.Column1Width}, col2={st.Column2Width})");
+                }
             }
         }
         catch (Exception ex)
@@ -270,7 +298,33 @@ public class WindowLifecycleService : IWindowLifecycleService
             if (double.IsNaN(height) || double.IsInfinity(height) || height <= 0)
                 height = 768;
 
-            WindowStateStore.SetWindowState(width, height, isMax);
+            // Capture column widths from MainGrid
+            double col0Width = 0, col1Width = 0, col2Width = 0;
+            try
+            {
+                var mainGrid = _window.FindControl<Grid>("MainGrid");
+                if (mainGrid != null && mainGrid.ColumnDefinitions.Count >= 3)
+                {
+                    var col0 = mainGrid.ColumnDefinitions[0];
+                    var col1 = mainGrid.ColumnDefinitions[1];
+                    var col2 = mainGrid.ColumnDefinitions[2];
+
+                    // Only save if they use Star sizing (resizable columns)
+                    if (col0.Width.IsStar && col1.Width.IsStar && col2.Width.IsStar)
+                    {
+                        col0Width = col0.Width.Value;
+                        col1Width = col1.Width.Value;
+                        col2Width = col2.Width.Value;
+                        DebugLogger.Log($"WindowLifecycleService: Saving column widths: {col0Width:F2}, {col1Width:F2}, {col2Width:F2}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("WindowLifecycleService.SaveWindowState: capture column widths", ex);
+            }
+
+            WindowStateStore.SetWindowState(width, height, isMax, col0Width, col1Width, col2Width);
         }
         catch (Exception ex)
         {
