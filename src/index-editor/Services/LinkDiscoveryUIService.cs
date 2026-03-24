@@ -115,6 +115,7 @@ public class LinkDiscoveryUIService : ILinkDiscoveryUIService
                 {
                     var progress = _window.FindControl<ProgressBar>("LinkDiscoveryProgress");
                     var status = _window.FindControl<TextBlock>("LinkDiscoveryStatus");
+                    var linkCountText = _window.FindControl<TextBlock>("LinkCountText");
 
                     if (progress != null && status != null)
                     {
@@ -122,6 +123,12 @@ public class LinkDiscoveryUIService : ILinkDiscoveryUIService
                         status.IsVisible = true;
                         progress.Value = e.PercentComplete;
                         status.Text = $"Scanning for links: {e.ProcessedPages}/{e.TotalPages} pages";
+                    }
+
+                    // Clear the link count text during scan to avoid showing stale data from previous folder
+                    if (linkCountText != null && e.ProcessedPages == 0)
+                    {
+                        linkCountText.Text = "";
                     }
                 }
                 catch (Exception ex) { DebugLogger.LogException("OnLinkDiscoveryProgress UI update", ex); }

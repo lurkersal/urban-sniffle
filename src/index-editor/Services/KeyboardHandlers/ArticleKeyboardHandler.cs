@@ -305,11 +305,31 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
                 return;
             }
 
-            // Navigate to first article (index 0)
+            // Select first article (index 0) without changing the current page
             var targetArticle = articles[0];
-            NavigateToArticle(vm, targetArticle);
             
-            DebugLogger.Log("Navigated to first article (top of list)");
+            if (vm != null)
+            {
+                vm.SelectedArticle = targetArticle;
+                _editorState.ActiveArticle = targetArticle;
+            }
+            else
+            {
+                _editorState.ActiveArticle = targetArticle;
+            }
+            
+            // Update ListBox selection
+            var lb = _window.FindControl<Views.ArticleList>("ArticleListControl")?.FindControl<ListBox>("ArticlesListBox");
+            if (lb != null)
+            {
+                try
+                {
+                    lb.SelectedIndex = 0;
+                }
+                catch (Exception ex) { DebugLogger.LogException("ArticleKeyboardHandler: update ListBox selection", ex); }
+            }
+            
+            DebugLogger.Log("Navigated to first article (top of list) - page unchanged");
             e.Handled = true;
         }
         catch (Exception ex)
@@ -341,11 +361,31 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
                 return;
             }
 
-            // Navigate to last article (index = count - 1)
+            // Select last article (index = count - 1) without changing the current page
             var targetArticle = articles[articles.Count - 1];
-            NavigateToArticle(vm, targetArticle);
             
-            DebugLogger.Log("Navigated to last article (bottom of list)");
+            if (vm != null)
+            {
+                vm.SelectedArticle = targetArticle;
+                _editorState.ActiveArticle = targetArticle;
+            }
+            else
+            {
+                _editorState.ActiveArticle = targetArticle;
+            }
+            
+            // Update ListBox selection
+            var lb = _window.FindControl<Views.ArticleList>("ArticleListControl")?.FindControl<ListBox>("ArticlesListBox");
+            if (lb != null)
+            {
+                try
+                {
+                    lb.SelectedIndex = articles.Count - 1;
+                }
+                catch (Exception ex) { DebugLogger.LogException("ArticleKeyboardHandler: update ListBox selection", ex); }
+            }
+            
+            DebugLogger.Log("Navigated to last article (bottom of list) - page unchanged");
             e.Handled = true;
         }
         catch (Exception ex)

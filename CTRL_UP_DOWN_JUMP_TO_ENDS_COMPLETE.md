@@ -12,7 +12,7 @@ The keyboard shortcuts **Ctrl+Up** and **Ctrl+Down** have been updated to provid
 - **Ctrl+Up**: Jump to the **first article** (top of list)
 - **Ctrl+Down**: Jump to the **last article** (bottom of list)
 
-This complements the existing Up/Down arrow keys which navigate one article at a time.
+**Important**: These shortcuts **only change the selected article** in the list. The **current page remains unchanged**, allowing you to quickly select different articles while staying on the same page you're viewing.
 
 ---
 
@@ -163,6 +163,28 @@ private void HandleCtrlDown(KeyEventArgs e)
 ---
 
 ## Behavior Details
+
+### Current Page Preservation ⭐
+**Key Feature**: Ctrl+Up and Ctrl+Down **do NOT change the current page**.
+
+- Only the **selected article** in the list changes
+- The **page you're viewing remains the same**
+- This allows you to quickly select different articles while maintaining your current viewing position
+
+**Example**:
+```
+Current state:
+- Viewing page 45
+- Article #5 selected (pages 40-50)
+
+Press Ctrl+Up:
+- Now viewing page 45 (unchanged) ✅
+- Article #1 selected (pages 3-10)
+
+Press Ctrl+Down:
+- Still viewing page 45 (unchanged) ✅
+- Article #15 selected (pages 60-70)
+```
 
 ### Respects Editor Focus
 Both shortcuts respect the article editor focus state:
@@ -344,4 +366,6 @@ Article list navigation is now faster and more intuitive! 🎉
 ---
 
 **End of Document**
+
+
 
