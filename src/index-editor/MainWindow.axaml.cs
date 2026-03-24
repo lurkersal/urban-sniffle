@@ -119,6 +119,9 @@ public partial class MainWindow : Window
             _linkDiscoveryService = new Services.LinkDiscoveryService();
             _linkDiscoveryUIService = new Services.LinkDiscoveryUIService(this, _editorState ?? new IndexEditor.Shared.EditorStateService());
             
+            // Initialize status text to show link count
+            _linkDiscoveryUIService.UpdateStatusText();
+            
             // Initialize BottomBarService for status messages
             Services.BottomBarService.Initialize(this);
             

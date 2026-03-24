@@ -176,7 +176,7 @@
 
         <!-- Status Bar -->
         <Border Grid.Row="2" Grid.ColumnSpan="3" Background="#F5F5F5" BorderBrush="#CCCCCC" BorderThickness="0,1,0,0" Padding="8,4">
-            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,*">
+            <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto,*,Auto,Auto">
                 <!-- Left side: Link discovery status -->
                 <TextBlock x:Name="LinkDiscoveryStatus" Grid.Column="0" Text="" VerticalAlignment="Center" IsVisible="False" />
                 <ProgressBar x:Name="LinkDiscoveryProgress" Grid.Column="1" Margin="10,0" Minimum="0" Maximum="100" Value="0" IsVisible="False" Height="16" Width="120" />
@@ -184,9 +184,12 @@
                 
                 <!-- Center: Babepedia status (uses spacer columns 3 and 6 to center) -->
                 <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock x:Name="StatusText" Text="Ready" VerticalAlignment="Center" />
                     <TextBlock x:Name="StatusLink" Text="" VerticalAlignment="Center" Foreground="Blue" TextDecorations="Underline" Cursor="Hand" IsVisible="False" Margin="10,0,0,0" />
                 </StackPanel>
+                
+                <!-- Right side: Link count and Ready status -->
+                <TextBlock x:Name="LinkCountText" Grid.Column="7" Text="" VerticalAlignment="Center" HorizontalAlignment="Right" Foreground="#666" Margin="0,0,15,0" />
+                <TextBlock x:Name="StatusText" Grid.Column="8" Text="Ready" VerticalAlignment="Center" HorizontalAlignment="Right" Foreground="LightGreen" />
             </Grid>
         </Border>
     </Grid>

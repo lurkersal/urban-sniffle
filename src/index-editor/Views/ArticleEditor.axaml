@@ -61,6 +61,13 @@
                                     </StackPanel>
                                 </StackPanel>
 
+                                <!-- Photographer row (positioned below Category, above Model) -->
+                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowContributor}}">
+                                    <TextBlock Text="{Binding Category, Converter={StaticResource FieldLabelConverter}, ConverterParameter=Photographer}" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
+                                    <TextBox Name="ContributorTextBox" Text="{Binding Contributor0, Mode=TwoWay}" Width="360" 
+                                             GotFocus="OnTextBoxGotFocus" LostFocus="OnContributorTextBoxLostFocus" />
+                                </StackPanel>
+
                                 <!-- Model/Cover rows -->
                                 <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter=&quot;2&quot;}">
                                     <TextBlock Text="Model:" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
@@ -90,12 +97,6 @@
                                           Margin="124,2,0,0" 
                                           IsVisible="{Binding HasMeasurementsError}" />
 
-                                <!-- Unified contributor row (field 6). Label changes depending on category via FieldLabelConverter. -->
-                                <StackPanel Orientation="Horizontal" Margin="0,4" IsVisible="{Binding Category, Converter={StaticResource ShowContributor}}">
-                                    <TextBlock Text="{Binding Category, Converter={StaticResource FieldLabelConverter}, ConverterParameter=Photographer}" FontWeight="Bold" Width="120" VerticalAlignment="Center"/>
-                                    <TextBox Name="ContributorTextBox" Text="{Binding Contributor0, Mode=TwoWay}" Width="360" 
-                                             GotFocus="OnTextBoxGotFocus" LostFocus="OnContributorTextBoxLostFocus" />
-                                </StackPanel>
 
                                 <!-- Pages row -->
                                 <StackPanel Orientation="Horizontal" Margin="0,4">

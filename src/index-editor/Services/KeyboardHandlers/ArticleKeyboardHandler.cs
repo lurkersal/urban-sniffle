@@ -11,7 +11,9 @@ namespace IndexEditor.Services.KeyboardHandlers;
 /// Handles keyboard shortcuts related to article operations.
 /// - Ctrl+N: Create new article
 /// - Ctrl+D: Delete selected article
-/// - Up/Down: Navigate article list
+/// - Up/Down: Navigate article list (previous/next)
+/// - Ctrl+Up: Jump to first article (top of list)
+/// - Ctrl+Down: Jump to last article (bottom of list)
 /// 
 /// Now uses IEditorState via dependency injection instead of static EditorState.
 /// </summary>
@@ -284,7 +286,7 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
     {
         try
         {
-            DebugLogger.Log("Ctrl+Up: Navigate to previous article");
+            DebugLogger.Log("Ctrl+Up: Navigate to first article (top of list)");
 
             // Don't handle if article editor has focus
             if (_editorState.IsArticleEditorFocused)
@@ -303,36 +305,11 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
                 return;
             }
 
-            // Find current article index
-            int currentIndex = -1;
-            if (vm?.SelectedArticle != null)
-            {
-                currentIndex = articles.IndexOf(vm.SelectedArticle);
-            }
-            else if (_editorState.ActiveArticle != null)
-            {
-                currentIndex = articles.IndexOf(_editorState.ActiveArticle);
-            }
-
-            // If no article selected, find article containing current page
-            if (currentIndex == -1)
-            {
-                currentIndex = articles.FindIndex(a => 
-                    a.Pages != null && a.Pages.Contains(_editorState.CurrentPage));
-            }
-
-            if (currentIndex <= 0)
-            {
-                DebugLogger.Log("Already at first article");
-                e.Handled = true;
-                return;
-            }
-
-            // Navigate to previous article
-            var targetArticle = articles[currentIndex - 1];
+            // Navigate to first article (index 0)
+            var targetArticle = articles[0];
             NavigateToArticle(vm, targetArticle);
             
-            DebugLogger.Log($"Navigated to previous article (index {currentIndex - 1})");
+            DebugLogger.Log("Navigated to first article (top of list)");
             e.Handled = true;
         }
         catch (Exception ex)
@@ -345,7 +322,7 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
     {
         try
         {
-            DebugLogger.Log("Ctrl+Down: Navigate to next article");
+            DebugLogger.Log("Ctrl+Down: Navigate to last article (bottom of list)");
 
             // Don't handle if article editor has focus
             if (_editorState.IsArticleEditorFocused)
@@ -364,36 +341,11 @@ public class ArticleKeyboardHandler : IKeyboardShortcutHandler
                 return;
             }
 
-            // Find current article index
-            int currentIndex = -1;
-            if (vm?.SelectedArticle != null)
-            {
-                currentIndex = articles.IndexOf(vm.SelectedArticle);
-            }
-            else if (_editorState.ActiveArticle != null)
-            {
-                currentIndex = articles.IndexOf(_editorState.ActiveArticle);
-            }
-
-            // If no article selected, find article containing current page
-            if (currentIndex == -1)
-            {
-                currentIndex = articles.FindIndex(a => 
-                    a.Pages != null && a.Pages.Contains(_editorState.CurrentPage));
-            }
-
-            if (currentIndex >= articles.Count - 1)
-            {
-                DebugLogger.Log("Already at last article");
-                e.Handled = true;
-                return;
-            }
-
-            // Navigate to next article
-            var targetArticle = articles[currentIndex + 1];
+            // Navigate to last article (index = count - 1)
+            var targetArticle = articles[articles.Count - 1];
             NavigateToArticle(vm, targetArticle);
             
-            DebugLogger.Log($"Navigated to next article (index {currentIndex + 1})");
+            DebugLogger.Log("Navigated to last article (bottom of list)");
             e.Handled = true;
         }
         catch (Exception ex)

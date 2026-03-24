@@ -49,6 +49,11 @@ public interface ILinkDiscoveryUIService
     /// Updates the UI to show that links were loaded from the index file.
     /// </summary>
     void ShowLinksLoadedFromIndex();
+
+    /// <summary>
+    /// Updates the status text to display current link count.
+    /// </summary>
+    void UpdateStatusText();
 }
 
 public class LinkDiscoveryUIService : ILinkDiscoveryUIService
@@ -110,7 +115,6 @@ public class LinkDiscoveryUIService : ILinkDiscoveryUIService
                 {
                     var progress = _window.FindControl<ProgressBar>("LinkDiscoveryProgress");
                     var status = _window.FindControl<TextBlock>("LinkDiscoveryStatus");
-                    var statusText = _window.FindControl<TextBlock>("StatusText");
 
                     if (progress != null && status != null)
                     {
@@ -118,11 +122,6 @@ public class LinkDiscoveryUIService : ILinkDiscoveryUIService
                         status.IsVisible = true;
                         progress.Value = e.PercentComplete;
                         status.Text = $"Scanning for links: {e.ProcessedPages}/{e.TotalPages} pages";
-                    }
-
-                    if (statusText != null)
-                    {
-                        statusText.Text = $"Discovering links... {e.PercentComplete}%";
                     }
                 }
                 catch (Exception ex) { DebugLogger.LogException("OnLinkDiscoveryProgress UI update", ex); }
@@ -180,7 +179,7 @@ public class LinkDiscoveryUIService : ILinkDiscoveryUIService
                 {
                     var progress = _window.FindControl<ProgressBar>("LinkDiscoveryProgress");
                     var status = _window.FindControl<TextBlock>("LinkDiscoveryStatus");
-                    var statusText = _window.FindControl<TextBlock>("StatusText");
+                    var linkCountText = _window.FindControl<TextBlock>("LinkCountText");
 
                     if (progress != null && status != null)
                     {
@@ -188,12 +187,10 @@ public class LinkDiscoveryUIService : ILinkDiscoveryUIService
                         status.IsVisible = false;
                     }
 
-                    if (statusText != null)
+                    if (linkCountText != null)
                     {
                         var linkCount = _discoveredLinks.Values.Sum(list => list.Count);
-                        statusText.Text = linkCount > 0
-                            ? $"Found {linkCount} link(s) on {_discoveredLinks.Count} page(s)"
-                            : "Ready";
+                        linkCountText.Text = linkCount > 0 ? $"{linkCount} link{(linkCount != 1 ? "s" : "")} found" : "";
 
                         // Mark index as modified if links were discovered
                         if (linkCount > 0)
@@ -219,7 +216,7 @@ public class LinkDiscoveryUIService : ILinkDiscoveryUIService
             {
                 // Links already exist, show button to optionally re-scan
                 var startBtn = _window.FindControl<Button>("StartLinkDiscoveryBtn");
-                var statusText = _window.FindControl<TextBlock>("StatusText");
+                var linkCountText = _window.FindControl<TextBlock>("LinkCountText");
 
                 if (startBtn != null)
                 {
@@ -227,10 +224,10 @@ public class LinkDiscoveryUIService : ILinkDiscoveryUIService
                     startBtn.Content = "Re-scan for Links";
                 }
 
-                if (statusText != null)
+                if (linkCountText != null)
                 {
                     var linkCount = _discoveredLinks.Values.Sum(l => l.Count);
-                    statusText.Text = $"Loaded {linkCount} link(s) from index file";
+                    linkCountText.Text = $"{linkCount} link{(linkCount != 1 ? "s" : "")} found";
                 }
             }
         }
@@ -251,6 +248,27 @@ public class LinkDiscoveryUIService : ILinkDiscoveryUIService
             }
             catch (Exception ex) { DebugLogger.LogException("UpdatePageControllerLinks", ex); }
         });
+    }
+
+    public void UpdateStatusText()
+    {
+        try
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    var linkCountText = _window.FindControl<TextBlock>("LinkCountText");
+                    if (linkCountText != null)
+                    {
+                        var linkCount = _discoveredLinks.Values.Sum(list => list.Count);
+                        linkCountText.Text = linkCount > 0 ? $"{linkCount} link{(linkCount != 1 ? "s" : "")} found" : "";
+                    }
+                }
+                catch (Exception ex) { DebugLogger.LogException("UpdateStatusText", ex); }
+            });
+        }
+        catch (Exception ex) { DebugLogger.LogException("UpdateStatusText outer", ex); }
     }
 }
 
