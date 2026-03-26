@@ -170,6 +170,48 @@ body {
     margin: 0 auto;
 }
 
+/* Statistics Dashboard */
+.stats-dashboard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding-bottom: 2rem;
+    border-bottom: 0.5px solid rgba(245, 240, 232, 0.1);
+}
+
+.stat-card {
+    background: rgba(245, 240, 232, 0.04);
+    border: 0.5px solid rgba(245, 240, 232, 0.1);
+    border-radius: 6px;
+    padding: 1.25rem 1rem;
+    text-align: center;
+    transition: all 0.2s;
+}
+
+.stat-card:hover {
+    background: rgba(245, 240, 232, 0.06);
+    border-color: rgba(245, 240, 232, 0.2);
+    transform: translateY(-2px);
+}
+
+.stat-value {
+    font-family: var(--serif);
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--gold);
+    line-height: 1;
+    margin-bottom: 0.5rem;
+}
+
+.stat-label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+}
+
 /* Section Headers */
 .section-hd {
     display: flex;

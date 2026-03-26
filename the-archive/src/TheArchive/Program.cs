@@ -17,6 +17,7 @@ builder.Services.AddControllers()
 var connectionString = builder.Configuration.GetConnectionString("MagazineDb") 
     ?? throw new InvalidOperationException("Connection string 'MagazineDb' not found.");
 builder.Services.AddSingleton(new ArchiveDatabase(connectionString));
+builder.Services.AddSingleton(new ArchiveStatistics(connectionString));
 
 // Add CORS for API
 builder.Services.AddCors(options =>

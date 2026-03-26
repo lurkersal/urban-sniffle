@@ -9,11 +9,13 @@ public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
     private readonly ArchiveDatabase _db;
+    private readonly ArchiveStatistics _stats;
 
-    public HomeController(ILogger<HomeController> logger, ArchiveDatabase db)
+    public HomeController(ILogger<HomeController> logger, ArchiveDatabase db, ArchiveStatistics stats)
     {
         _logger = logger;
         _db = db;
+        _stats = stats;
     }
 
     public async Task<IActionResult> Index()
@@ -21,15 +23,19 @@ public class HomeController : Controller
         try
         {
             var magazines = await _db.GetMagazinesAsync();
-            ViewBag.MagazineCount = magazines.Count;
+            var statistics = await _stats.GetStatisticsAsync();
+            
             ViewBag.Magazines = magazines;
-            ViewBag.Status = "Database Connected!";
+            ViewBag.MagazineCount = magazines.Count;
+            ViewBag.Stats = statistics;
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error loading home page");
             ViewBag.Status = $"Database Error: {ex.Message}";
             ViewBag.MagazineCount = 0;
             ViewBag.Magazines = new List<Magazine>();
+            ViewBag.Stats = new ArchiveStats();
         }
         
         return View();
