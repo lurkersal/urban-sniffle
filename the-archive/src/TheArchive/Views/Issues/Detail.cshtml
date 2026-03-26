@@ -1,0 +1,100 @@
+@{
+    ViewData["Title"] = ViewBag.Issue.DateLabel + " - " + ViewBag.Issue.MagazineName;
+}
+
+<div class="main fade-in">
+    <div class="section-hd">
+        <div>
+            <h1 class="section-title">@ViewBag.Issue.MagazineName <em>@ViewBag.Issue.DateLabel</em></h1>
+            <p class="section-sub">@ViewBag.Issue.VolumeDisplay, @ViewBag.Issue.IssueNumber</p>
+        </div>
+        <span class="count-badge">@ViewBag.Articles.Count Article@(ViewBag.Articles.Count != 1 ? "s" : "")</span>
+    </div>
+
+    @{
+        var articles = ViewBag.Articles as List<TheArchive.Models.Article>;
+        var categories = articles
+            .Select(a => a.CategoryName)
+            .Distinct()
+            .OrderBy(c => c)
+            .ToList();
+    }
+
+    @if (categories.Count > 1)
+    {
+        <div class="filter-bar">
+            <button class="filter-chip on" data-category="all">All</button>
+            @foreach (var cat in categories)
+            {
+                <button class="filter-chip" data-category="@cat.ToLower()">@cat</button>
+            }
+        </div>
+    }
+
+    <div class="article-list" id="article-list">
+        @foreach (var article in ViewBag.Articles)
+        {
+            var catClass = "cat-" + article.Category;
+            <div class="article-row" data-category="@article.CategoryName.ToLower()" data-article-id="@article.ArticleId" data-page="@article.PageStart">
+                <div class="article-pg">@article.PageStart</div>
+                <div class="article-body">
+                    <div>
+                        <span class="article-cat @catClass">@article.CategoryName</span>
+                    </div>
+                    @if (!string.IsNullOrEmpty(article.Title))
+                    {
+                        <div class="article-title">@article.Title</div>
+                    }
+                    else
+                    {
+                        <div class="article-title" style="color: var(--muted); font-style: italic;">Untitled</div>
+                    }
+                    @if (!string.IsNullOrEmpty(article.ModelName) || !string.IsNullOrEmpty(article.Photographer))
+                    {
+                        <div class="article-byline">
+                            @if (!string.IsNullOrEmpty(article.ModelName))
+                            {
+                                <span>Model: <a href="/models/@article.ModelName.ToLower().Replace(" ", "-")">@article.ModelName</a></span>
+                            }
+                            @if (!string.IsNullOrEmpty(article.Photographer))
+                            {
+                                @if (!string.IsNullOrEmpty(article.ModelName))
+                                {
+                                    <span> • </span>
+                                }
+                                <span>Photo: @article.Photographer</span>
+                            }
+                        </div>
+                    }
+                </div>
+                <button class="article-spread-btn" onclick="openSpread(@article.PageStart, @ViewBag.Issue.IssueId)">View Spread</button>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Category filtering
+        document.querySelectorAll('.filter-chip').forEach(chip => {
+            chip.addEventListener('click', function() {
+                const category = this.dataset.category;
+                
+                // Update active chip
+                document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('on'));
+                this.classList.add('on');
+                
+                // Filter articles
+                const articles = document.querySelectorAll('.article-row');
+                articles.forEach(article => {
+                    if (category === 'all' || article.dataset.category === category) {
+                        article.style.display = '';
+                    } else {
+                        article.style.display = 'none';
+                    }
+                });
+            });
+        });
+    </script>
+}
+
