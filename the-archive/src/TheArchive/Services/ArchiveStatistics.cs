@@ -22,8 +22,8 @@ public class ArchiveStatistics
         stats.TotalMagazines = await connection.QuerySingleAsync<int>("SELECT COUNT(*) FROM magazine");
         stats.TotalIssues = await connection.QuerySingleAsync<int>("SELECT COUNT(*) FROM issue");
         stats.TotalArticles = await connection.QuerySingleAsync<int>("SELECT COUNT(*) FROM content");
-        stats.TotalModels = await connection.QuerySingleAsync<int>("SELECT COUNT(DISTINCT model_id) FROM content_model WHERE model_id IS NOT NULL");
-        stats.TotalPhotographers = await connection.QuerySingleAsync<int>("SELECT COUNT(DISTINCT photographer) FROM content WHERE photographer IS NOT NULL");
+        stats.TotalModels = await connection.QuerySingleAsync<int>("SELECT COUNT(DISTINCT modelid) FROM contentmodel WHERE modelid IS NOT NULL");
+        stats.TotalPhotographers = await connection.QuerySingleAsync<int>("SELECT COUNT(DISTINCT contributorid) FROM contentcontributor");
         
         // Get detailed data
         stats.RecentIssues = await GetRecentIssuesAsync(connection);
@@ -37,26 +37,26 @@ public class ArchiveStatistics
     {
         var sql = @"
             SELECT 
-                i.issue_id as IssueId,
-                m.name as MagazineName,
+                i.issueid,
+                m.name as magazinename,
                 i.year,
                 i.number,
-                COUNT(c.content_id) as ArticleCount
+                COUNT(c.contentid) as articlecount
             FROM issue i
-            JOIN magazine m ON i.magazine_id = m.magazine_id
-            LEFT JOIN content c ON i.issue_id = c.issue_id
-            GROUP BY i.issue_id, m.name, i.year, i.number
+            JOIN magazine m ON i.magazineid = m.magazineid
+            LEFT JOIN content c ON i.issueid = c.issueid
+            GROUP BY i.issueid, m.name, i.year, i.number
             ORDER BY i.year DESC, i.number DESC
             LIMIT 5";
         
         var results = await connection.QueryAsync(sql);
         return results.Select(r => new RecentIssue
         {
-            IssueId = r.IssueId,
-            MagazineName = r.MagazineName,
-            Year = r.year,
-            Number = r.number,
-            ArticleCount = r.ArticleCount
+            IssueId = (int)r.issueid,
+            MagazineName = (string)r.magazinename ?? string.Empty,
+            Year = (int)r.year,
+            Number = r.number.ToString() ?? string.Empty,
+            ArticleCount = (long)r.articlecount
         }).ToList();
     }
 
@@ -64,21 +64,21 @@ public class ArchiveStatistics
     {
         var sql = @"
             SELECT 
-                m.model_id as ModelId,
-                m.name as Name,
-                COUNT(DISTINCT cm.content_id) as AppearanceCount
+                m.modelid,
+                m.name,
+                COUNT(DISTINCT cm.articleid) as appearancecount
             FROM model m
-            JOIN content_model cm ON m.model_id = cm.model_id
-            GROUP BY m.model_id, m.name
-            ORDER BY AppearanceCount DESC
+            JOIN contentmodel cm ON m.modelid = cm.modelid
+            GROUP BY m.modelid, m.name
+            ORDER BY appearancecount DESC
             LIMIT 5";
         
         var results = await connection.QueryAsync(sql);
         return results.Select(r => new TopModel
         {
-            ModelId = r.ModelId,
-            Name = r.Name,
-            AppearanceCount = r.AppearanceCount
+            ModelId = (int)r.modelid,
+            Name = (string)r.name ?? string.Empty,
+            AppearanceCount = (int)(long)r.appearancecount
         }).ToList();
     }
 
@@ -86,17 +86,18 @@ public class ArchiveStatistics
     {
         var sql = @"
             SELECT 
-                cat.name as CategoryName,
-                COUNT(*) as Count
+                cat.name as categoryname,
+                COUNT(*) as count
             FROM content c
-            JOIN category cat ON c.category_id = cat.category_id
+            JOIN article a ON c.articleid = a.articleid
+            JOIN category cat ON a.categoryid = cat.categoryid
             GROUP BY cat.name
-            ORDER BY Count DESC";
+            ORDER BY count DESC";
         
         var results = await connection.QueryAsync(sql);
         return results.ToDictionary(
-            r => (string)r.CategoryName,
-            r => (int)r.Count
+            r => (string)r.categoryname ?? string.Empty,
+            r => (int)(long)r.count
         );
     }
 }
@@ -119,7 +120,7 @@ public class RecentIssue
     public string MagazineName { get; set; } = string.Empty;
     public int Year { get; set; }
     public string Number { get; set; } = string.Empty;
-    public int ArticleCount { get; set; }
+    public long ArticleCount { get; set; }
 }
 
 public class TopModel

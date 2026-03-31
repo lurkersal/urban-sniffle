@@ -187,12 +187,30 @@ body {
     padding: 1.25rem 1rem;
     text-align: center;
     transition: all 0.2s;
+    display: block;
+    text-decoration: none;
+    color: inherit;
 }
 
-.stat-card:hover {
+.stat-card-link {
+    cursor: pointer;
+}
+
+.stat-card-link:hover {
     background: rgba(245, 240, 232, 0.06);
     border-color: rgba(245, 240, 232, 0.2);
     transform: translateY(-2px);
+}
+
+.stat-card-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.stat-card-disabled:hover {
+    background: rgba(245, 240, 232, 0.04);
+    border-color: rgba(245, 240, 232, 0.1);
+    transform: none;
 }
 
 .stat-value {
@@ -806,6 +824,208 @@ body {
 
 .random-btn svg {
     flex-shrink: 0;
+}
+
+/* Filter Toggle Button */
+.filter-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(245, 240, 232, 0.08);
+    border: 0.5px solid rgba(245, 240, 232, 0.2);
+    border-radius: 4px;
+    color: var(--paper);
+    font-size: 12px;
+    font-family: var(--sans);
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.filter-toggle-btn:hover,
+.filter-toggle-btn.active {
+    background: rgba(184, 146, 42, 0.15);
+    border-color: var(--gold);
+    color: var(--gold);
+}
+
+.filter-toggle-btn svg {
+    flex-shrink: 0;
+}
+
+/* Filter Panel */
+.filter-panel {
+    background: rgba(245, 240, 232, 0.04);
+    border: 0.5px solid rgba(245, 240, 232, 0.1);
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.filter-row {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 200px;
+}
+
+.filter-label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+}
+
+.filter-input {
+    background: rgba(245, 240, 232, 0.06);
+    border: 0.5px solid rgba(245, 240, 232, 0.2);
+    border-radius: 4px;
+    color: var(--paper);
+    font-size: 14px;
+    font-family: var(--sans);
+    padding: 8px 12px;
+    transition: all 0.15s;
+}
+
+.filter-input:focus {
+    outline: none;
+    border-color: var(--gold);
+    background: rgba(245, 240, 232, 0.08);
+}
+
+.filter-input::placeholder {
+    color: var(--muted);
+}
+
+.filter-year-inputs {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.filter-year-inputs .filter-input {
+    flex: 1;
+    width: 100px;
+}
+
+.filter-separator {
+    color: var(--muted);
+    font-size: 14px;
+}
+
+/* Magazine Multi-Select */
+.filter-magazine-select {
+    position: relative;
+}
+
+.filter-dropdown-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(245, 240, 232, 0.06);
+    border: 0.5px solid rgba(245, 240, 232, 0.2);
+    border-radius: 4px;
+    color: var(--paper);
+    font-size: 14px;
+    font-family: var(--sans);
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.filter-dropdown-btn:hover {
+    border-color: var(--gold);
+    background: rgba(245, 240, 232, 0.08);
+}
+
+.filter-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: rgba(15, 14, 13, 0.98);
+    border: 0.5px solid rgba(245, 240, 232, 0.2);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 100;
+}
+
+.filter-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 13px;
+}
+
+.filter-checkbox-item:hover {
+    background: rgba(245, 240, 232, 0.08);
+}
+
+.filter-checkbox-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--gold);
+}
+
+/* Filter Actions */
+.filter-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-end;
+}
+
+.filter-apply-btn {
+    background: var(--gold);
+    border: none;
+    border-radius: 4px;
+    color: var(--ink);
+    font-size: 12px;
+    font-family: var(--sans);
+    font-weight: 600;
+    padding: 8px 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.filter-apply-btn:hover {
+    background: #c9a030;
+}
+
+.filter-clear-btn {
+    background: transparent;
+    border: 0.5px solid rgba(245, 240, 232, 0.2);
+    border-radius: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    font-family: var(--sans);
+    font-weight: 500;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.filter-clear-btn:hover {
+    border-color: rgba(245, 240, 232, 0.4);
+    color: var(--paper);
 }
 
 /* Search Results Dropdown */

@@ -1,0 +1,142 @@
+@{
+    ViewData["Title"] = ViewBag.Article?.Title ?? "Article";
+    var article = ViewBag.Article as TheArchive.Models.Article;
+    var issue = ViewBag.Issue as TheArchive.Models.Issue;
+}
+
+<div class="main fade-in">
+    <div class="section-hd">
+        <div>
+            <h1 class="section-title">@(article?.Title ?? "Untitled Article")</h1>
+            @if (issue != null)
+            {
+                <p class="section-sub">
+                    <a href="/magazines/@issue.MagazineSlug">@issue.MagazineName</a> &middot; 
+                    <a href="/issues/@issue.IssueId">@issue.DateLabel</a> &middot; 
+                    Page @article?.PageStart
+                </p>
+            }
+        </div>
+    </div>
+
+    @if (article != null)
+    {
+        <div class="article-detail">
+            <div class="article-meta-grid">
+                <div class="meta-item">
+                    <span class="meta-label">Category:</span>
+                    <span class="meta-value">@article.CategoryName</span>
+                </div>
+                
+                @if (!string.IsNullOrEmpty(article.ModelName))
+                {
+                    <div class="meta-item">
+                        <span class="meta-label">Model:</span>
+                        <span class="meta-value">
+                            <a href="/models/@article.ModelId">@article.ModelName</a>
+                        </span>
+                    </div>
+                }
+                
+                @if (!string.IsNullOrEmpty(article.Photographer))
+                {
+                    <div class="meta-item">
+                        <span class="meta-label">Photographer:</span>
+                        <span class="meta-value">@article.Photographer</span>
+                    </div>
+                }
+                
+                @if (!string.IsNullOrEmpty(article.Author))
+                {
+                    <div class="meta-item">
+                        <span class="meta-label">Author:</span>
+                        <span class="meta-value">@article.Author</span>
+                    </div>
+                }
+            </div>
+            
+            <div class="article-actions">
+                @if (issue != null)
+                {
+                    <a href="/issues/@issue.IssueId" class="btn-primary">View Full Issue</a>
+                }
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="empty-state">
+            <p>Article not found.</p>
+        </div>
+    }
+</div>
+
+<style>
+    .article-detail {
+        max-width: 800px;
+        margin: 2rem auto;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 2rem;
+    }
+    
+    .article-meta-grid {
+        display: grid;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .meta-item {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .meta-label {
+        font-weight: 600;
+        color: #666;
+        min-width: 120px;
+    }
+    
+    .meta-value {
+        color: #333;
+    }
+    
+    .meta-value a {
+        color: #667eea;
+        text-decoration: none;
+    }
+    
+    .meta-value a:hover {
+        text-decoration: underline;
+    }
+    
+    .article-actions {
+        display: flex;
+        gap: 1rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid #e0e0e0;
+    }
+    
+    .btn-primary {
+        background: #667eea;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-primary:hover {
+        background: #5568d3;
+        transform: translateY(-1px);
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #999;
+    }
+</style>
+

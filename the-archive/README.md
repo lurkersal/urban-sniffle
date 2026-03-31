@@ -2,6 +2,30 @@
 
 ASP.NET Core 8.0 web application for viewing a curated collection of British men's magazines from the 1970s, 80s, and 90s.
 
+## 🚀 Quick Start
+
+### Start the Application
+```bash
+cd /home/justin/repos/urban-sniffle/the-archive
+./start-archive.sh
+```
+
+### Stop the Application
+```bash
+./stop-archive.sh
+```
+
+### ⚠️ "Address Already In Use" Error?
+If you see `Failed to bind to address http://127.0.0.1:5163: address already in use`:
+```bash
+./stop-archive.sh  # Stops any running instances
+./start-archive.sh # Starts fresh
+```
+
+**See `QUICK_START_GUIDE.md` for detailed troubleshooting.**
+
+---
+
 ## Overview
 
 This application provides a read-only interface to browse magazines, issues, articles, and models. It uses the **existing database schema** from the `magazine-viewer` project and adapts it to the requirements specified in `the-archive-spec.docx`.

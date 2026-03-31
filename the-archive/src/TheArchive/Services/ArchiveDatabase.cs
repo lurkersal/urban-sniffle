@@ -116,6 +116,67 @@ public class ArchiveDatabase
     }
 
     /// <summary>
+    /// Get filtered issues with advanced filter options
+    /// </summary>
+    public async Task<List<Issue>> GetFilteredIssuesAsync(
+        int? yearFrom = null,
+        int? yearTo = null,
+        List<int>? magazineIds = null,
+        int page = 1,
+        int perPage = 100)
+    {
+        using var conn = GetConnection();
+        
+        var whereClauses = new List<string>();
+        var parameters = new DynamicParameters();
+        
+        if (yearFrom.HasValue)
+        {
+            whereClauses.Add("i.Year >= @YearFrom");
+            parameters.Add("YearFrom", yearFrom.Value);
+        }
+        
+        if (yearTo.HasValue)
+        {
+            whereClauses.Add("i.Year <= @YearTo");
+            parameters.Add("YearTo", yearTo.Value);
+        }
+        
+        if (magazineIds != null && magazineIds.Any())
+        {
+            whereClauses.Add("i.MagazineId = ANY(@MagazineIds)");
+            parameters.Add("MagazineIds", magazineIds.ToArray());
+        }
+        
+        var whereClause = whereClauses.Any() ? "WHERE " + string.Join(" AND ", whereClauses) : "";
+        
+        var sql = $@"
+            SELECT 
+                i.IssueId,
+                i.MagazineId,
+                i.Volume,
+                i.Number,
+                i.Year,
+                i.LinkScanPerformed,
+                m.Name as MagazineName,
+                COUNT(DISTINCT c.ArticleId) as ArticleCount
+            FROM Issue i
+            JOIN Magazine m ON i.MagazineId = m.MagazineId
+            LEFT JOIN Content c ON i.IssueId = c.IssueId
+            {whereClause}
+            GROUP BY i.IssueId, i.MagazineId, i.Volume, i.Number, i.Year, i.LinkScanPerformed, m.Name
+            ORDER BY i.Year DESC, i.Volume DESC, i.Number DESC
+            LIMIT @PerPage OFFSET @Offset";
+        
+        var offset = (page - 1) * perPage;
+        parameters.Add("PerPage", perPage);
+        parameters.Add("Offset", offset);
+        
+        var issues = await conn.QueryAsync<Issue>(sql, parameters);
+        return issues.ToList();
+    }
+
+    /// <summary>
     /// Get issues for a specific magazine
     /// </summary>
     public async Task<List<Issue>> GetIssuesByMagazineAsync(int magazineId)
@@ -408,6 +469,121 @@ public class ArchiveDatabase
             ORDER BY i.Year DESC, i.Volume DESC, i.Number DESC";
         
         var issues = await conn.QueryAsync<Issue>(sql, new { ModelId = modelId });
+        return issues.ToList();
+    }
+
+    #endregion
+
+    #region Contributors
+
+    /// <summary>
+    /// Get all contributors (photographers, etc.) with appearance counts
+    /// </summary>
+    public async Task<List<Contributor>> GetContributorsAsync()
+    {
+        using var conn = GetConnection();
+        const string sql = @"
+            SELECT 
+                c.ContributorId,
+                c.Name,
+                COUNT(DISTINCT cc.ContentId) as AppearanceCount
+            FROM Contributor c
+            LEFT JOIN ContentContributor cc ON c.ContributorId = cc.ContributorId
+            GROUP BY c.ContributorId, c.Name
+            ORDER BY c.Name";
+        
+        var contributors = await conn.QueryAsync<Contributor>(sql);
+        return contributors.ToList();
+    }
+
+    /// <summary>
+    /// Get a single contributor by ID or slug
+    /// </summary>
+    public async Task<Contributor?> GetContributorAsync(string idOrSlug)
+    {
+        using var conn = GetConnection();
+        
+        // Try to parse as integer ID
+        if (int.TryParse(idOrSlug, out var id))
+        {
+            const string sql = @"
+                SELECT 
+                    c.ContributorId,
+                    c.Name,
+                    COUNT(DISTINCT cc.ContentId) as AppearanceCount
+                FROM Contributor c
+                LEFT JOIN ContentContributor cc ON c.ContributorId = cc.ContributorId
+                WHERE c.ContributorId = @Id
+                GROUP BY c.ContributorId, c.Name";
+            
+            return await conn.QueryFirstOrDefaultAsync<Contributor>(sql, new { Id = id });
+        }
+        else
+        {
+            // Search by name (slug-like)
+            const string sql = @"
+                SELECT 
+                    c.ContributorId,
+                    c.Name,
+                    COUNT(DISTINCT cc.ContentId) as AppearanceCount
+                FROM Contributor c
+                LEFT JOIN ContentContributor cc ON c.ContributorId = cc.ContributorId
+                WHERE LOWER(REPLACE(REPLACE(c.Name, ' ', '-'), '.', '')) = LOWER(@Slug)
+                GROUP BY c.ContributorId, c.Name";
+            
+            return await conn.QueryFirstOrDefaultAsync<Contributor>(sql, new { Slug = idOrSlug });
+        }
+    }
+
+    /// <summary>
+    /// Get all articles by a specific contributor
+    /// </summary>
+    public async Task<List<Article>> GetArticlesByContributorAsync(int contributorId)
+    {
+        using var conn = GetConnection();
+        const string sql = @"
+            SELECT DISTINCT
+                a.ArticleId,
+                a.CategoryId,
+                a.Title,
+                cat.Name as CategoryName,
+                c.IssueId,
+                MIN(cont.Page) as PageStart
+            FROM Article a
+            JOIN Category cat ON a.CategoryId = cat.CategoryId
+            JOIN Content cont ON a.ArticleId = cont.ArticleId
+            JOIN ContentContributor cc ON cont.ContentId = cc.ContentId
+            WHERE cc.ContributorId = @ContributorId
+            GROUP BY a.ArticleId, a.CategoryId, a.Title, cat.Name, c.IssueId
+            ORDER BY a.ArticleId DESC";
+        
+        var articles = await conn.QueryAsync<Article>(sql, new { ContributorId = contributorId });
+        return articles.ToList();
+    }
+
+    /// <summary>
+    /// Get all issues featuring a specific contributor
+    /// </summary>
+    public async Task<List<Issue>> GetIssuesByContributorAsync(int contributorId)
+    {
+        using var conn = GetConnection();
+        const string sql = @"
+            SELECT DISTINCT
+                i.IssueId,
+                i.MagazineId,
+                i.Volume,
+                i.Number,
+                i.Year,
+                i.LinkScanPerformed,
+                mag.Name as MagazineName
+            FROM Issue i
+            JOIN Magazine mag ON i.MagazineId = mag.MagazineId
+            JOIN Content c ON i.IssueId = c.IssueId
+            JOIN ContentContributor cc ON c.ContentId = cc.ContentId
+            WHERE cc.ContributorId = @ContributorId
+            ORDER BY i.Year DESC, i.Volume DESC, i.Number DESC";
+        
+        var issues = await conn.QueryAsync<Issue>(sql, new { ContributorId = contributorId });
         return issues.ToList();
     }
 

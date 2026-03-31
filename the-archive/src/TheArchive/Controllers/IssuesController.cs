@@ -14,17 +14,39 @@ public class IssuesController : Controller
     }
 
     /// <summary>
-    /// GET /issues - All issues across all magazines
+    /// GET /issues - All issues across all magazines with optional filters
     /// </summary>
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(
+        int? yearFrom,
+        int? yearTo,
+        string? magazines)
     {
-        var issues = await _db.GetAllIssuesAsync(page: 1, perPage: 100);
+        // Parse magazine IDs from comma-separated string
+        List<int>? magazineIds = null;
+        if (!string.IsNullOrEmpty(magazines))
+        {
+            magazineIds = magazines.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                .Select(id => int.TryParse(id, out var magId) ? magId : 0)
+                .Where(id => id > 0)
+                .ToList();
+        }
+        
+        // Get filtered issues
+        var issues = await _db.GetFilteredIssuesAsync(yearFrom, yearTo, magazineIds);
+        
+        // Get all magazines for filter dropdown
+        var allMagazines = await _db.GetMagazinesAsync();
         
         ViewBag.Breadcrumbs = new List<BreadcrumbItem>
         {
             new BreadcrumbItem { Text = "Home", Url = "/", IsActive = false, IsLast = false },
             new BreadcrumbItem { Text = "All Issues", IsActive = true, IsLast = true }
         };
+        
+        ViewBag.AllMagazines = allMagazines;
+        ViewBag.YearFrom = yearFrom;
+        ViewBag.YearTo = yearTo;
+        ViewBag.SelectedMagazineIds = magazineIds ?? new List<int>();
         
         return View(issues);
     }

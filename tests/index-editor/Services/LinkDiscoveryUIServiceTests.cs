@@ -9,7 +9,7 @@ using Xunit;
 
 namespace IndexEditor.Tests.Services
 {
-    public class LinkDiscoveryUIServiceTests
+    public class LinkDiscoveryUIServiceTests : AvaloniaTestBase
     {
         private class TestWindow : Window
         {

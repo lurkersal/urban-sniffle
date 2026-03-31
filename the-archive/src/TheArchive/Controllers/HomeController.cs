@@ -51,4 +51,48 @@ public class HomeController : Controller
     {
         return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
     }
+
+    /// <summary>
+    /// Test endpoint to check database connectivity and counts
+    /// GET /test/db
+    /// </summary>
+    [HttpGet("test/db")]
+    public async Task<IActionResult> TestDatabase()
+    {
+        try
+        {
+            var stats = await _stats.GetStatisticsAsync();
+            var magazines = await _db.GetMagazinesAsync();
+            
+            var result = new
+            {
+                Status = "Connected",
+                Counts = new
+                {
+                    Magazines = stats.TotalMagazines,
+                    Issues = stats.TotalIssues,
+                    Articles = stats.TotalArticles,
+                    Models = stats.TotalModels,
+                    Photographers = stats.TotalPhotographers
+                },
+                SampleMagazines = magazines.Take(3).Select(m => new
+                {
+                    m.MagazineId,
+                    m.Name,
+                    m.IssueCount
+                })
+            };
+            
+            return Json(result);
+        }
+        catch (Exception ex)
+        {
+            return Json(new
+            {
+                Status = "Error",
+                Message = ex.Message,
+                StackTrace = ex.StackTrace
+            });
+        }
+    }
 }
