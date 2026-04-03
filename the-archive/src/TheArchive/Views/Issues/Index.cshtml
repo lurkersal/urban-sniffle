@@ -108,8 +108,13 @@
         @foreach (var issue in Model)
         {
             var magazineClass = issue.MagazineSlug.ToLower().Replace(" ", "-");
+            var backgroundStyle = "";
+            if (!string.IsNullOrEmpty(issue.CoverImagePath))
+            {
+                backgroundStyle = $"background-image: url('/image?path={Uri.EscapeDataString(issue.CoverImagePath)}'); background-size: cover; background-position: center;";
+            }
             <a class="issue-card" href="/issues/@issue.IssueId">
-                <div class="issue-thumb @magazineClass">
+                <div class="issue-thumb @magazineClass" style="@backgroundStyle">
                     <div class="issue-label">
                         <div class="issue-vol">@issue.VolumeDisplay</div>
                         <div class="issue-date">@issue.DateLabel</div>

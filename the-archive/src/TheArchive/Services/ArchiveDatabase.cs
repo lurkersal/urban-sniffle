@@ -159,12 +159,21 @@ public class ArchiveDatabase
                 i.Year,
                 i.LinkScanPerformed,
                 m.Name as MagazineName,
-                COUNT(DISTINCT c.ArticleId) as ArticleCount
+                COUNT(DISTINCT c.ArticleId) as ArticleCount,
+                cover.ImagePath as CoverImagePath
             FROM Issue i
             JOIN Magazine m ON i.MagazineId = m.MagazineId
             LEFT JOIN Content c ON i.IssueId = c.IssueId
+            LEFT JOIN (
+                SELECT DISTINCT ON (mc.IssueId) mc.IssueId, mc.ImagePath
+                FROM Content mc
+                JOIN Article a ON mc.ArticleId = a.ArticleId
+                JOIN Category cat ON a.CategoryId = cat.CategoryId
+                WHERE cat.Name = 'Cover'
+                ORDER BY mc.IssueId, mc.Page
+            ) cover ON i.IssueId = cover.IssueId
             {whereClause}
-            GROUP BY i.IssueId, i.MagazineId, i.Volume, i.Number, i.Year, i.LinkScanPerformed, m.Name
+            GROUP BY i.IssueId, i.MagazineId, i.Volume, i.Number, i.Year, i.LinkScanPerformed, m.Name, cover.ImagePath
             ORDER BY i.Year DESC, i.Volume DESC, i.Number DESC
             LIMIT @PerPage OFFSET @Offset";
         
@@ -220,12 +229,21 @@ public class ArchiveDatabase
                 i.LinkScanPerformed,
                 m.Name as MagazineName,
                 COUNT(DISTINCT c.ArticleId) as ArticleCount,
-                MAX(c.Page) as PageCount
+                MAX(c.Page) as PageCount,
+                cover.ImagePath as CoverImagePath
             FROM Issue i
             JOIN Magazine m ON i.MagazineId = m.MagazineId
             LEFT JOIN Content c ON i.IssueId = c.IssueId
+            LEFT JOIN (
+                SELECT DISTINCT ON (mc.IssueId) mc.IssueId, mc.ImagePath
+                FROM Content mc
+                JOIN Article a ON mc.ArticleId = a.ArticleId
+                JOIN Category cat ON a.CategoryId = cat.CategoryId
+                WHERE cat.Name = 'Cover'
+                ORDER BY mc.IssueId, mc.Page
+            ) cover ON i.IssueId = cover.IssueId
             WHERE i.IssueId = @IssueId
-            GROUP BY i.IssueId, i.MagazineId, i.Volume, i.Number, i.Year, i.LinkScanPerformed, m.Name";
+            GROUP BY i.IssueId, i.MagazineId, i.Volume, i.Number, i.Year, i.LinkScanPerformed, m.Name, cover.ImagePath";
         
         return await conn.QueryFirstOrDefaultAsync<Issue>(sql, new { IssueId = issueId });
     }
