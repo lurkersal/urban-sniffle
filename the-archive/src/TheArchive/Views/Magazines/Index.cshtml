@@ -1,0 +1,33 @@
+@{
+    ViewData["Title"] = ViewBag.Magazine.Name;
+}
+
+<div class="main fade-in">
+    <div class="section-hd">
+        <div>
+            <h1 class="section-title">@ViewBag.Magazine.Name</h1>
+            <p class="section-sub">All issues</p>
+        </div>
+        <span class="count-badge">@ViewBag.Issues.Count Issue@(ViewBag.Issues.Count != 1 ? "s" : "")</span>
+    </div>
+
+    <div class="issue-grid">
+        @foreach (var issue in ViewBag.Issues)
+        {
+            var magazineClass = ViewBag.Magazine.Id.ToLower().Replace(" ", "-");
+            <a class="issue-card" href="/issues/@issue.IssueId">
+                <div class="issue-thumb @magazineClass">
+                    <div class="issue-label">
+                        <div class="issue-vol">@issue.VolumeDisplay</div>
+                        <div class="issue-date">@issue.DateLabel</div>
+                    </div>
+                </div>
+                <div class="issue-info">
+                    <div class="issue-num">@issue.IssueNumber</div>
+                    <div class="issue-art-count">@issue.ArticleCount article@(issue.ArticleCount != 1 ? "s" : "")</div>
+                </div>
+            </a>
+        }
+    </div>
+</div>
+

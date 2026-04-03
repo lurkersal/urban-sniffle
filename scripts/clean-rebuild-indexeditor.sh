@@ -24,7 +24,6 @@ dotnet publish src/index-editor/IndexEditor.csproj \
     -r linux-x64 \
     --self-contained \
     -p:PublishSingleFile=true \
-    -p:PublishTrimmed=true \
     -o ~/bin \
     2>&1 | grep -v "warning" | tail -10
 
@@ -33,15 +32,6 @@ if [ -f ~/bin/IndexEditor ]; then
     echo "✓ Build successful!"
     echo "Binary: ~/bin/IndexEditor"
     ls -lh ~/bin/IndexEditor
-    echo ""
-    echo "========================================="
-    echo "Now run: IndexEditor"
-    echo "========================================="
-    echo ""
-    echo "Look for these log lines:"
-    echo "  1. 'CategoryComboBox not found in DataTemplate yet, will retry'"
-    echo "  2. 'Successfully set up category ComboBox binding'"
-    echo "  3. 'SelectedCategory GET:'"
 else
     echo ""
     echo "✗ Build failed - binary not created"

@@ -85,7 +85,7 @@ namespace IndexEditor.Views
             get => _selectedArticle;
             set
             {
-                try { DebugLogger.Log($"==> SelectedArticle SETTER CALLED: incoming='{value?.Title}', current='{_selectedArticle?.Title}', stacktrace={Environment.StackTrace}"); } catch { }
+                try { DebugLogger.Debug($"==> SelectedArticle SETTER CALLED: incoming='{value?.Title}', current='{_selectedArticle?.Title}'"); } catch { }
                 
                 // Normalize the incoming article to an instance from our Articles collection if possible
                 ArticleLine? incoming = value;
@@ -103,7 +103,7 @@ namespace IndexEditor.Views
                 {
                     if (activeArticle != null && !object.ReferenceEquals(activeArticle, incoming))
                     {
-                        try { DebugLogger.Log($"==> SelectedArticle SETTER: BLOCKED - active segment prevents selection change"); } catch { }
+                        try { DebugLogger.Debug($"==> SelectedArticle SETTER: BLOCKED - active segment prevents selection change"); } catch { }
                         // Inform user and do not change selection while a segment is open
                         IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first");
                         // Push a property changed so UI bindings revert to the existing selected article
@@ -116,24 +116,30 @@ namespace IndexEditor.Views
                 // exists in our Articles collection, ignore the transient null to avoid losing the editor view.
                 if (incoming == null && _selectedArticle != null && Articles.Contains(_selectedArticle))
                 {
-                    try { DebugLogger.Log($"==> SelectedArticle SETTER: IGNORING transient null (current article still in collection)"); } catch { }
+                    try { DebugLogger.Debug($"==> SelectedArticle SETTER: IGNORING transient null (current article still in collection)"); } catch { }
                     // ignore transient clear
                     return;
                 }
 
                 if (_selectedArticle != incoming)
                 {
-                    try { DebugLogger.Log($"SelectedArticle changing. incoming.Title='{incoming?.Title}', Category='{incoming?.Category}', Contributor0='{incoming?.Contributor0}'"); } catch {}
+                    try { DebugLogger.Debug($"SelectedArticle changing. incoming.Title='{incoming?.Title}', Category='{incoming?.Category}'"); } catch {}
                      _selectedArticle = incoming;
                       // Update IsSelected flags on all articles so UI bindings reflect selection
+                      // Suppress HasUnsavedChanges since this is just a UI state change
                       try
                       {
+                          _suppressHasUnsavedChanges = true;
                           foreach (var a in Articles)
                           {
                               try { a.IsSelected = object.ReferenceEquals(a, _selectedArticle); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: set IsSelected", ex); }
                           }
                       }
                       catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: updating IsSelected flags", ex); }
+                      finally
+                      {
+                          _suppressHasUnsavedChanges = false;
+                      }
                       // Ensure the global EditorState reflects the current selected article so
                       // other views (PageController, etc.) can read the active article details.
                       try
@@ -146,14 +152,23 @@ namespace IndexEditor.Views
                     try { 
                         var pagesStr = _selectedArticle?.Pages != null ? string.Join(",", _selectedArticle.Pages) : "(null)";
                         var pagesTextStr = _selectedArticle?.PagesText ?? "(null)";
-                        DebugLogger.Log($"SelectedArticle set. current.Title='{_selectedArticle?.Title}', Category='{_selectedArticle?.Category}', Contributor0='{_selectedArticle?.Contributor0}', Pages=[{pagesStr}], PagesText='{pagesTextStr}'"); 
+                        DebugLogger.Debug($"SelectedArticle set. current.Title='{_selectedArticle?.Title}', Category='{_selectedArticle?.Category}', Pages=[{pagesStr}], PagesText='{pagesTextStr}'"); 
                     } catch {}
+                    
+                    // Note: Babepedia check removed from automatic selection - now triggered manually
+                    
                       // Force the ArticleLine to notify all UI-bound properties changed so TextBox bindings refresh
+                      // Suppress HasUnsavedChanges during this refresh since no actual data is changing
                       try
                       {
+                          _suppressHasUnsavedChanges = true;
                           _selectedArticle?.RefreshUIBindings();
                       }
                       catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: RefreshUIBindings", ex); }
+                      finally
+                      {
+                          _suppressHasUnsavedChanges = false;
+                      }
                       // Notify SelectedCategory so the editor ComboBox updates to the new article's category
                       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
                       // Also notify CurrentShownArticle which may change when SelectedArticle changes
@@ -174,7 +189,8 @@ namespace IndexEditor.Views
          }
 
          private bool _suppressCategorySet = false;
-        private bool _isReordering = false;
+         private bool _suppressHasUnsavedChanges = false;
+         private bool _isReordering = false;
          public string? SelectedCategory
          {
              get
@@ -183,7 +199,7 @@ namespace IndexEditor.Views
                  // Debug: Log when category is accessed to verify binding is working
                  if (category != null)
                  {
-                     try { DebugLogger.Log($"SelectedCategory GET: '{category}' for article '{SelectedArticle?.Title}'"); } catch { }
+                     try { DebugLogger.Debug($"SelectedCategory GET: '{category}' for article '{SelectedArticle?.Title}'"); } catch { }
                  }
                  return category;
              }
@@ -428,7 +444,11 @@ namespace IndexEditor.Views
                 
                 if (dataProperties.Contains(e.PropertyName))
                 {
-                    try { IndexEditor.Shared.EditorState.HasUnsavedChanges = true; } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.OnArticlePropertyChanged: set HasUnsavedChanges", ex); }
+                    // Only set HasUnsavedChanges if we're not in the middle of refreshing UI bindings
+                    if (!_suppressHasUnsavedChanges)
+                    {
+                        try { IndexEditor.Shared.EditorState.HasUnsavedChanges = true; } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.OnArticlePropertyChanged: set HasUnsavedChanges", ex); }
+                    }
                 }
                 
                 // OnArticlePropertyChanged
@@ -562,24 +582,89 @@ namespace IndexEditor.Views
         {
             try
             {
-                try { DebugLogger.Log($"==> OnEditorStateChanged CALLED: SelectedArticle is currently '{_selectedArticle?.Title}'"); } catch { }
+                try { DebugLogger.Debug($"==> OnEditorStateChanged CALLED: SelectedArticle is currently '{_selectedArticle?.Title}'"); } catch { }
                 Dispatcher.UIThread.Post(() =>
                 {
-                    // DO NOT raise PropertyChanged for SelectedArticle here!
-                    // Raising it when the value hasn't actually changed confuses the binding
-                    // system and causes the article to disappear from the editor.
-                    // Only the SelectedArticle setter should raise this event.
+                    // ...existing code...
                     
-                    // try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle))); } catch { }
-                    
-                    // These are fine - they may actually change when EditorState changes
-                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentShownArticle))); } catch { }
-                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegmentDisplay))); } catch { }
-                    
-                    try { DebugLogger.Log($"==> OnEditorStateChanged COMPLETED: SelectedArticle is still '{_selectedArticle?.Title}'"); } catch { }
+                    try { DebugLogger.Debug($"==> OnEditorStateChanged COMPLETED: SelectedArticle is still '{_selectedArticle?.Title}'"); } catch { }
                 });
             }
             catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.OnEditorStateChanged", ex); }
+        }
+
+        /// <summary>
+        /// Manually check babepedia.com for the currently selected article
+        /// </summary>
+        public void CheckBabepediaForSelectedArticle()
+        {
+            if (_selectedArticle != null)
+            {
+                CheckBabepediaAsync(_selectedArticle);
+            }
+            else
+            {
+                IndexEditor.Shared.ToastService.Show("No article selected");
+            }
+        }
+
+        /// <summary>
+        /// Check babepedia.com for a specific article's model
+        /// </summary>
+        public async void CheckBabepediaAsync(Common.Shared.ArticleLine article)
+        {
+            try
+            {
+                DebugLogger.Debug($"CheckBabepediaAsync: Called for article '{article.Title}' (Category: {article.Category})");
+                
+                // Only check Model and Cover categories
+                if (article.Category != "Model" && article.Category != "Cover")
+                {
+                    DebugLogger.Debug($"CheckBabepediaAsync: Skipping - not a Model or Cover article");
+                    return;
+                }
+
+                DebugLogger.Debug($"CheckBabepediaAsync: Starting babepedia check for Model/Cover article");
+                var (exists, modelName, url) = await IndexEditor.Services.BabepediaService.CheckArticleModelAsync(article);
+                DebugLogger.Debug($"CheckBabepediaAsync: Result - exists={exists}, modelName='{modelName}', url='{url}'");
+
+                if (exists)
+                {
+                    // Log to info (success is worth knowing)
+                    DebugLogger.Info($"BABEPEDIA: Model '{modelName}' found at {url}");
+                    
+                    // Show debug popup on UI thread
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        try
+                        {
+                            // Find the main window
+                            var mainWindow = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                                ? desktop.MainWindow
+                                : null;
+
+                            if (mainWindow != null)
+                            {
+                                BabepediaDebugDialog.ShowDialog(mainWindow, modelName, url);
+                            }
+                            else
+                            {
+                                // Fallback to toast if we can't find the main window
+                                IndexEditor.Shared.ToastService.Show($"✓ Babepedia: {modelName}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            DebugLogger.LogException("CheckBabepediaAsync: Show babepedia dialog", ex);
+                            IndexEditor.Shared.ToastService.Show($"✓ Babepedia: {modelName}");
+                        }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("CheckBabepediaAsync", ex);
+            }
         }
     }
 }

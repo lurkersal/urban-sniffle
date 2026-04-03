@@ -1,0 +1,179 @@
+@{
+    ViewData["Title"] = ViewBag.Photographer?.Name ?? "Photographer";
+    var photographer = ViewBag.Photographer as TheArchive.Models.Contributor;
+    var articles = ViewBag.Articles as List<TheArchive.Models.Article> ?? new List<TheArchive.Models.Article>();
+    var issues = ViewBag.Issues as List<TheArchive.Models.Issue> ?? new List<TheArchive.Models.Issue>();
+}
+
+<div class="main fade-in">
+    <div class="section-hd">
+        <div>
+            <h1 class="section-title">@(photographer?.Name ?? "Photographer")</h1>
+            @if (photographer != null)
+            {
+                <p class="section-sub">@photographer.AppearanceCount @(photographer.AppearanceCount != 1 ? "appearances" : "appearance") across @issues.Count @(issues.Count != 1 ? "issues" : "issue")</p>
+            }
+        </div>
+    </div>
+
+    @if (photographer != null)
+    {
+        <div class="photographer-detail">
+            <!-- Issues Section -->
+            @if (issues.Any())
+            {
+                <div class="section">
+                    <h2 class="section-subtitle">Issues</h2>
+                    <div class="issue-grid">
+                        @foreach (var issue in issues.Take(12))
+                        {
+                            var magazineClass = issue.MagazineSlug.ToLower().Replace(" ", "-");
+                            <a class="issue-card" href="/issues/@issue.IssueId">
+                                <div class="issue-thumb @magazineClass">
+                                    <div class="issue-label">
+                                        <div class="issue-vol">@issue.VolumeDisplay</div>
+                                        <div class="issue-date">@issue.DateLabel</div>
+                                    </div>
+                                </div>
+                                <div class="issue-info">
+                                    <div class="issue-num">@issue.MagazineName</div>
+                                </div>
+                            </a>
+                        }
+                    </div>
+                    @if (issues.Count > 12)
+                    {
+                        <p class="show-more">+ @(issues.Count - 12) more issues</p>
+                    }
+                </div>
+            }
+
+            <!-- Articles Section -->
+            @if (articles.Any())
+            {
+                <div class="section">
+                    <h2 class="section-subtitle">Articles</h2>
+                    <div class="article-list">
+                        @foreach (var article in articles.Take(20))
+                        {
+                            <a class="article-item" href="/articles/@article.ArticleId">
+                                <div class="article-header">
+                                    <h3 class="article-title">@(article.Title ?? "Untitled")</h3>
+                                    <span class="article-category">@article.CategoryName</span>
+                                </div>
+                                <div class="article-meta">
+                                    @if (!string.IsNullOrEmpty(article.ModelName))
+                                    {
+                                        <span>Model: @article.ModelName</span>
+                                    }
+                                    <span>Page @article.PageStart</span>
+                                </div>
+                            </a>
+                        }
+                    </div>
+                    @if (articles.Count > 20)
+                    {
+                        <p class="show-more">+ @(articles.Count - 20) more articles</p>
+                    }
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="empty-state">
+            <p>Photographer not found.</p>
+        </div>
+    }
+</div>
+
+<style>
+    .photographer-detail {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    
+    .section {
+        margin-bottom: 3rem;
+    }
+    
+    .section-subtitle {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+        color: #333;
+    }
+    
+    .issue-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 1.5rem;
+    }
+    
+    .article-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .article-item {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 1.25rem;
+        text-decoration: none;
+        color: inherit;
+        transition: all 0.2s ease;
+    }
+    
+    .article-item:hover {
+        border-color: #667eea;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+    }
+    
+    .article-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 0.5rem;
+        gap: 1rem;
+    }
+    
+    .article-title {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #333;
+        flex: 1;
+    }
+    
+    .article-category {
+        background: #667eea;
+        color: white;
+        padding: 0.2rem 0.6rem;
+        border-radius: 10px;
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+    
+    .article-meta {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.85rem;
+        color: #666;
+    }
+    
+    .show-more {
+        text-align: center;
+        color: #666;
+        margin-top: 1.5rem;
+        font-style: italic;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #999;
+    }
+</style>
+

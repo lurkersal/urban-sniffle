@@ -89,6 +89,41 @@ namespace IndexEditor.Views
                     {
                         var wnd = this.VisualRoot as Window;
                         
+                        // Check if link discovery scan is in progress
+                        try
+                        {
+                            var main = wnd as MainWindow;
+                            if (main != null)
+                            {
+                                // Use reflection to access _linkDiscoveryService
+                                var field = typeof(MainWindow).GetField("_linkDiscoveryService", 
+                                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                                if (field != null)
+                                {
+                                    var linkDiscoveryService = field.GetValue(main) as Services.LinkDiscoveryService;
+                                    if (linkDiscoveryService?.IsScanning ?? false)
+                                    {
+                                        bool shouldWait = await ConfirmDialog.ShowDialog(
+                                            wnd,
+                                            "A link discovery scan is currently in progress. Do you want to wait for it to complete before opening a new folder?");
+                                        
+                                        if (shouldWait)
+                                        {
+                                            IndexEditor.Shared.ToastService.Show("Waiting for scan to complete. Try opening again when scan finishes.");
+                                            return; // Don't open folder
+                                        }
+                                        else
+                                        {
+                                            // User chose to cancel scan and proceed
+                                            linkDiscoveryService.StopDiscovery();
+                                            IndexEditor.Shared.ToastService.Show("Link discovery scan cancelled.");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: check scan in progress", ex); }
+                        
                         // Check for unsaved changes and prompt user
                         if (IndexEditor.Shared.EditorState.HasUnsavedChanges)
                         {

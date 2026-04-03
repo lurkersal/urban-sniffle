@@ -1,0 +1,110 @@
+﻿@{
+    ViewData["Title"] = "Magazines";
+}
+
+<div class="main fade-in">
+    <!-- Statistics Dashboard -->
+    <div class="stats-dashboard">
+        <a href="/" class="stat-card stat-card-link">
+            <div class="stat-value">@ViewBag.Stats.TotalMagazines</div>
+            <div class="stat-label">Magazines</div>
+        </a>
+        <a href="/issues" class="stat-card stat-card-link">
+            <div class="stat-value">@ViewBag.Stats.TotalIssues</div>
+            <div class="stat-label">Issues</div>
+        </a>
+        <a href="/articles" class="stat-card stat-card-link">
+            <div class="stat-value">@ViewBag.Stats.TotalArticles</div>
+            <div class="stat-label">Articles</div>
+        </a>
+        <a href="/models" class="stat-card stat-card-link">
+            <div class="stat-value">@ViewBag.Stats.TotalModels</div>
+            <div class="stat-label">Models</div>
+        </a>
+        <a href="/photographers" class="stat-card stat-card-link">
+            <div class="stat-value">@ViewBag.Stats.TotalPhotographers</div>
+            <div class="stat-label">Photographers</div>
+        </a>
+    </div>
+
+    <div class="section-hd">
+        <div>
+            <h1 class="section-title">The <em>Archive</em></h1>
+            <p class="section-sub">British Men's Magazine Collection, 1970s–1990s</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <button class="random-btn" onclick="randomMagazine()" title="View random issue">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="margin-right: 6px;">
+                    <path d="M13 3L10 6M13 13L10 10M3 3L6 6M3 13L6 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/>
+                </svg>
+                Surprise Me
+            </button>
+            <span class="count-badge">@ViewBag.MagazineCount Magazine@(ViewBag.MagazineCount != 1 ? "s" : "")</span>
+        </div>
+    </div>
+
+    <div class="mag-grid">
+        @foreach (var mag in ViewBag.Magazines)
+        {
+            <a class="mag-card" href="/magazines/@mag.Id">
+                <div class="mag-cover">
+                    @{
+                        var coverId = mag.Id.ToLower();
+                    }
+                    @if (coverId == "club-international")
+                    {
+                        <svg viewBox="0 0 190 253" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="190" height="253" fill="#0d0d0d"/>
+                            <rect x="6" y="6" width="178" height="241" fill="none" stroke="#c8a84b" stroke-width="1.5"/>
+                            <rect x="0" y="38" width="190" height="58" fill="#c8a84b"/>
+                            <text x="95" y="74" text-anchor="middle" font-family="serif" font-weight="900" font-size="36" fill="#0d0d0d" letter-spacing="-1">CLUB</text>
+                            <text x="95" y="88" text-anchor="middle" font-family="serif" font-size="10" fill="#0d0d0d" letter-spacing="5">INTERNATIONAL</text>
+                        </svg>
+                    }
+                    else if (coverId == "mayfair")
+                    {
+                        <svg viewBox="0 0 190 253" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="190" height="253" fill="#f5f0e8"/>
+                            <rect x="0" y="0" width="190" height="46" fill="#1c2b4a"/>
+                            <rect x="0" y="44" width="190" height="3" fill="#bf2e1a"/>
+                            <text x="95" y="34" text-anchor="middle" font-family="serif" font-weight="900" font-size="38" fill="#f5f0e8" letter-spacing="3">MAYFAIR</text>
+                            <rect x="0" y="47" width="190" height="3" fill="#bf2e1a"/>
+                        </svg>
+                    }
+                    else
+                    {
+                        <div class="mag-cover-placeholder">
+                            @mag.Name.Substring(0, 1)
+                        </div>
+                    }
+                </div>
+                <div class="mag-info">
+                    <div class="mag-name">@mag.Name</div>
+                    <div class="mag-meta">@mag.IssueCount issue@(mag.IssueCount != 1 ? "s" : "")</div>
+                </div>
+            </a>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        async function randomMagazine() {
+            try {
+                // Get all issues
+                const response = await fetch('/api/v1/issues');
+                const issues = await response.json();
+                
+                if (issues.length > 0) {
+                    // Pick random issue
+                    const randomIssue = issues[Math.floor(Math.random() * issues.length)];
+                    // Navigate to it
+                    window.location.href = `/issues/${randomIssue.issueId}`;
+                }
+            } catch (error) {
+                console.error('Error loading random issue:', error);
+            }
+        }
+    </script>
+}

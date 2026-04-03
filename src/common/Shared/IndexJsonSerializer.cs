@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -23,6 +24,7 @@ namespace Common.Shared
         /// <summary>
         /// Converts ArticleLine objects to JSON format and saves to _index.json
         /// </summary>
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "JSON types are preserved with DynamicallyAccessedMembers attributes")]
         public static void SaveToJson(string folder, string magazine, string volume, string number, string year, List<ArticleLine> articles, List<MagazineLink>? links = null)
         {
             if (string.IsNullOrWhiteSpace(folder))
@@ -66,6 +68,7 @@ namespace Common.Shared
         /// <summary>
         /// Loads _index.json and converts to ArticleLine objects
         /// </summary>
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "JSON types are preserved with DynamicallyAccessedMembers attributes")]
         public static (string magazine, string volume, string number, string year, List<ArticleLine> articles, List<MagazineLink>? links) LoadFromJson(string folder)
         {
             if (string.IsNullOrWhiteSpace(folder))

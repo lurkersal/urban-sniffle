@@ -1,0 +1,89 @@
+﻿﻿﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "magazine-viewer", "src\magazine-viewer", "{4D956000-3D84-4B2F-AB95-CE12E2523FD4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MagazineViewer", "src\magazine-viewer\MagazineViewer.csproj", "{95E5CE15-4AA5-498D-B991-7BD54FA989C4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "magazine-parser", "src\magazine-parser", "{40E1CE9E-4A5F-457C-B7C5-E0EA8C9A8AD7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "magazine-parser", "src\magazine-parser\magazine-parser.csproj", "{C844543D-C8C4-4BA9-9C54-9A1FCEF513FB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "file-renamer", "src\file-renamer", "{50C81300-D0DE-4EBA-A39C-3E1B9422DBB1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "file-renamer", "src\file-renamer\file-renamer.csproj", "{516D9DA6-E13F-444B-A09B-0732D2A14C4E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IndexEditor", "src\index-editor\IndexEditor.csproj", "{C558868C-33CF-4F0A-939D-AF77B5209CA9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "image-splitter", "src\image-splitter", "{B0C1D2E3-F4A5-4B6C-7D8E-9F0A1B2C3D4E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ImageSplitter", "src\image-splitter\ImageSplitter.csproj", "{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "common", "src\common\common.csproj", "{94EEDB99-CAD9-4419-9B6D-676FDE777A0C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common.Tests", "tests\common\Common.Tests.csproj", "{4E10372A-CAB8-48FC-BA9E-7460A6BFC68C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{A1B2C3D4-E5F6-4789-ABCD-EF0123456789}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FileRenamer.Tests", "tests\file-renamer\FileRenamer.Tests.csproj", "{C2D3E4F5-A6B7-4C89-DEFF-012345678901}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IndexEditor.Tests", "tests\index-editor\IndexEditor.Tests.csproj", "{E4F5A6B7-C8D9-4EAB-F012-234567890123}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{95E5CE15-4AA5-498D-B991-7BD54FA989C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{95E5CE15-4AA5-498D-B991-7BD54FA989C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{95E5CE15-4AA5-498D-B991-7BD54FA989C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{95E5CE15-4AA5-498D-B991-7BD54FA989C4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C844543D-C8C4-4BA9-9C54-9A1FCEF513FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C844543D-C8C4-4BA9-9C54-9A1FCEF513FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C844543D-C8C4-4BA9-9C54-9A1FCEF513FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C844543D-C8C4-4BA9-9C54-9A1FCEF513FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{516D9DA6-E13F-444B-A09B-0732D2A14C4E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{516D9DA6-E13F-444B-A09B-0732D2A14C4E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{516D9DA6-E13F-444B-A09B-0732D2A14C4E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{516D9DA6-E13F-444B-A09B-0732D2A14C4E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C558868C-33CF-4F0A-939D-AF77B5209CA9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C558868C-33CF-4F0A-939D-AF77B5209CA9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C558868C-33CF-4F0A-939D-AF77B5209CA9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C558868C-33CF-4F0A-939D-AF77B5209CA9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}.Release|Any CPU.Build.0 = Release|Any CPU
+		{94EEDB99-CAD9-4419-9B6D-676FDE777A0C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{94EEDB99-CAD9-4419-9B6D-676FDE777A0C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{94EEDB99-CAD9-4419-9B6D-676FDE777A0C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{94EEDB99-CAD9-4419-9B6D-676FDE777A0C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4E10372A-CAB8-48FC-BA9E-7460A6BFC68C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4E10372A-CAB8-48FC-BA9E-7460A6BFC68C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4E10372A-CAB8-48FC-BA9E-7460A6BFC68C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4E10372A-CAB8-48FC-BA9E-7460A6BFC68C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C2D3E4F5-A6B7-4C89-DEFF-012345678901}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C2D3E4F5-A6B7-4C89-DEFF-012345678901}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C2D3E4F5-A6B7-4C89-DEFF-012345678901}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C2D3E4F5-A6B7-4C89-DEFF-012345678901}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E4F5A6B7-C8D9-4EAB-F012-234567890123}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E4F5A6B7-C8D9-4EAB-F012-234567890123}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E4F5A6B7-C8D9-4EAB-F012-234567890123}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E4F5A6B7-C8D9-4EAB-F012-234567890123}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{95E5CE15-4AA5-498D-B991-7BD54FA989C4} = {4D956000-3D84-4B2F-AB95-CE12E2523FD4}
+		{C844543D-C8C4-4BA9-9C54-9A1FCEF513FB} = {40E1CE9E-4A5F-457C-B7C5-E0EA8C9A8AD7}
+		{516D9DA6-E13F-444B-A09B-0732D2A14C4E} = {50C81300-D0DE-4EBA-A39C-3E1B9422DBB1}
+		{A1B2C3D4-E5F6-7890-ABCD-EF1234567890} = {B0C1D2E3-F4A5-4B6C-7D8E-9F0A1B2C3D4E}
+		{4E10372A-CAB8-48FC-BA9E-7460A6BFC68C} = {A1B2C3D4-E5F6-4789-ABCD-EF0123456789}
+		{C2D3E4F5-A6B7-4C89-DEFF-012345678901} = {A1B2C3D4-E5F6-4789-ABCD-EF0123456789}
+		{E4F5A6B7-C8D9-4EAB-F012-234567890123} = {A1B2C3D4-E5F6-4789-ABCD-EF0123456789}
+	EndGlobalSection
+EndGlobal

@@ -13,6 +13,11 @@ namespace IndexEditor.Services
         public event EventHandler<LinkDiscoveredEventArgs>? LinkDiscovered;
         public event EventHandler? DiscoveryCompleted;
 
+        /// <summary>
+        /// Gets whether a link discovery scan is currently in progress.
+        /// </summary>
+        public bool IsScanning => _cts != null && !_cts.IsCancellationRequested;
+
         public void StartDiscovery(string folder, string magazineName)
         {
             StopDiscovery();
@@ -29,49 +34,58 @@ namespace IndexEditor.Services
 
         private async Task DiscoverAsync(string folder, string magazineName, CancellationToken ct)
         {
-            await Task.Yield();
-            var imageFiles = IndexEditor.Shared.ImageHelper.GetAllImageFiles(folder);
-            int total = imageFiles.Count;
-            int processed = 0;
-
-            foreach (var (page, path) in imageFiles)
+            try
             {
-                if (ct.IsCancellationRequested) return;
-                
-                ProgressChanged?.Invoke(this, new LinkDiscoveryProgressEventArgs 
-                { 
-                    CurrentPage = page, 
-                    TotalPages = total, 
-                    ProcessedPages = processed 
-                });
+                await Task.Yield();
+                var imageFiles = IndexEditor.Shared.ImageHelper.GetAllImageFiles(folder);
+                int total = imageFiles.Count;
+                int processed = 0;
 
-                try
+                foreach (var (page, path) in imageFiles)
                 {
-                    var text = ExtractText(path);
-                    if (!string.IsNullOrWhiteSpace(text))
+                    if (ct.IsCancellationRequested) return;
+                    
+                    ProgressChanged?.Invoke(this, new LinkDiscoveryProgressEventArgs 
+                    { 
+                        CurrentPage = page, 
+                        TotalPages = total, 
+                        ProcessedPages = processed 
+                    });
+
+                    try
                     {
-                        var links = FindLinks(text);
-                        foreach (var (vol, num) in links)
+                        var text = ExtractText(path);
+                        if (!string.IsNullOrWhiteSpace(text))
                         {
-                            if (vol > 0 && num > 0)
+                            var links = FindLinks(text);
+                            foreach (var (vol, num) in links)
                             {
-                                LinkDiscovered?.Invoke(this, new LinkDiscoveredEventArgs
+                                if (vol > 0 && num > 0)
                                 {
-                                    Page = page,
-                                    Magazine = magazineName,
-                                    Volume = vol.ToString(),
-                                    Issue = num.ToString()
-                                });
+                                    LinkDiscovered?.Invoke(this, new LinkDiscoveredEventArgs
+                                    {
+                                        Page = page,
+                                        Magazine = magazineName,
+                                        Volume = vol.ToString(),
+                                        Issue = num.ToString()
+                                    });
+                                }
                             }
                         }
                     }
+                    catch { }
+                    
+                    processed++;
                 }
-                catch { }
                 
-                processed++;
+                DiscoveryCompleted?.Invoke(this, EventArgs.Empty);
             }
-            
-            DiscoveryCompleted?.Invoke(this, EventArgs.Empty);
+            finally
+            {
+                // Clean up the cancellation token source so IsScanning returns false
+                _cts?.Dispose();
+                _cts = null;
+            }
         }
 
         private string ExtractText(string path)

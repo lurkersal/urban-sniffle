@@ -12,6 +12,19 @@ namespace IndexEditor.Tests
     {
         private static bool _initialized = false;
         private static readonly object _lock = new object();
+        private static IndexEditor.Services.IndexFileService? _indexFileService;
+        
+        /// <summary>
+        /// Gets the IIndexFileService instance for testing.
+        /// </summary>
+        public static IndexEditor.Services.IIndexFileService IndexFileService
+        {
+            get
+            {
+                EnsureInitialized();
+                return _indexFileService!;
+            }
+        }
         
         /// <summary>
         /// Initializes DI services for testing.
@@ -28,6 +41,10 @@ namespace IndexEditor.Tests
                     // Create real instances for testing
                     var editorState = new EditorStateService();
                     var editorActions = new EditorActionsService(editorState);
+                    
+                    // Use NullLogger for tests
+                    var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<IndexEditor.Services.IndexFileService>.Instance;
+                    _indexFileService = new IndexEditor.Services.IndexFileService(logger);
                     
                     // Set static instances
                     EditorState.SetInstance(editorState);

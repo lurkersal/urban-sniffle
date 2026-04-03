@@ -65,7 +65,6 @@ projects=(
     "src/file-renamer/file-renamer.csproj"
     "src/magazine-parser/magazine-parser.csproj"
     "src/image-splitter/ImageSplitter.csproj"
-    "src/find-links/find-links.csproj"
     "src/common/measure-test/measure-test.csproj"
 )
 

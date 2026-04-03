@@ -20,6 +20,22 @@ public partial class MainWindow : Window
     
     public string? FolderToOpen { get; }
 
+    // Service fields
+    private IndexEditor.Shared.IKeyboardShortcutService? _shortcutService;
+    private Services.KeyboardHandlers.KeyboardShortcutDispatcher? _keyboardDispatcher;
+    private Services.FullscreenImageService? _fullscreenService;
+    private Services.OverlayManager? _overlayManager;
+    private Services.LinkDiscoveryService? _linkDiscoveryService;
+    private Services.LinkDiscoveryUIService? _linkDiscoveryUIService;
+    private Services.FolderLoadingService? _folderLoadingService;
+    private Services.ArticleDeletionService? _articleDeletionService;
+    private Services.WindowLifecycleService? _windowLifecycleService;
+    private readonly Services.IIndexFileService? _indexFileService;
+    private Services.IDialogService? _dialogService;
+    private readonly IndexEditor.Shared.IEditorState? _editorState;
+    private readonly IndexEditor.Shared.IEditorActions? _editorActions;
+    private Services.IFileOperationsService? _fileOperationsService;
+
     private Views.MainWindowViewModel? _mainViewModel;
     public Views.MainWindowViewModel? MainViewModel
     {
@@ -46,26 +62,52 @@ public partial class MainWindow : Window
 
     public MainWindow() : this(null) { }
 
-    private IndexEditor.Shared.IKeyboardShortcutService? _shortcutService;
-    private Services.KeyboardHandlers.KeyboardShortcutDispatcher? _keyboardDispatcher;
-    private Services.FullscreenImageService? _fullscreenService;
-    private Services.OverlayManager? _overlayManager;
-    private Services.LinkDiscoveryService? _linkDiscoveryService;
-    private Dictionary<int, List<Common.Shared.MagazineLink>> _discoveredLinks = new();
+    /// <summary>
+    /// Set the dialog service (called from App.axaml.cs after MainWindow is created)
+    /// </summary>
+    public void SetDialogService(Services.IDialogService dialogService)
+    {
+        _dialogService = dialogService;
+        
+        // Reinitialize WindowLifecycleService with the DialogService
+        _windowLifecycleService = new Services.WindowLifecycleService(
+            this,
+            _editorState ?? new IndexEditor.Shared.EditorStateService(),
+            _dialogService,
+            _linkDiscoveryService,
+            GetDiscoveredLinks);
+    }
 
     /// <summary>
     /// Get all discovered links as a flat list for saving
     /// </summary>
     public List<Common.Shared.MagazineLink> GetDiscoveredLinks()
     {
-        return _discoveredLinks.Values.SelectMany(l => l).ToList();
+        return _linkDiscoveryUIService?.DiscoveredLinks.Values.SelectMany(l => l).ToList() 
+            ?? new List<Common.Shared.MagazineLink>();
     }
 
-    public MainWindow(string? folderToOpen = null)
+    public MainWindow(string? folderToOpen = null) : this(folderToOpen, null, null, null) { }
+
+    public MainWindow(string? folderToOpen, Services.IIndexFileService? indexFileService) : this(folderToOpen, indexFileService, null, null) { }
+
+    public MainWindow(string? folderToOpen, Services.IIndexFileService? indexFileService, IndexEditor.Shared.IEditorState? editorState) 
+        : this(folderToOpen, indexFileService, editorState, null) { }
+
+    public MainWindow(string? folderToOpen, Services.IIndexFileService? indexFileService, IndexEditor.Shared.IEditorState? editorState, IndexEditor.Shared.IEditorActions? editorActions)
     {
         // MainWindow constructor
         Instance = this;
         FolderToOpen = folderToOpen;
+        _indexFileService = indexFileService;
+        _editorState = editorState;
+        _editorActions = editorActions;
+
+        // Initialize FileOperationsService if we have an IIndexFileService
+        if (_indexFileService != null)
+        {
+            _fileOperationsService = new Services.FileOperationsService(_indexFileService, _editorState);
+        }
 
         InitializeComponent();
         
@@ -75,11 +117,42 @@ public partial class MainWindow : Window
             _fullscreenService = new Services.FullscreenImageService(this);
             _overlayManager = new Services.OverlayManager(this);
             _linkDiscoveryService = new Services.LinkDiscoveryService();
+            _linkDiscoveryUIService = new Services.LinkDiscoveryUIService(this, _editorState ?? new IndexEditor.Shared.EditorStateService());
+            
+            // Initialize status text to show link count
+            _linkDiscoveryUIService.UpdateStatusText();
+            
+            // Initialize BottomBarService for status messages
+            Services.BottomBarService.Initialize(this);
             
             // Wire up link discovery events
-            _linkDiscoveryService.ProgressChanged += OnLinkDiscoveryProgress;
-            _linkDiscoveryService.LinkDiscovered += OnLinkDiscovered;
-            _linkDiscoveryService.DiscoveryCompleted += OnLinkDiscoveryCompleted;
+            _linkDiscoveryService.ProgressChanged += _linkDiscoveryUIService.OnLinkDiscoveryProgress;
+            _linkDiscoveryService.LinkDiscovered += _linkDiscoveryUIService.OnLinkDiscovered;
+            _linkDiscoveryService.DiscoveryCompleted += _linkDiscoveryUIService.OnLinkDiscoveryCompleted;
+            
+            // Initialize FolderLoadingService
+            _folderLoadingService = new Services.FolderLoadingService(
+                this,
+                _editorState ?? new IndexEditor.Shared.EditorStateService(),
+                _fileOperationsService,
+                _indexFileService,
+                _linkDiscoveryUIService,
+                _linkDiscoveryService,
+                ImageExistsInFolder);
+            
+            // Initialize ArticleDeletionService
+            _articleDeletionService = new Services.ArticleDeletionService(
+                this,
+                _editorState ?? new IndexEditor.Shared.EditorStateService(),
+                _editorActions);
+            
+            // Initialize WindowLifecycleService (will be set with DialogService later)
+            _windowLifecycleService = new Services.WindowLifecycleService(
+                this,
+                _editorState ?? new IndexEditor.Shared.EditorStateService(),
+                _dialogService,
+                _linkDiscoveryService,
+                GetDiscoveredLinks);
         }
         catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: init services", ex); }
         // After InitializeComponent, wire view-specific bridges
@@ -88,6 +161,39 @@ public partial class MainWindow : Window
             var pcControl = this.FindControl<IndexEditor.Views.PageControllerView>("PageControllerControl");
             if (pcControl != null)
             {
+                // Inject EditorState if available
+                if (_editorState != null)
+                {
+                    pcControl.SetEditorState(_editorState);
+                }
+                
+                // Inject all services from DI container or create defaults
+                // Note: These will be from DI container when services are properly registered in App.axaml.cs
+                var pageNav = new Services.PageNavigationService();
+                var imageLoad = new Services.ImageLoadingService();
+                var linkMgmt = new Services.LinkManagementService();
+                var articleCardRenderer = new Services.ArticleCardRenderer();
+                var articleDisplayCoord = new Services.ArticleDisplayCoordinator(
+                    _editorState ?? new IndexEditor.Shared.EditorStateService(), 
+                    articleCardRenderer);
+                var articleFocusMgr = new Services.ArticleFocusManager(
+                    _editorState ?? new IndexEditor.Shared.EditorStateService());
+                var segmentMgmt = new Services.SegmentManagementService(
+                    _editorState ?? new IndexEditor.Shared.EditorStateService());
+                var pageNavCoord = new Services.PageNavigationCoordinator(
+                    _editorState ?? new IndexEditor.Shared.EditorStateService(), 
+                    pageNav);
+                
+                pcControl.SetServices(
+                    pageNav,
+                    imageLoad,
+                    linkMgmt,
+                    articleCardRenderer,
+                    articleDisplayCoord,
+                    articleFocusMgr,
+                    segmentMgmt,
+                    pageNavCoord);
+                
                 // Create bridge implementation and assign to VM (SetBridge call is unnecessary)
                 var bridge = new PageControllerBridge(pcControl);
                 try { if (this.DataContext is Views.MainWindowViewModel mwvm) mwvm.PageControllerBridge = bridge; } catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: assign bridge to VM", ex); }
@@ -95,15 +201,29 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire PageControllerBridge", ex); }
 
+        // Inject EditorState into ArticleList
+        try
+        {
+            var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
+            if (articleList != null && _editorState != null)
+            {
+                articleList.SetEditorState(_editorState);
+            }
+        }
+        catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: inject ArticleList EditorState", ex); }
+
         // Initialize keyboard shortcut dispatcher with handlers
         try
         {
+            // Use injected _editorState if available, otherwise create a new instance for backward compatibility
+            var editorStateForHandlers = _editorState ?? new IndexEditor.Shared.EditorStateService();
+            
             var handlers = new List<Services.KeyboardHandlers.IKeyboardShortcutHandler>
             {
-                new Services.KeyboardHandlers.SegmentKeyboardHandler(this),
-                new Services.KeyboardHandlers.ArticleKeyboardHandler(this),
-                new Services.KeyboardHandlers.FileKeyboardHandler(this, LoadArticlesFromFolder, _overlayManager),
-                new Services.KeyboardHandlers.NavigationKeyboardHandler(this)
+                new Services.KeyboardHandlers.SegmentKeyboardHandler(this, editorStateForHandlers),
+                new Services.KeyboardHandlers.ArticleKeyboardHandler(this, editorStateForHandlers),
+                new Services.KeyboardHandlers.FileKeyboardHandler(this, editorStateForHandlers, LoadArticlesFromFolder, _overlayManager, _linkDiscoveryService),
+                new Services.KeyboardHandlers.NavigationKeyboardHandler(this, editorStateForHandlers)
             };
             _keyboardDispatcher = new Services.KeyboardHandlers.KeyboardShortcutDispatcher(handlers);
         }
@@ -148,51 +268,11 @@ public partial class MainWindow : Window
                     {
                         try
                         {
-                            try { DebugLogger.Log("DeleteArticleConfirmBtn.Click invoked"); } catch {}
-                             // Perform deletion of selected article
-                             var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-                             Common.Shared.ArticleLine? toDelete = null;
-                             if (vm != null) toDelete = vm.SelectedArticle;
-                             if (toDelete == null) toDelete = IndexEditor.Shared.EditorState.ActiveArticle;
-                            try { DebugLogger.Log($"toDelete={(toDelete==null?"<null>":toDelete.Title)}"); } catch {}
-                             if (toDelete != null)
-                             {
-                                 try
-                                 {
-                                     // Compute selected index first so we can pick the next sensible selection
-                                     int oldIndex = -1;
-                                     try { if (vm != null) oldIndex = vm.Articles.IndexOf(toDelete); else if (IndexEditor.Shared.EditorState.Articles != null) oldIndex = IndexEditor.Shared.EditorState.Articles.IndexOf(toDelete); } catch { }
-                                     // Remove from shared state
-                                     IndexEditor.Shared.EditorState.Articles?.Remove(toDelete);
-                                     // Mark that we have unsaved changes
-                                     IndexEditor.Shared.EditorState.HasUnsavedChanges = true;
-                                     // Update VM list if present
-                                     if (vm != null)
-                                     {
-                                         try { vm.Articles.Remove(toDelete); } catch { }
-                                         // Choose next selection: prefer previous index if possible, otherwise clamp
-                                         if (vm.Articles.Count > 0)
-                                         {
-                                             int newIndex = Math.Min(Math.Max(0, oldIndex), vm.Articles.Count - 1);
-                                             vm.SelectedArticle = vm.Articles[newIndex];
-                                            try { DebugLogger.Log($"SelectedArticle changed to index {newIndex}: {vm.SelectedArticle?.Title}"); } catch {}
-                                         }
-                                         else vm.SelectedArticle = null;
-                                     }
-                                      // Clear active article/segment if it referred to deleted article
-                                      if (IndexEditor.Shared.EditorState.ActiveArticle == toDelete) IndexEditor.Shared.EditorState.ActiveArticle = null;
-                                      IndexEditor.Shared.EditorState.NotifyStateChanged();
-                                      IndexEditor.Shared.ToastService.Show("Article deleted");
-                                    try { DebugLogger.Log("Article deletion completed"); } catch {}
-                                 }
-                                 catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: delete", ex); }
-                             }
-                             try { delOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: hide overlay", ex); }
-                            try { DebugLogger.Log("Delete overlay hidden after confirm"); } catch {}
-                         }
-                         catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click: outer", ex); }
-                     };
-                 }
+                            _articleDeletionService?.DeleteSelectedArticle();
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("DeleteArticleConfirmBtn.Click", ex); }
+                    };
+                }
                  if (delCancel != null && delOverlay != null)
                  {
                     delCancel.Click += (s, e) => { try { delOverlay.IsVisible = false; } catch (Exception ex) { DebugLogger.LogException("DeleteArticleCancelBtn.Click", ex); } };
@@ -253,7 +333,9 @@ public partial class MainWindow : Window
             var closeBtn = this.FindControl<Button>("IndexOverlayCloseBtn");
             var saveBtn = this.FindControl<Button>("IndexOverlaySaveBtn");
             var overlay = this.FindControl<Border>("IndexOverlay");
-            var textBox = this.FindControl<TextBox>("IndexOverlayTextBox");
+            
+            // Note: Overlay is now editable TextBox for JSON
+            
             if (closeBtn != null && overlay != null)
             {
                 closeBtn.Click += (s, e) => {
@@ -266,6 +348,72 @@ public partial class MainWindow : Window
                     catch (Exception ex) { DebugLogger.LogException("IndexOverlayCloseBtn.Click", ex); }
                 };
             }
+            
+            if (saveBtn != null)
+            {
+                saveBtn.Click += (s, e) =>
+                {
+                    try
+                    {
+                        var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                        _overlayManager?.SaveIndexFromOverlay(folder);
+                        // Reload the folder after save
+                        if (!string.IsNullOrWhiteSpace(folder))
+                        {
+                            LoadArticlesFromFolder(folder);
+                        }
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("IndexOverlaySaveBtn.Click", ex); }
+                };
+            }
+            
+            // Wire up toggle mode button
+            var toggleModeBtn = this.FindControl<Button>("IndexOverlayToggleModeBtn");
+            if (toggleModeBtn != null)
+            {
+                toggleModeBtn.Click += (s, e) =>
+                {
+                    try
+                    {
+                        var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                        _overlayManager?.ToggleEditMode(folder);
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("IndexOverlayToggleModeBtn.Click", ex); }
+                };
+            }
+            
+            // Wire up expand/collapse buttons for JSON tree viewer
+            try
+            {
+                var expandAllBtn = this.FindControl<Button>("IndexOverlayExpandAllBtn");
+                var collapseAllBtn = this.FindControl<Button>("IndexOverlayCollapseAllBtn");
+                
+                if (expandAllBtn != null)
+                {
+                    expandAllBtn.Click += (s, e) => 
+                    {
+                        try
+                        {
+                            _overlayManager?.ExpandAllJsonNodes();
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("IndexOverlayExpandAllBtn.Click", ex); }
+                    };
+                }
+                
+                if (collapseAllBtn != null)
+                {
+                    collapseAllBtn.Click += (s, e) =>
+                    {
+                        try
+                        {
+                            _overlayManager?.CollapseAllJsonNodes();
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("IndexOverlayCollapseAllBtn.Click", ex); }
+                    };
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire expand/collapse buttons", ex); }
+            
             // Help overlay close wiring
             try
             {
@@ -301,70 +449,6 @@ public partial class MainWindow : Window
                 }
             }
             catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire FullscreenCloseBtn", ex); }
-
-            if (saveBtn != null && overlay != null && textBox != null)
-            {
-                saveBtn.Click += (s, e) =>
-                {
-                    try
-                    {
-                        var folder = IndexEditor.Shared.EditorState.CurrentFolder;
-                        if (string.IsNullOrWhiteSpace(folder))
-                        {
-                            IndexEditor.Shared.ToastService.Show("No folder open; cannot save index file");
-                            return;
-                        }
-                        
-                        // Determine which format to save based on file content
-                        var text = textBox.Text ?? string.Empty;
-                        
-                        // Phase 2 - Task 2: Validate JSON before saving
-                        if (_overlayManager != null)
-                        {
-                            (bool isValid, string? errorMessage) = _overlayManager.ValidateJsonContent(text);
-                            if (!isValid)
-                            {
-                                IndexEditor.Shared.ToastService.Show($"Validation failed: {errorMessage}");
-                                return;
-                            }
-                        }
-                        
-                        var jsonPath = System.IO.Path.Combine(folder, "_index.json");
-                        var txtPath = System.IO.Path.Combine(folder, "_index.txt");
-                        
-                        // Check if content looks like JSON
-                        bool isJson = text.TrimStart().StartsWith("{");
-                        var targetPath = isJson ? jsonPath : txtPath;
-                        
-                        // Atomic write with backup
-                        var temp = targetPath + ".tmp";
-                        var backupPath = targetPath + "~";
-                        System.IO.File.WriteAllText(temp, text);
-                        
-                        if (System.IO.File.Exists(targetPath))
-                        {
-                            // Create backup before replacing
-                            if (System.IO.File.Exists(backupPath))
-                            {
-                                System.IO.File.Delete(backupPath);
-                            }
-                            System.IO.File.Copy(targetPath, backupPath);
-                            System.IO.File.Replace(temp, targetPath, null);
-                        }
-                        else System.IO.File.Move(temp, targetPath);
-                        
-                        IndexEditor.Shared.ToastService.Show(isJson ? "_index.json saved" : "_index.txt saved");
-                        // Reload articles from folder to reflect edits
-                        LoadArticlesFromFolder(folder);
-                    }
-                    catch (Exception ex)
-                    {
-                        IndexEditor.Shared.ToastService.Show("Failed to save index file");
-                        DebugLogger.LogException("MainWindow.SaveIndex: saving index file", ex);
-                    }
-                };
-            }
-            // Allow pressing 'i' again to close overlay; handled in OnMainWindowKeyDown
         }
         catch (Exception ex) { DebugLogger.LogException("MainWindow ctor: wire up overlay buttons", ex); }
 
@@ -385,9 +469,9 @@ public partial class MainWindow : Window
                             startBtn.IsVisible = false;
                             
                             // Clear existing links when user manually starts/re-scans
-                            _discoveredLinks.Clear();
+                            _linkDiscoveryUIService?.ClearDiscoveredLinks();
                             var pcView = this.FindControl<Views.PageControllerView>("PageControllerControl");
-                            pcView?.UpdateDiscoveredLinks(_discoveredLinks);
+                            pcView?.UpdateDiscoveredLinks(_linkDiscoveryUIService?.DiscoveredLinks ?? new Dictionary<int, List<Common.Shared.MagazineLink>>());
                             
                             _linkDiscoveryService?.StartDiscovery(folder, magazineName);
                         }
@@ -449,138 +533,34 @@ public partial class MainWindow : Window
 
     private void OnWindowOpened(object? sender, EventArgs e)
     {
-        // Opened event fired
-        try
-        {
-            // Restore window size/state
-            try
-            {
-                var st = IndexEditor.Shared.WindowStateStore.GetWindowState();
-                if (st != null)
-                {
-                    if (st.IsMaximized) this.WindowState = WindowState.Maximized; // remember maximized
-                    else
-                    {
-                        this.Width = st.Width > 0 ? st.Width : this.Width;
-                        this.Height = st.Height > 0 ? st.Height : this.Height;
-                    }
-                }
-            }
-            catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: restore window state", ex); }
-
-            this.Activate();
-            this.Topmost = true;
-            this.Topmost = false;
-            // MainWindow activated
-
-            try
-            {
-                // skip diag
-            }
-            catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: screen diag", ex); /* swallow screen exception diag */ }
-
-            // Ensure keyboard focus is on the window or the articles list so global shortcuts work immediately
-            try
-            {
-                // Delay focus to allow the window to finish opening
-                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                {
-                    try
-                    {
-                        this.Focus();
-                        // Also focus the invisible host so it receives keyboard input for shortcuts
-                        try { var host = this.FindControl<Border>("KeyboardFocusHost"); if (host != null) host.Focus(); } catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: focus host", ex); }
-                        // Try to focus the articles listbox
-                        var articleList = this.FindControl<IndexEditor.Views.ArticleList>("ArticleListControl");
-                        if (articleList != null)
-                        {
-                            try { var lb = articleList.FindControl<ListBox>("ArticlesListBox"); if (lb != null) lb.Focus(); } catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: focus ArticlesListBox", ex); }
-                        }
-                    }
-                    catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: UI post", ex); }
-                });
-            }
-            catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: outer focus", ex); }
-
-        }
-        catch (Exception ex) { DebugLogger.LogException("OnWindowOpened: outer", ex); WriteDiagFile("[TRACE] Exception raising window"); }
+        _windowLifecycleService?.OnWindowOpened();
     }
 
     private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
-        try
-        {
-            // Check for unsaved changes and prompt user
-            if (IndexEditor.Shared.EditorState.HasUnsavedChanges)
-            {
-                try
-                {
-                    e.Cancel = true; // Cancel the close temporarily
-                    var result = await IndexEditor.Views.ConfirmDialog.ShowDialog(
-                        this, 
-                        "You have unsaved changes. Do you want to save before quitting?");
-                    
-                    if (result)
-                    {
-                        // User wants to save
-                        try
-                        {
-                            var folder = IndexEditor.Shared.EditorState.CurrentFolder;
-                            if (!string.IsNullOrWhiteSpace(folder))
-                            {
-                                IndexEditor.Shared.IndexSaver.SaveIndex(folder, GetDiscoveredLinks());
-                                IndexEditor.Shared.ToastService.Show("Index saved");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            DebugLogger.LogException("OnWindowClosing: save failed", ex);
-                            IndexEditor.Shared.ToastService.Show("Failed to save index");
-                        }
-                    }
-                    
-                    // Clear the unsaved changes flag so we can quit without being prompted again
-                    IndexEditor.Shared.EditorState.HasUnsavedChanges = false;
-                    
-                    // Now close the window
-                    this.Close();
-                }
-                catch (Exception ex) { DebugLogger.LogException("OnWindowClosing: prompt save", ex); }
-                return;
-            }
-            
-            try
-            {
-                var isMax = this.WindowState == WindowState.Maximized;
-                // If maximized, store previous normal size so restore works later; Avalonia provides ClientSize
-                var width = this.Width;
-                var height = this.Height;
-                if (double.IsNaN(width) || double.IsInfinity(width) || width <= 0) width = 1024;
-                if (double.IsNaN(height) || double.IsInfinity(height) || height <= 0) height = 768;
-                IndexEditor.Shared.WindowStateStore.SetWindowState(width, height, isMax);
-            }
-            catch (Exception ex) { DebugLogger.LogException("OnWindowClosing: save window state", ex); }
-        }
-        catch (Exception ex) { DebugLogger.LogException("OnWindowClosing: outer", ex); }
-    }
+        if (_windowLifecycleService == null) return;
 
-    // Parsing helpers
-    private Common.Shared.ArticleLine? ParseArticleLine(string line)
-    {
+        // Cancel the close temporarily to allow async processing
+        e.Cancel = true;
+
         try
         {
-            // Delegate parsing to the centralized parser to keep behaviour consistent
-            return IndexEditor.Shared.IndexFileParser.ParseArticleLine(line);
-        }
-        catch (FormatException)
-        {
-            // Bubble up format exceptions for the caller to handle (overlay UI)
-            throw;
+            // Let the service handle the closing logic
+            bool canClose = await _windowLifecycleService.OnWindowClosingAsync();
+
+            if (canClose)
+            {
+                // Actually close the window (this time without canceling)
+                this.Closing -= OnWindowClosing; // Unsubscribe to prevent recursion
+                this.Close();
+            }
         }
         catch (Exception ex)
         {
-            DebugLogger.LogException("MainWindow.ParseArticleLine: delegate parser threw", ex);
-            return null;
+            DebugLogger.LogException("MainWindow.OnWindowClosing", ex);
+            // Close anyway on error
+            this.Closing -= OnWindowClosing;
+            this.Close();
         }
     }
 
@@ -631,7 +611,13 @@ public partial class MainWindow : Window
 
     private bool ImageExistsInFolder(string folder, int pageNumber)
     {
-        // Use ImageHelper.ImageExists to check all possible filename patterns
+        // Use FileOperationsService if available
+        if (_fileOperationsService != null)
+        {
+            return _fileOperationsService.ImageExists(folder, pageNumber);
+        }
+
+        // Fallback: Use ImageHelper.ImageExists to check all possible filename patterns
         return IndexEditor.Shared.ImageHelper.ImageExists(folder, pageNumber);
     }
 
@@ -701,13 +687,10 @@ public partial class MainWindow : Window
             }
 
             var overlay = this.FindControl<Border>("IndexOverlay");
-            var tb = this.FindControl<TextBox>("IndexOverlayTextBox");
 
-            // Index overlay: capture all keys except Ctrl+I, Esc, and Ctrl+S
+            // Index overlay: capture Ctrl+I and Esc to close
             if (overlay != null && overlay.IsVisible)
             {
-                try { if (tb != null && !tb.IsFocused) tb.Focus(); } 
-                catch (Exception ex) { DebugLogger.LogException("MainWindow: overlay textbox focus", ex); }
 
                 // Ctrl+I: Toggle overlay
                 if (e.Key == Key.I && (e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta)))
@@ -780,41 +763,35 @@ public partial class MainWindow : Window
     {
         try
         {
-            // Don't delete if ArticleEditor has focus
-            if (IndexEditor.Shared.EditorState.IsArticleEditorFocused)
+            if (_articleDeletionService == null) return;
+            
+            // Don't handle Delete key when article editor is focused - allow normal text deletion
+            var editorState = _editorState ?? new IndexEditor.Shared.EditorStateService();
+            if (editorState.IsArticleEditorFocused)
             {
                 return;
             }
-
-            // Don't allow deletion while active segment exists
-            var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
-            if (activeSeg != null && activeSeg.IsActive)
+            
+            if (!_articleDeletionService.CanDeleteArticle())
             {
-                IndexEditor.Shared.ToastService.Show("End or cancel the active segment before deleting an article");
-                e.Handled = true;
-                return;
-            }
-
-            // Show delete confirmation if article is selected
-            var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-            var hasSelection = vm?.SelectedArticle != null || IndexEditor.Shared.EditorState.ActiveArticle != null;
-
-            if (hasSelection)
-            {
-                var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay");
-                if (delOverlay != null)
+                // Check if we should show a message about active segment
+                var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
+                if (activeSeg != null && activeSeg.IsActive)
                 {
-                    // Update delete confirmation text
-                    var article = vm?.SelectedArticle ?? IndexEditor.Shared.EditorState.ActiveArticle;
-                    var titleLbl = this.FindControl<TextBlock>("DeleteArticleTitleLabel");
-                    if (titleLbl != null && article != null)
-                    {
-                        titleLbl.Text = article.DisplayTitle ?? "(no title)";
-                    }
-                    
-                    delOverlay.IsVisible = true;
+                    IndexEditor.Shared.ToastService.Show("End or cancel the active segment before deleting an article");
                     e.Handled = true;
                 }
+                return;
+            }
+
+            // Get the article to show in the confirmation dialog
+            var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
+            var article = vm?.SelectedArticle ?? IndexEditor.Shared.EditorState.ActiveArticle;
+            
+            if (article != null)
+            {
+                _articleDeletionService.ShowDeleteConfirmation(article);
+                e.Handled = true;
             }
         }
         catch (Exception ex)
@@ -861,513 +838,12 @@ public partial class MainWindow : Window
 
     private void LoadArticlesFromFolder(string folder)
     {
-        try
-        {
-            if (string.IsNullOrWhiteSpace(folder)) return;
-            
-            DebugLogger.Log($"LoadArticlesFromFolder: Input folder: '{folder}'");
-            
-            // Normalize to absolute path to avoid issues with relative paths like './'
-            try
-            {
-                var originalFolder = folder;
-                folder = System.IO.Path.GetFullPath(folder);
-                DebugLogger.Log($"LoadArticlesFromFolder: Normalized '{originalFolder}' to '{folder}'");
-            }
-            catch (Exception ex) 
-            { 
-                DebugLogger.LogException("LoadArticlesFromFolder: GetFullPath", ex); 
-            }
-            
-            // Parse folder basename for fallback metadata
-            try
-            {
-                var folderName = System.IO.Path.GetFileName(folder.TrimEnd(System.IO.Path.DirectorySeparatorChar));
-                var (mag, vol, num, year) = IndexEditor.Shared.FolderMetadataParser.ParseFolderMetadata(folderName);
-                IndexEditor.Shared.EditorState.CurrentMagazine = mag;
-                IndexEditor.Shared.EditorState.CurrentVolume = vol;
-                IndexEditor.Shared.EditorState.CurrentNumber = num;
-                IndexEditor.Shared.EditorState.CurrentYear = year;
-            }
-            catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: parse folder metadata", ex); }
-
-            // Clear discovered links from previous folder
-            _discoveredLinks.Clear();
-
-            var articles = new List<Common.Shared.ArticleLine>();
-            string fileMag = IndexEditor.Shared.EditorState.CurrentMagazine ?? string.Empty;
-            string fileVol = IndexEditor.Shared.EditorState.CurrentVolume ?? string.Empty;
-            string fileNum = IndexEditor.Shared.EditorState.CurrentNumber ?? string.Empty;
-            string fileYear = IndexEditor.Shared.EditorState.CurrentYear ?? string.Empty;
-
-            // Phase 1: Check for JSON first, fall back to CSV
-            if (Common.Shared.IndexJsonSerializer.JsonExists(folder))
-            {
-                DebugLogger.Log("LoadArticlesFromFolder: Loading from _index.json");
-                try
-                {
-                    var (mag, vol, num, year, jsonArticles, loadedLinks) = Common.Shared.IndexJsonSerializer.LoadFromJson(folder);
-                    fileMag = mag;
-                    fileVol = vol;
-                    fileNum = num;
-                    fileYear = year;
-                    articles = jsonArticles;
-                    
-                    // Load links into discovered links dictionary (already cleared at method start)
-                    if (loadedLinks != null && loadedLinks.Count > 0)
-                    {
-                        foreach (var link in loadedLinks)
-                        {
-                            if (!_discoveredLinks.ContainsKey(link.Page))
-                            {
-                                _discoveredLinks[link.Page] = new List<Common.Shared.MagazineLink>();
-                            }
-                            
-                            // Check if this exact link already exists for this page (deduplicate)
-                            bool isDuplicate = _discoveredLinks[link.Page].Any(l => 
-                                l.Magazine == link.Magazine && 
-                                l.Volume == link.Volume && 
-                                l.Issue == link.Issue);
-                            
-                            if (!isDuplicate)
-                            {
-                                _discoveredLinks[link.Page].Add(link);
-                            }
-                        }
-                        
-                        var totalLinks = _discoveredLinks.Values.Sum(list => list.Count);
-                        DebugLogger.Log($"Loaded {totalLinks} unique links from JSON (deduplicated from {loadedLinks.Count})");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    DebugLogger.LogException("LoadArticlesFromFolder: Failed to load JSON, falling back to CSV", ex);
-                    IndexEditor.Shared.ToastService.Show("Failed to load _index.json, falling back to _index.txt");
-                    // Fall through to CSV loading below
-                }
-            }
-            
-            // Fall back to CSV if JSON doesn't exist or failed to load
-            if (articles.Count == 0)
-            {
-                var indexPath = System.IO.Path.Combine(folder, "_index.txt");
-                if (System.IO.File.Exists(indexPath))
-                {
-                    DebugLogger.Log("LoadArticlesFromFolder: Loading from _index.txt");
-                    var lines = System.IO.File.ReadAllLines(indexPath);
-                    int articleStartIndex = 0;
-                    for (int i = 0; i < lines.Length; i++)
-                    {
-                        var raw = lines[i];
-                        if (string.IsNullOrWhiteSpace(raw)) { articleStartIndex = i + 1; continue; }
-                        var trimmed = raw.Trim();
-                        if (trimmed.StartsWith("#"))
-                        {
-                            var content = trimmed.TrimStart('#').Trim();
-                            if (content.StartsWith("Magazine:", StringComparison.OrdinalIgnoreCase))
-                                fileMag = content.Substring("Magazine:".Length).Trim();
-                            else if (content.StartsWith("Volume:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("Vol:", StringComparison.OrdinalIgnoreCase))
-                            {
-                                var val = content.Contains(":" ) ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
-                                fileVol = val.Replace("Volume:", string.Empty).Replace("Vol:", string.Empty).Trim();
-                            }
-                            else if (content.StartsWith("Number:", StringComparison.OrdinalIgnoreCase) || content.StartsWith("No:", StringComparison.OrdinalIgnoreCase))
-                            {
-                                var val = content.Contains(":") ? content.Substring(content.IndexOf(':') + 1).Trim() : content;
-                                fileNum = val.Replace("Number:", string.Empty).Replace("No:", string.Empty).Trim();
-                            }
-                            else if (content.StartsWith("Year:", StringComparison.OrdinalIgnoreCase))
-                            {
-                                fileYear = content.Substring("Year:".Length).Trim();
-                            }
-                            articleStartIndex = i + 1;
-                            continue;
-                        }
-                        // First non-comment line: try CSV metadata
-                        var parts = IndexFileParser.SplitRespectingEscapedCommas(trimmed);
-                        if (parts.Count >= 3)
-                        {
-                            string Unescape(string s) => s.Replace("\\,", ",");
-                            fileMag = Unescape(parts[0]);
-                            fileVol = Unescape(parts[1]);
-                            fileNum = Unescape(parts[2]);
-                            if (parts.Count >= 4)
-                            {
-                                fileYear = Unescape(parts[3]);
-                            }
-                            articleStartIndex = i + 1;
-                        }
-                        else
-                        {
-                            articleStartIndex = i;
-                        }
-                        break;
-                    }
-
-                    for (int i = articleStartIndex; i < lines.Length; i++)
-                    {
-                        var line = lines[i];
-                        if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#")) continue;
-                        try
-                        {
-                            var parsed = ParseArticleLine(line);
-                            if (parsed != null) articles.Add(parsed);
-                        }
-                        catch (FormatException fx)
-                        {
-                            // Show error and open index overlay with full file contents for user correction
-                            try { IndexEditor.Shared.ToastService.Show("_index.txt format error: " + fx.Message); } catch { }
-                            
-                            // Use overlay manager to show the error
-                            try
-                            {
-                                var fullText = System.IO.File.ReadAllText(indexPath);
-                                _overlayManager?.ShowIndexOverlayError(line ?? string.Empty, fullText);
-                            }
-                            catch (Exception ex)
-                            {
-                                DebugLogger.LogException("LoadArticlesFromFolder: show overlay on format error", ex);
-                            }
-
-                            // Stop further parsing; let the user fix the file
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Set EditorState metadata and articles
-            IndexEditor.Shared.EditorState.CurrentMagazine = fileMag;
-            IndexEditor.Shared.EditorState.CurrentVolume = fileVol;
-            IndexEditor.Shared.EditorState.CurrentNumber = fileNum;
-            IndexEditor.Shared.EditorState.CurrentYear = fileYear;
-            IndexEditor.Shared.EditorState.Articles = articles.Where(a => a.Pages != null && a.Pages.Count > 0).OrderBy(a => a.Pages.Min()).ToList();
-
-            // Validate segments for missing pages
-            try
-            {
-                foreach (var article in IndexEditor.Shared.EditorState.Articles)
-                {
-                    article.ValidateSegments(folder, ImageExistsInFolder);
-                }
-            }
-            catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: validate segments", ex); }
-
-            // Update VM collection if present
-            try
-            {
-                var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-                if (vm != null)
-                {
-                    vm.Articles.Clear();
-                    foreach (var a in IndexEditor.Shared.EditorState.Articles) vm.Articles.Add(a);
-                    // If nothing is selected yet, select the first article so the editor shows content
-                    if (vm.SelectedArticle == null && vm.Articles.Count > 0)
-                    {
-                        try { vm.SelectedArticle = vm.Articles[0]; } catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: set SelectedArticle", ex); }
-                    }
-                }
-            }
-            catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: update VM", ex); }
-
-            DebugLogger.Log($"LoadArticlesFromFolder: Setting CurrentFolder to '{folder}'");
-            IndexEditor.Shared.EditorState.CurrentFolder = folder;
-
-            // Choose first existing image page (prefer 1)
-            try
-            {
-                int? firstImage = IndexEditor.Shared.ImageHelper.FindFirstImageInFolder(folder, 1, 2000);
-                if (!firstImage.HasValue)
-                {
-                    var allPages = IndexEditor.Shared.EditorState.Articles?.SelectMany(a => a.Pages ?? new List<int>()).Distinct().OrderBy(p => p).ToList();
-                    if (allPages != null && allPages.Count > 0)
-                    {
-                        foreach (var p in allPages)
-                        {
-                            try { if (IndexEditor.Shared.ImageHelper.ImageExists(folder, p)) { firstImage = p; break; } } catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: ImageExists check", ex); }
-                        }
-                    }
-                }
-                IndexEditor.Shared.EditorState.CurrentPage = firstImage ?? 1;
-            }
-            catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: choose first image", ex); IndexEditor.Shared.EditorState.CurrentPage = 1; }
-
-            IndexEditor.Shared.EditorState.NotifyStateChanged();
-            
-            // Clear unsaved changes flag since we just loaded from disk
-            IndexEditor.Shared.EditorState.HasUnsavedChanges = false;
-            
-            // Persist the folder as the most-recently opened so future runs can default to it
-            try { IndexEditor.Shared.RecentFolderStore.SetLastOpenedFolder(folder); } catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: persist recent folder", ex); }
-            
-            // Update PageControllerView with loaded links
-            try
-            {
-                var pcView = this.FindControl<Views.PageControllerView>("PageControllerControl");
-                pcView?.UpdateDiscoveredLinks(_discoveredLinks);
-            }
-            catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: update PageController with loaded links", ex); }
-            
-            // Check if links exist - if so, show button instead of auto-starting discovery
-            try
-            {
-                if (_discoveredLinks.Count > 0)
-                {
-                    // Links already exist, show button to optionally re-scan
-                    var startBtn = this.FindControl<Button>("StartLinkDiscoveryBtn");
-                    var statusText = this.FindControl<TextBlock>("StatusText");
-                    
-                    if (startBtn != null)
-                    {
-                        startBtn.IsVisible = true;
-                        startBtn.Content = "Re-scan for Links";
-                    }
-                    
-                    if (statusText != null)
-                    {
-                        var linkCount = _discoveredLinks.Values.Sum(l => l.Count);
-                        statusText.Text = $"Loaded {linkCount} link(s) from index file";
-                    }
-                }
-                else
-                {
-                    // No links exist, auto-start discovery
-                    var magazineName = IndexEditor.Shared.EditorState.CurrentMagazine ?? "Unknown";
-                    _linkDiscoveryService?.StartDiscovery(folder, magazineName);
-                }
-            }
-            catch (Exception ex) { DebugLogger.LogException("LoadArticlesFromFolder: link discovery logic", ex); }
-        }
-        catch (Exception ex)
-        {
-            DebugLogger.LogException("LoadArticlesFromFolder failed", ex);
-            Console.WriteLine("[ERROR] LoadArticlesFromFolder failed: " + ex);
-        }
-    }
-
-    private void OnLinkDiscoveryProgress(object? sender, Services.LinkDiscoveryProgressEventArgs e)
-    {
-        try
-        {
-            Dispatcher.UIThread.Post(() =>
-            {
-                try
-                {
-                    var progress = this.FindControl<ProgressBar>("LinkDiscoveryProgress");
-                    var status = this.FindControl<TextBlock>("LinkDiscoveryStatus");
-                    var statusText = this.FindControl<TextBlock>("StatusText");
-                    
-                    if (progress != null && status != null)
-                    {
-                        progress.IsVisible = true;
-                        status.IsVisible = true;
-                        progress.Value = e.PercentComplete;
-                        status.Text = $"Scanning for links: {e.ProcessedPages}/{e.TotalPages} pages";
-                    }
-                    
-                    if (statusText != null)
-                    {
-                        statusText.Text = $"Discovering links... {e.PercentComplete}%";
-                    }
-                }
-                catch (Exception ex) { DebugLogger.LogException("OnLinkDiscoveryProgress UI update", ex); }
-            });
-        }
-        catch (Exception ex) { DebugLogger.LogException("OnLinkDiscoveryProgress", ex); }
-    }
-
-    private void OnLinkDiscovered(object? sender, Services.LinkDiscoveredEventArgs e)
-    {
-        try
-        {
-            // Add to discovered links dictionary
-            if (!_discoveredLinks.ContainsKey(e.Page))
-            {
-                _discoveredLinks[e.Page] = new List<Common.Shared.MagazineLink>();
-            }
-            
-            // Check if this exact link already exists for this page (deduplicate)
-            bool isDuplicate = _discoveredLinks[e.Page].Any(l => 
-                l.Magazine == e.Magazine && 
-                l.Volume == e.Volume && 
-                l.Issue == e.Issue);
-            
-            if (!isDuplicate)
-            {
-                _discoveredLinks[e.Page].Add(new Common.Shared.MagazineLink
-                {
-                    Page = e.Page,
-                    Magazine = e.Magazine,
-                    Volume = e.Volume,
-                    Issue = e.Issue
-                });
-                
-                DebugLogger.Log($"Link discovered on page {e.Page}: {e.Magazine} Vol.{e.Volume} No.{e.Issue}");
-                
-                // Update PageControllerView with current links
-                Dispatcher.UIThread.Post(() =>
-                {
-                    try
-                    {
-                        var pcView = this.FindControl<Views.PageControllerView>("PageControllerControl");
-                        pcView?.UpdateDiscoveredLinks(_discoveredLinks);
-                    }
-                    catch (Exception ex) { DebugLogger.LogException("OnLinkDiscovered: update PageController", ex); }
-                });
-            }
-            else
-            {
-                DebugLogger.Log($"Duplicate link skipped on page {e.Page}: {e.Magazine} Vol.{e.Volume} No.{e.Issue}");
-            }
-        }
-        catch (Exception ex) { DebugLogger.LogException("OnLinkDiscovered", ex); }
-    }
-
-    private void OnLinkDiscoveryCompleted(object? sender, EventArgs e)
-    {
-        try
-        {
-            Dispatcher.UIThread.Post(() =>
-            {
-                try
-                {
-                    var progress = this.FindControl<ProgressBar>("LinkDiscoveryProgress");
-                    var status = this.FindControl<TextBlock>("LinkDiscoveryStatus");
-                    var statusText = this.FindControl<TextBlock>("StatusText");
-                    
-                    if (progress != null && status != null)
-                    {
-                        progress.IsVisible = false;
-                        status.IsVisible = false;
-                    }
-                    
-                    if (statusText != null)
-                    {
-                        var linkCount = _discoveredLinks.Values.Sum(list => list.Count);
-                        statusText.Text = linkCount > 0 
-                            ? $"Found {linkCount} link(s) on {_discoveredLinks.Count} page(s)" 
-                            : "Ready";
-                        
-                        // Mark index as modified if links were discovered
-                        if (linkCount > 0)
-                        {
-                            IndexEditor.Shared.EditorState.HasUnsavedChanges = true;
-                            DebugLogger.Log($"Index file marked as modified due to {linkCount} discovered link(s)");
-                        }
-                    }
-                    
-                    DebugLogger.Log($"Link discovery completed. Found {_discoveredLinks.Count} pages with links.");
-                }
-                catch (Exception ex) { DebugLogger.LogException("OnLinkDiscoveryCompleted UI update", ex); }
-            });
-        }
-        catch (Exception ex) { DebugLogger.LogException("OnLinkDiscoveryCompleted", ex); }
+        _folderLoadingService?.LoadFolder(folder);
     }
 
     // Helper: delete currently selected article (VM selected or EditorState active) and close delete overlay
     private void DeleteSelectedArticleAndCloseOverlay()
     {
-        try
-        {
-            try { DebugLogger.Log("DeleteSelectedArticleAndCloseOverlay called"); } catch {}
-             var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-             Common.Shared.ArticleLine? toDelete = null;
-             if (vm != null) toDelete = vm.SelectedArticle;
-             if (toDelete == null) toDelete = IndexEditor.Shared.EditorState.ActiveArticle;
-             if (toDelete == null) return;
-
-            int oldIndex = -1;
-            try { if (vm != null) oldIndex = vm.Articles.IndexOf(toDelete); else if (IndexEditor.Shared.EditorState.Articles != null) oldIndex = IndexEditor.Shared.EditorState.Articles.IndexOf(toDelete); } catch { }
-            IndexEditor.Shared.EditorState.Articles?.Remove(toDelete);
-            if (vm != null)
-            {
-                try { vm.Articles.Remove(toDelete); } catch { }
-                if (vm.Articles.Count > 0)
-                {
-                    int newIndex = Math.Min(Math.Max(0, oldIndex), vm.Articles.Count - 1);
-                    vm.SelectedArticle = vm.Articles[newIndex];
-                }
-                else vm.SelectedArticle = null;
-            }
-
-            if (IndexEditor.Shared.EditorState.ActiveArticle == toDelete) IndexEditor.Shared.EditorState.ActiveArticle = null;
-            IndexEditor.Shared.EditorState.NotifyStateChanged();
-            IndexEditor.Shared.ToastService.Show("Article deleted");
-
-            try { var delOverlay = this.FindControl<Border>("DeleteArticleConfirmOverlay"); if (delOverlay != null) delOverlay.IsVisible = false; } catch { }
-        }
-        catch (Exception ex) { DebugLogger.LogException("DeleteSelectedArticleAndCloseOverlay", ex); }
-    }
-
-    // Handle Ctrl+Up shortcut: navigate to the previous article
-    private bool HandleCtrlUpShortcut(KeyEventArgs ke)
-    {
-        try
-        {
-            DebugLogger.Log("Shortcut Ctrl+Up invoked");
-            if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) { DebugLogger.Log("ArticleEditor focused - ignoring Ctrl+Up"); return false; }
-            var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-            List<Common.Shared.ArticleLine>? list = null;
-            if (vm != null) list = vm.Articles.ToList();
-            else if (IndexEditor.Shared.EditorState.Articles != null) list = new List<Common.Shared.ArticleLine>(IndexEditor.Shared.EditorState.Articles);
-            if (list == null || list.Count == 0) { DebugLogger.Log("No articles to navigate"); return true; }
-            int curIndex = -1;
-            if (vm != null && vm.SelectedArticle != null) curIndex = list.IndexOf(vm.SelectedArticle);
-            if (curIndex == -1 && IndexEditor.Shared.EditorState.ActiveArticle != null) curIndex = list.IndexOf(IndexEditor.Shared.EditorState.ActiveArticle);
-            if (curIndex == -1) curIndex = list.FindIndex(a => a.Pages != null && a.Pages.Contains(IndexEditor.Shared.EditorState.CurrentPage));
-            if (curIndex == -1) curIndex = 0;
-            int target = Math.Max(0, curIndex - 1);
-            if (target == curIndex) { DebugLogger.Log("Already at first article"); return true; }
-            var targetArticle = list[target];
-            if (vm != null)
-            {
-                try { vm.SelectedArticle = targetArticle; } catch { }
-                try { vm.NavigateToArticle(targetArticle); } catch (Exception ex) { DebugLogger.LogException("MainWindow: NavigateToArticle (Ctrl+Up)", ex); }
-            }
-            else
-            {
-                try { IndexEditor.Shared.EditorState.ActiveArticle = targetArticle; } catch { }
-                try { int? pick = IndexEditor.Shared.ImageHelper.FindFirstImageInFolder(IndexEditor.Shared.EditorState.CurrentFolder ?? string.Empty, targetArticle.Pages != null && targetArticle.Pages.Count > 0 ? targetArticle.Pages.Min() : 1, 2000); if (pick.HasValue) IndexEditor.Shared.EditorState.CurrentPage = pick.Value; else if (targetArticle.Pages != null && targetArticle.Pages.Count > 0) IndexEditor.Shared.EditorState.CurrentPage = targetArticle.Pages.Min(); IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Up fallback navigation", ex); }
-            }
-            DebugLogger.Log($"Ctrl+Up navigated to article index {target}");
-        }
-        catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Up handler", ex); }
-        return true;
-    }
-
-    // Handle Ctrl+Down shortcut: navigate to the next article
-    private bool HandleCtrlDownShortcut(KeyEventArgs ke)
-    {
-        try
-        {
-            DebugLogger.Log("Shortcut Ctrl+Down invoked");
-            if (IndexEditor.Shared.EditorState.IsArticleEditorFocused) { DebugLogger.Log("ArticleEditor focused - ignoring Ctrl+Down"); return false; }
-            var vm = this.DataContext as IndexEditor.Views.EditorStateViewModel;
-            List<Common.Shared.ArticleLine>? list = null;
-            if (vm != null) list = vm.Articles.ToList();
-            else if (IndexEditor.Shared.EditorState.Articles != null) list = new List<Common.Shared.ArticleLine>(IndexEditor.Shared.EditorState.Articles);
-            if (list == null || list.Count == 0) { DebugLogger.Log("No articles to navigate"); return true; }
-            int curIndex = -1;
-            if (vm != null && vm.SelectedArticle != null) curIndex = list.IndexOf(vm.SelectedArticle);
-            if (curIndex == -1 && IndexEditor.Shared.EditorState.ActiveArticle != null) curIndex = list.IndexOf(IndexEditor.Shared.EditorState.ActiveArticle);
-            if (curIndex == -1) curIndex = list.FindIndex(a => a.Pages != null && a.Pages.Contains(IndexEditor.Shared.EditorState.CurrentPage));
-            if (curIndex == -1) curIndex = 0;
-            int target = Math.Min(list.Count - 1, curIndex + 1);
-            if (target == curIndex) { DebugLogger.Log("Already at last article"); return true; }
-            var targetArticle = list[target];
-            if (vm != null)
-            {
-                try { vm.SelectedArticle = targetArticle; } catch { }
-                try { vm.NavigateToArticle(targetArticle); } catch (Exception ex) { DebugLogger.LogException("MainWindow: NavigateToArticle (Ctrl+Down)", ex); }
-            }
-            else
-            {
-                try { IndexEditor.Shared.EditorState.ActiveArticle = targetArticle; } catch { }
-                try { int? pick = IndexEditor.Shared.ImageHelper.FindFirstImageInFolder(IndexEditor.Shared.EditorState.CurrentFolder ?? string.Empty, targetArticle.Pages != null && targetArticle.Pages.Count > 0 ? targetArticle.Pages.Min() : 1, 2000); if (pick.HasValue) IndexEditor.Shared.EditorState.CurrentPage = pick.Value; else if (targetArticle.Pages != null && targetArticle.Pages.Count > 0) IndexEditor.Shared.EditorState.CurrentPage = targetArticle.Pages.Min(); IndexEditor.Shared.EditorState.NotifyStateChanged(); } catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Down fallback navigation", ex); }
-            }
-            DebugLogger.Log($"Ctrl+Down navigated to article index {target}");
-        }
-        catch (Exception ex) { DebugLogger.LogException("MainWindow: Ctrl+Down handler", ex); }
-        return true;
+        _articleDeletionService?.DeleteSelectedArticle();
     }
 }

@@ -1,0 +1,206 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - The Archive</title>
+    <link rel="stylesheet" href="~/css/archive.css" asp-append-version="true" />
+</head>
+<body>
+    <nav class="topnav">
+        <a class="topnav-logo" asp-controller="Home" asp-action="Index">The <span>Archive</span></a>
+        <div class="topnav-tabs">
+            <a class="tab-btn active" asp-controller="Home" asp-action="Index">Magazines</a>
+            <a class="tab-btn" asp-controller="Issues" asp-action="Index">All Issues</a>
+            <a class="tab-btn" asp-controller="Models" asp-action="Index">Models</a>
+        </div>
+        <div class="topnav-search">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <circle cx="6" cy="6" r="4.5" stroke="white" stroke-width="1.2"/>
+                <line x1="9.5" y1="9.5" x2="13" y2="13" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            <input type="text" placeholder="Search magazines, models…" id="search-input" oninput="handleSearch(this.value)">
+        </div>
+    </nav>
+    
+    <!-- Search Results Dropdown -->
+    <div id="search-results" class="search-results" style="display: none;"></div>
+    
+    @if (ViewBag.Breadcrumbs != null)
+    {
+        <div class="breadcrumb">
+            @foreach (var crumb in ViewBag.Breadcrumbs)
+            {
+                if (crumb.IsActive)
+                {
+                    <span class="bc-item active">@crumb.Text</span>
+                }
+                else
+                {
+                    <a class="bc-item" href="@crumb.Url">@crumb.Text</a>
+                }
+                
+                if (!crumb.IsLast)
+                {
+                    <span class="bc-sep">/</span>
+                }
+            }
+        </div>
+    }
+    
+    @RenderBody()
+    
+    <!-- Spread Viewer Overlay -->
+    <div class="spread-overlay" id="spread-overlay">
+        <div class="spread-info" id="spread-info"></div>
+        <div class="spread-nav">
+            <button class="spread-btn" id="spread-prev" onclick="shiftSpread(-2)">← Prev</button>
+            <button class="spread-btn" id="spread-next" onclick="shiftSpread(2)">Next →</button>
+            <div class="spread-close" onclick="closeSpread()">✕</div>
+        </div>
+        <div class="spread-pages" id="spread-pages"></div>
+    </div>
+    
+    <script>
+        // Search functionality
+        let searchTimeout;
+        async function handleSearch(query) {
+            clearTimeout(searchTimeout);
+            
+            const resultsDiv = document.getElementById('search-results');
+            
+            if (!query || query.length < 2) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
+            
+            searchTimeout = setTimeout(async () => {
+                try {
+                    // Search articles and models
+                    const [articlesRes, modelsRes] = await Promise.all([
+                        fetch(`/api/v1/articles?q=${encodeURIComponent(query)}&per_page=5`),
+                        fetch(`/api/v1/models?q=${encodeURIComponent(query)}&per_page=5`)
+                    ]);
+                    
+                    const articles = await articlesRes.json();
+                    const models = await modelsRes.json();
+                    
+                    let html = '<div class="search-results-inner">';
+                    
+                    if (models.length > 0) {
+                        html += '<div class="search-section"><div class="search-section-label">Models</div>';
+                        models.forEach(model => {
+                            html += `<a href="/models/${model.id}" class="search-result">
+                                <span class="search-result-title">${model.name}</span>
+                                <span class="search-result-meta">${model.appearanceCount} appearances</span>
+                            </a>`;
+                        });
+                        html += '</div>';
+                    }
+                    
+                    if (articles.length > 0) {
+                        html += '<div class="search-section"><div class="search-section-label">Articles</div>';
+                        articles.slice(0, 5).forEach(article => {
+                            html += `<a href="/issues/${article.issueId}" class="search-result">
+                                <span class="search-result-title">${article.title || 'Untitled'}</span>
+                                <span class="search-result-meta">Page ${article.pageStart}</span>
+                            </a>`;
+                        });
+                        html += '</div>';
+                    }
+                    
+                    if (models.length === 0 && articles.length === 0) {
+                        html += '<div class="search-no-results">No results found</div>';
+                    }
+                    
+                    html += '</div>';
+                    
+                    resultsDiv.innerHTML = html;
+                    resultsDiv.style.display = 'block';
+                } catch (error) {
+                    console.error('Search error:', error);
+                }
+            }, 300);
+        }
+        
+        // Close search results when clicking outside
+        document.addEventListener('click', function(e) {
+            const searchInput = document.getElementById('search-input');
+            const resultsDiv = document.getElementById('search-results');
+            if (!searchInput.contains(e.target) && !resultsDiv.contains(e.target)) {
+                resultsDiv.style.display = 'none';
+            }
+        });
+        
+        // Spread viewer state
+        let currentPage = 1;
+        let currentIssueId = null;
+        let maxPage = 100; // Will be updated based on issue
+        
+        function openSpread(page, issueId) {
+            currentPage = page;
+            currentIssueId = issueId;
+            
+            // Calculate left and right pages for spread
+            const leftPage = page % 2 === 0 ? page : page - 1;
+            const rightPage = leftPage + 1;
+            
+            // Update spread viewer
+            document.getElementById('spread-info').innerHTML = `Page <strong>${leftPage}</strong> & <strong>${rightPage}</strong>`;
+            document.getElementById('spread-pages').innerHTML = `
+                <div class="spread-page">
+                    <div class="spread-pg-inner">
+                        <div style="font-family: var(--serif); font-size: 18px; color: var(--muted);">Page ${leftPage}</div>
+                        <div class="pg-number">${leftPage}</div>
+                    </div>
+                </div>
+                <div class="spread-page">
+                    <div class="spread-pg-inner">
+                        <div style="font-family: var(--serif); font-size: 18px; color: var(--muted);">Page ${rightPage}</div>
+                        <div class="pg-number">${rightPage}</div>
+                    </div>
+                </div>
+            `;
+            
+            // Update button states
+            document.getElementById('spread-prev').disabled = leftPage <= 1;
+            document.getElementById('spread-next').disabled = rightPage >= maxPage;
+            
+            // Show overlay
+            document.getElementById('spread-overlay').classList.add('open');
+        }
+        
+        function closeSpread() {
+            document.getElementById('spread-overlay').classList.remove('open');
+        }
+        
+        function shiftSpread(delta) {
+            const newPage = currentPage + delta;
+            if (newPage >= 1 && newPage <= maxPage) {
+                openSpread(newPage, currentIssueId);
+            }
+        }
+        
+        // ESC key to close
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeSpread();
+            }
+        });
+        
+        // Arrow keys for navigation
+        document.addEventListener('keydown', function(e) {
+            const overlay = document.getElementById('spread-overlay');
+            if (overlay.classList.contains('open')) {
+                if (e.key === 'ArrowLeft') {
+                    shiftSpread(-2);
+                } else if (e.key === 'ArrowRight') {
+                    shiftSpread(2);
+                }
+            }
+        });
+    </script>
+    
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

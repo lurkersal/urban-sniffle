@@ -1,0 +1,52 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="IndexEditor.Views.BabepediaDebugDialog"
+        Title="Babepedia Check Result"
+        Width="500" Height="250"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False">
+    
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" 
+                   Text="✓ Model Found on Babepedia.com"
+                   FontSize="18"
+                   FontWeight="Bold"
+                   Margin="0,0,0,20"/>
+
+        <StackPanel Grid.Row="1" Spacing="10">
+            <StackPanel>
+                <TextBlock Text="Model Name:" FontWeight="Bold" FontSize="14"/>
+                <TextBlock x:Name="ModelNameText" 
+                           Text="[Model Name]" 
+                           FontSize="14"
+                           Margin="10,5,0,0"/>
+            </StackPanel>
+            
+            <StackPanel>
+                <TextBlock Text="Babepedia URL:" FontWeight="Bold" FontSize="14"/>
+                <TextBlock x:Name="UrlText" 
+                           Text="[URL]" 
+                           FontSize="12"
+                           Margin="10,5,0,0"
+                           TextWrapping="Wrap"
+                           Foreground="Blue"
+                           Cursor="Hand"
+                           PointerPressed="OnUrlClicked"/>
+            </StackPanel>
+        </StackPanel>
+
+        <Button Grid.Row="2"
+                x:Name="OkButton"
+                Content="OK"
+                HorizontalAlignment="Right"
+                Width="100"
+                Margin="0,20,0,0"/>
+    </Grid>
+</Window>
+
