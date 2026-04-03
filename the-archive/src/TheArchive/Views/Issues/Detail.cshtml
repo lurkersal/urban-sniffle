@@ -35,7 +35,7 @@
         @foreach (var article in ViewBag.Articles)
         {
             var catClass = "cat-" + article.Category;
-            <div class="article-row" data-category="@article.CategoryName.ToLower()" data-article-id="@article.ArticleId" data-page="@article.PageStart">
+            <div class="article-row" data-category="@article.CategoryName.ToLower()" data-article-id="@article.ArticleId" data-page="@article.PageStart" onclick="openSpread(@article.PageStart, @ViewBag.Issue.IssueId)">
                 <div class="article-pg">@article.PageStart</div>
                 <div class="article-body">
                     <div>
@@ -54,7 +54,7 @@
                         <div class="article-byline">
                             @if (!string.IsNullOrEmpty(article.ModelName))
                             {
-                                <span>Model: <a href="/models/@article.ModelName.ToLower().Replace(" ", "-")">@article.ModelName</a></span>
+                                <span>Model: <a href="/models/@article.ModelName.ToLower().Replace(" ", "-")" onclick="event.stopPropagation()">@article.ModelName</a></span>
                             }
                             @if (!string.IsNullOrEmpty(article.Photographer))
                             {
@@ -67,7 +67,17 @@
                         </div>
                     }
                 </div>
-                <button class="article-spread-btn" onclick="openSpread(@article.PageStart, @ViewBag.Issue.IssueId)">View Spread</button>
+                @{
+                    var showThumbnail = !string.IsNullOrEmpty(article.FirstImagePath) && 
+                        (article.CategoryName.Equals("Cover", StringComparison.OrdinalIgnoreCase) ||
+                         article.CategoryName.Equals("Model", StringComparison.OrdinalIgnoreCase) ||
+                         article.CategoryName.Equals("Group", StringComparison.OrdinalIgnoreCase) ||
+                         article.CategoryName.Equals("Feature", StringComparison.OrdinalIgnoreCase));
+                }
+                @if (showThumbnail)
+                {
+                    <div class="article-thumb" style="background-image: url('/image?path=@Uri.EscapeDataString(article.FirstImagePath)')"></div>
+                }
             </div>
         }
     </div>

@@ -18,6 +18,7 @@ public class Article
     public string? Photographer { get; set; }
     public int? ModelId { get; set; }
     public string? ModelName { get; set; }
+    public string? FirstImagePath { get; set; }
     
     // Computed properties for the spec
     public string Id => $"art-{ArticleId}";

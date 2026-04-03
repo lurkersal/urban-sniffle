@@ -25,8 +25,12 @@ LEFT JOIN (
 ) cover ON i.IssueId = cover.IssueId
 ```
 
-### 2. View Update (`the-archive/src/TheArchive/Views/Issues/Index.cshtml`)
-Modified the issue card rendering to display cover images as background-image and moved volume/date info below the image:
+### 2. View Update (`the-archive/src/TheArchive/Views/Issues/Index.cshtml` and `Magazines/Index.cshtml`)
+Modified the issue card rendering to display cover images as background-image and moved volume/date info below the image.
+
+**Applied to:**
+- `/issues` - All Issues page
+- `/magazines/{slug}` - Magazine-specific issues page (e.g., `/magazines/club-international`)
 
 **Before:**
 ```html
@@ -44,7 +48,9 @@ Modified the issue card rendering to display cover images as background-image an
 
 **After:**
 ```html
-<div class="issue-thumb @magazineClass" style="@backgroundStyle">
+<div class="issue-thumb @magazineClass lazy-bg" 
+     data-bg-url="...">
+    <div class="loading-spinner"></div>
 </div>
 <div class="issue-info">
     <div class="issue-num">@issue.MagazineName</div>
@@ -55,6 +61,19 @@ Modified the issue card rendering to display cover images as background-image an
 ```
 
 The cover image is now displayed without any overlay text, and all metadata (magazine name, volume, date, and article count) is shown in the info section below the image.
+
+**Performance Improvements:**
+- Implemented lazy loading using Intersection Observer API
+- Images load only when they're about to enter the viewport (50px margin)
+- Added loading spinner for visual feedback
+- Images fade in smoothly when loaded
+- Changed background-size from 'cover' to 'contain' to prevent cropping
+
+**Magazine Filter Fix:**
+- Fixed magazine multi-select filter to properly submit comma-separated magazine IDs
+- Added hidden input field to collect selected magazine IDs
+- Changed checkboxes to use data attributes instead of form field names
+- JavaScript now populates hidden field with comma-separated values (e.g., "1,4" for Club International and Mayfair)
 
 ### 3. Image Controller Created (`the-archive/src/TheArchive/Controllers/ImageController.cs`)
 Created a new ImageController to serve image files via `/image?path=...` endpoint:
@@ -71,7 +90,11 @@ The cover images are identified using the following criteria:
 - One cover per issue (DISTINCT ON IssueId)
 
 ## Testing
-Verified on http://localhost:5163/issues:
+Verified on:
+- **http://localhost:5163/issues** - All Issues page
+- **http://localhost:5163/magazines/club-international** - Magazine-specific issues page
+
+Results:
 - All 6 issues display their cover images
 - Images are served correctly through the /image endpoint
 - Cover images have correct file paths from the database

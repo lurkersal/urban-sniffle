@@ -123,7 +123,7 @@ public class ArchiveDatabase
         int? yearTo = null,
         List<int>? magazineIds = null,
         int page = 1,
-        int perPage = 100)
+        int perPage = 500)
     {
         using var conn = GetConnection();
         
@@ -278,7 +278,8 @@ public class ArchiveDatabase
                 MIN(c.Page) as PageStart,
                 STRING_AGG(DISTINCT contrib.Name, ', ') as Photographer,
                 cm.ModelId,
-                m.Name as ModelName
+                m.Name as ModelName,
+                first_img.ImagePath as FirstImagePath
             FROM Article a
             JOIN Category cat ON a.CategoryId = cat.CategoryId
             JOIN Content c ON a.ArticleId = c.ArticleId
@@ -286,6 +287,12 @@ public class ArchiveDatabase
             LEFT JOIN Contributor contrib ON cc.ContributorId = contrib.ContributorId
             LEFT JOIN ContentModel cm ON a.ArticleId = cm.ArticleId
             LEFT JOIN Model m ON cm.ModelId = m.ModelId
+            LEFT JOIN (
+                SELECT DISTINCT ON (c2.ArticleId) c2.ArticleId, c2.ImagePath
+                FROM Content c2
+                WHERE c2.ImagePath IS NOT NULL
+                ORDER BY c2.ArticleId, c2.Page
+            ) first_img ON a.ArticleId = first_img.ArticleId
             WHERE c.IssueId = @IssueId";
         
         if (!string.IsNullOrWhiteSpace(categoryFilter) && categoryFilter.ToLower() != "all")
@@ -294,7 +301,7 @@ public class ArchiveDatabase
         }
         
         sql += @"
-            GROUP BY a.ArticleId, a.CategoryId, a.Title, cat.Name, c.IssueId, cm.ModelId, m.Name
+            GROUP BY a.ArticleId, a.CategoryId, a.Title, cat.Name, c.IssueId, cm.ModelId, m.Name, first_img.ImagePath
             ORDER BY MIN(c.Page) ASC";
         
         var articles = await conn.QueryAsync<Article>(sql, new { IssueId = issueId, Category = categoryFilter });

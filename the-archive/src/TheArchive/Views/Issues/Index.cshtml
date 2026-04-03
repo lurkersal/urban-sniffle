@@ -23,6 +23,7 @@
     <!-- Filter Panel -->
     <div class="filter-panel" id="filterPanel" style="display: none;">
         <form method="get" action="/issues" id="filterForm">
+            <input type="hidden" name="magazines" id="magazinesInput" value="" />
             <div class="filter-row">
                 <!-- Year Range Filter -->
                 <div class="filter-group">
@@ -67,7 +68,6 @@
                                         @("All magazines")
                                     }
                                 }
-                                }
                             </span>
                             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                                 <path d="M3 5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -83,8 +83,8 @@
                                 <label class="filter-checkbox-item">
                                     <input 
                                         type="checkbox" 
-                                        name="magazines" 
-                                        value="@mag.MagazineId"
+                                        class="magazine-checkbox"
+                                        data-magazine-id="@mag.MagazineId"
                                         @(isSelected ? "checked" : "")
                                         onchange="updateMagazineSelection()"
                                     />
@@ -141,8 +141,9 @@
                             const img = new Image();
                             img.onload = () => {
                                 div.style.backgroundImage = `url('${bgUrl}')`;
-                                div.style.backgroundSize = 'cover';
+                                div.style.backgroundSize = 'contain';
                                 div.style.backgroundPosition = 'center';
+                                div.style.backgroundRepeat = 'no-repeat';
                                 div.classList.add('loaded');
                                 div.querySelector('.loading-spinner').style.display = 'none';
                             };
@@ -192,7 +193,7 @@
         }
 
         function updateMagazineSelection() {
-            const checkboxes = document.querySelectorAll('input[name="magazines"]:checked');
+            const checkboxes = document.querySelectorAll('.magazine-checkbox:checked');
             const count = checkboxes.length;
             const text = count > 0 ? `${count} selected` : 'All magazines';
             document.getElementById('magazineSelectionText').textContent = text;
@@ -202,13 +203,11 @@
 
         function updateMagazinesInput() {
             // Get all checked magazine IDs and create comma-separated string
-            const checkboxes = document.querySelectorAll('input[name="magazines"]:checked');
-            const ids = Array.from(checkboxes).map(cb => cb.value);
+            const checkboxes = document.querySelectorAll('.magazine-checkbox:checked');
+            const ids = Array.from(checkboxes).map(cb => cb.getAttribute('data-magazine-id'));
             
-            // Remove unchecked checkboxes from form submission
-            document.querySelectorAll('input[name="magazines"]:not(:checked)').forEach(cb => {
-                cb.disabled = true;
-            });
+            // Update hidden input with comma-separated IDs
+            document.getElementById('magazinesInput').value = ids.join(',');
         }
 
         function clearFilters() {
