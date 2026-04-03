@@ -49,12 +49,13 @@ publish_project() {
     fi
 
     echo "Publishing $(basename "$proj_abs")..."
+    # Note: Do not force -p:PublishTrimmed=true here, as some projects (like magazine-parser)
+    # explicitly set <PublishTrimmed>false</PublishTrimmed> to avoid trimming issues with JSON deserialization
     run_cmd dotnet publish "$proj_abs" \
         -c Release \
         -r linux-x64 \
         --self-contained true \
         -p:PublishSingleFile=true \
-        -p:PublishTrimmed=true \
         -o "$BIN_DIR"
 }
 
