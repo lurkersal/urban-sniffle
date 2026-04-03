@@ -108,20 +108,15 @@
         @foreach (var issue in Model)
         {
             var magazineClass = issue.MagazineSlug.ToLower().Replace(" ", "-");
-            var backgroundStyle = "";
-            if (!string.IsNullOrEmpty(issue.CoverImagePath))
-            {
-                backgroundStyle = $"background-image: url('/image?path={Uri.EscapeDataString(issue.CoverImagePath)}'); background-size: cover; background-position: center;";
-            }
             <a class="issue-card" href="/issues/@issue.IssueId">
-                <div class="issue-thumb @magazineClass" style="@backgroundStyle">
-                    <div class="issue-label">
-                        <div class="issue-vol">@issue.VolumeDisplay</div>
-                        <div class="issue-date">@issue.DateLabel</div>
-                    </div>
+                <div class="issue-thumb @magazineClass lazy-bg" 
+                     data-bg-url="@(string.IsNullOrEmpty(issue.CoverImagePath) ? "" : $"/image?path={Uri.EscapeDataString(issue.CoverImagePath)}")">
+                    <div class="loading-spinner"></div>
                 </div>
                 <div class="issue-info">
                     <div class="issue-num">@issue.MagazineName</div>
+                    <div class="issue-vol">@issue.VolumeDisplay</div>
+                    <div class="issue-date">@issue.DateLabel</div>
                     <div class="issue-art-count">@issue.ArticleCount article@(issue.ArticleCount != 1 ? "s" : "")</div>
                 </div>
             </a>
@@ -131,8 +126,41 @@
 
 @section Scripts {
     <script>
-        // Check if filters are active on page load
+        // Lazy load background images using Intersection Observer
         document.addEventListener('DOMContentLoaded', function() {
+            const lazyBackgrounds = document.querySelectorAll('.lazy-bg');
+            
+            const imageObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const div = entry.target;
+                        const bgUrl = div.getAttribute('data-bg-url');
+                        
+                        if (bgUrl) {
+                            // Preload the image
+                            const img = new Image();
+                            img.onload = () => {
+                                div.style.backgroundImage = `url('${bgUrl}')`;
+                                div.style.backgroundSize = 'cover';
+                                div.style.backgroundPosition = 'center';
+                                div.classList.add('loaded');
+                                div.querySelector('.loading-spinner').style.display = 'none';
+                            };
+                            img.src = bgUrl;
+                        }
+                        
+                        observer.unobserve(div);
+                    }
+                });
+            }, {
+                rootMargin: '50px' // Start loading 50px before the element is visible
+            });
+            
+            lazyBackgrounds.forEach(bg => {
+                imageObserver.observe(bg);
+            });
+            
+            // Check if filters are active on page load
             const urlParams = new URLSearchParams(window.location.search);
             const hasFilters = urlParams.has('yearFrom') || urlParams.has('yearTo') || urlParams.has('magazines');
             

@@ -537,6 +537,65 @@ body {
     background: #c8392b;
 }
 
+/* Lazy loading improvements */
+.lazy-bg {
+    will-change: auto;
+    background-color: rgba(245, 240, 232, 0.05);
+}
+
+.lazy-bg.loaded {
+    animation: fadeInImage 0.3s ease-in;
+}
+
+@keyframes fadeInImage {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Loading spinner */
+.loading-spinner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 30px;
+    height: 30px;
+    border: 2px solid rgba(245, 240, 232, 0.1);
+    border-top-color: rgba(245, 240, 232, 0.4);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+}
+
+/* Performance optimizations for smooth scrolling */
+.issue-card {
+    contain: layout style paint;
+    will-change: auto;
+}
+
+.issue-card:hover {
+    will-change: transform;
+}
+
+.issue-thumb {
+    contain: layout style paint;
+    background-repeat: no-repeat;
+}
+
+/* Optimize grid for better paint performance */
+.issue-grid {
+    contain: layout style;
+}
+
 /* Article List Styles */
 .article-list {
     display: flex;

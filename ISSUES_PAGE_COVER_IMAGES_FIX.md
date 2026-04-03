@@ -26,24 +26,35 @@ LEFT JOIN (
 ```
 
 ### 2. View Update (`the-archive/src/TheArchive/Views/Issues/Index.cshtml`)
-Modified the issue card rendering to display cover images as background-image:
+Modified the issue card rendering to display cover images as background-image and moved volume/date info below the image:
 
 **Before:**
 ```html
 <div class="issue-thumb @magazineClass">
+    <div class="issue-label">
+        <div class="issue-vol">@issue.VolumeDisplay</div>
+        <div class="issue-date">@issue.DateLabel</div>
+    </div>
+</div>
+<div class="issue-info">
+    <div class="issue-num">@issue.MagazineName</div>
+    <div class="issue-art-count">@issue.ArticleCount articles</div>
+</div>
 ```
 
 **After:**
 ```html
-@{
-    var backgroundStyle = "";
-    if (!string.IsNullOrEmpty(issue.CoverImagePath))
-    {
-        backgroundStyle = $"background-image: url('/image?path={Uri.EscapeDataString(issue.CoverImagePath)}'); background-size: cover; background-position: center;";
-    }
-}
 <div class="issue-thumb @magazineClass" style="@backgroundStyle">
+</div>
+<div class="issue-info">
+    <div class="issue-num">@issue.MagazineName</div>
+    <div class="issue-vol">@issue.VolumeDisplay</div>
+    <div class="issue-date">@issue.DateLabel</div>
+    <div class="issue-art-count">@issue.ArticleCount articles</div>
+</div>
 ```
+
+The cover image is now displayed without any overlay text, and all metadata (magazine name, volume, date, and article count) is shown in the info section below the image.
 
 ### 3. Image Controller Created (`the-archive/src/TheArchive/Controllers/ImageController.cs`)
 Created a new ImageController to serve image files via `/image?path=...` endpoint:
@@ -64,6 +75,10 @@ Verified on http://localhost:5163/issues:
 - All 6 issues display their cover images
 - Images are served correctly through the /image endpoint
 - Cover images have correct file paths from the database
+- Issues are displayed in volume/number order (ascending), grouped by magazine name
+- Scrolling is smooth with lazy loading - images load only when needed
+- Loading spinners appear while images are being fetched
+- Images fade in smoothly when loaded
 
 ## Date
 April 3, 2026
