@@ -136,31 +136,271 @@
         let currentPage = 1;
         let currentIssueId = null;
         let maxPage = 100; // Will be updated based on issue
+        let pageImageCache = {}; // Cache page images
+        let currentArticlePages = null; // Pages for current article
+        let currentPageIndex = 0; // Current position in article pages array
         
-        function openSpread(page, issueId) {
+        async function loadPageImages(issueId) {
+            if (pageImageCache[issueId]) {
+                return pageImageCache[issueId];
+            }
+            
+            try {
+                const response = await fetch(`/api/v1/pages/issue/${issueId}`);
+                const data = await response.json();
+                pageImageCache[issueId] = data;
+                maxPage = data.maxPage;
+                return data;
+            } catch (error) {
+                console.error('Error loading page images:', error);
+                return null;
+            }
+        }
+        
+        async function openArticle(articleId, articleTitle, category, issueId) {
+            try {
+                // If it's a Cover article, load all issue pages instead of just the cover
+                if (category && category.toLowerCase() === 'cover') {
+                    await openIssuePages(issueId);
+                    return;
+                }
+                
+                // Load article pages
+                const response = await fetch(`/api/v1/pages/article/${articleId}`);
+                const data = await response.json();
+                
+                if (!data.pages || data.pages.length === 0) {
+                    alert('No pages found for this article');
+                    return;
+                }
+                
+                currentArticlePages = data.pages;
+                currentPageIndex = 0;
+                
+                // Display first page(s)
+                displayArticlePages();
+                
+                // Show overlay
+                document.getElementById('spread-overlay').classList.add('open');
+            } catch (error) {
+                console.error('Error loading article pages:', error);
+                alert('Error loading article pages');
+            }
+        }
+        
+        async function openIssuePages(issueId) {
+            try {
+                // Load all issue pages
+                const pageData = await loadPageImages(issueId);
+                if (!pageData) {
+                    alert('Error loading issue pages');
+                    return;
+                }
+                
+                // Convert page dictionary to array format
+                currentArticlePages = [];
+                for (const [pageNum, imagePath] of Object.entries(pageData.pages)) {
+                    if (imagePath) {
+                        currentArticlePages.push({
+                            page: parseInt(pageNum),
+                            imagePath: imagePath
+                        });
+                    }
+                }
+                
+                // Sort by page number
+                currentArticlePages.sort((a, b) => a.page - b.page);
+                
+                if (currentArticlePages.length === 0) {
+                    alert('No pages found for this issue');
+                    return;
+                }
+                
+                currentPageIndex = 0;
+                currentIssueId = issueId;
+                
+                // Display first page(s)
+                displayArticlePages();
+                
+                // Show overlay
+                document.getElementById('spread-overlay').classList.add('open');
+            } catch (error) {
+                console.error('Error loading issue pages:', error);
+                alert('Error loading issue pages');
+            }
+        }
+        
+        function displayArticlePages() {
+            if (!currentArticlePages || currentArticlePages.length === 0) return;
+            
+            // Get current page and potentially next page for spread
+            const currentPageData = currentArticlePages[currentPageIndex];
+            const nextPageData = currentPageIndex + 1 < currentArticlePages.length ? currentArticlePages[currentPageIndex + 1] : null;
+            
+            // Check if we can show a double spread:
+            // 1. Pages must be consecutive (n, n+1)
+            // 2. First page must be even, second must be odd (8-9, 10-11, not 9-10)
+            const canShowSpread = nextPageData && 
+                                  (nextPageData.page === currentPageData.page + 1) &&
+                                  (currentPageData.page % 2 === 0) && 
+                                  (nextPageData.page % 2 === 1);
+            
+            // Update page info
+            if (canShowSpread) {
+                document.getElementById('spread-info').innerHTML = `Page <strong>${currentPageData.page}</strong> & <strong>${nextPageData.page}</strong>`;
+            } else {
+                document.getElementById('spread-info').innerHTML = `Page <strong>${currentPageData.page}</strong>`;
+            }
+            
+            // Build HTML - always show pages in numerical order (never swap)
+            let spreadHtml = '<div class="spread-container">';
+            
+            if (canShowSpread) {
+                // Show spread with pages in numerical order (even on left, odd on right)
+                if (currentPageData.imagePath) {
+                    const imageUrl = `/image?path=${encodeURIComponent(currentPageData.imagePath)}`;
+                    spreadHtml += `
+                        <div class="spread-page">
+                            <img src="${imageUrl}" alt="Page ${currentPageData.page}" class="spread-img" />
+                        </div>`;
+                }
+                
+                if (nextPageData.imagePath) {
+                    const imageUrl = `/image?path=${encodeURIComponent(nextPageData.imagePath)}`;
+                    spreadHtml += `
+                        <div class="spread-page">
+                            <img src="${imageUrl}" alt="Page ${nextPageData.page}" class="spread-img" />
+                        </div>`;
+                }
+            } else {
+                // Single page
+                if (currentPageData.imagePath) {
+                    const imageUrl = `/image?path=${encodeURIComponent(currentPageData.imagePath)}`;
+                    spreadHtml += `
+                        <div class="spread-page">
+                            <img src="${imageUrl}" alt="Page ${currentPageData.page}" class="spread-img" />
+                        </div>`;
+                }
+            }
+            
+            spreadHtml += '</div>';
+            document.getElementById('spread-pages').innerHTML = spreadHtml;
+            
+            // Update button states
+            document.getElementById('spread-prev').disabled = currentPageIndex === 0;
+            document.getElementById('spread-next').disabled = canShowSpread ? 
+                (currentPageIndex + 2 >= currentArticlePages.length) : 
+                (currentPageIndex + 1 >= currentArticlePages.length);
+        }
+        
+        function navigateArticlePages(direction) {
+            if (!currentArticlePages) return;
+            
+            // Check if current view is a spread
+            const currentPageData = currentArticlePages[currentPageIndex];
+            const nextPageData = currentPageIndex + 1 < currentArticlePages.length ? currentArticlePages[currentPageIndex + 1] : null;
+            const isSpread = nextPageData && 
+                            (nextPageData.page === currentPageData.page + 1) &&
+                            (currentPageData.page % 2 === 0) && 
+                            (nextPageData.page % 2 === 1);
+            
+            if (direction > 0) {
+                // Next: calculate new index
+                const newIndex = currentPageIndex + (isSpread ? 2 : 1);
+                
+                // Don't advance if we'd go past the end
+                if (newIndex >= currentArticlePages.length) {
+                    return; // Already at the end
+                }
+                
+                currentPageIndex = newIndex;
+            } else {
+                // Previous: go back
+                if (currentPageIndex === 0) return;
+                
+                // If current is showing a spread, go back 2
+                // If current is showing a single, go back 1
+                currentPageIndex--;
+                
+                // Check if the previous position would show a spread
+                // If so, we need to go back one more to land at the start of that spread
+                if (currentPageIndex > 0) {
+                    const prevPageData = currentArticlePages[currentPageIndex - 1];
+                    const currPageData = currentArticlePages[currentPageIndex];
+                    // If prev is even and curr is odd and consecutive, we're in middle of a spread
+                    if (currPageData.page === prevPageData.page + 1 &&
+                        prevPageData.page % 2 === 0 && 
+                        currPageData.page % 2 === 1) {
+                        currentPageIndex--;
+                    }
+                }
+            }
+            
+            displayArticlePages();
+        }
+        
+        async function openSpread(page, issueId) {
             currentPage = page;
             currentIssueId = issueId;
+            
+            // Load page images
+            const pageData = await loadPageImages(issueId);
+            if (!pageData) {
+                alert('Error loading page images');
+                return;
+            }
             
             // Calculate left and right pages for spread
             const leftPage = page % 2 === 0 ? page : page - 1;
             const rightPage = leftPage + 1;
             
-            // Update spread viewer
-            document.getElementById('spread-info').innerHTML = `Page <strong>${leftPage}</strong> & <strong>${rightPage}</strong>`;
-            document.getElementById('spread-pages').innerHTML = `
-                <div class="spread-page">
-                    <div class="spread-pg-inner">
-                        <div style="font-family: var(--serif); font-size: 18px; color: var(--muted);">Page ${leftPage}</div>
-                        <div class="pg-number">${leftPage}</div>
-                    </div>
-                </div>
-                <div class="spread-page">
-                    <div class="spread-pg-inner">
-                        <div style="font-family: var(--serif); font-size: 18px; color: var(--muted);">Page ${rightPage}</div>
-                        <div class="pg-number">${rightPage}</div>
-                    </div>
-                </div>
-            `;
+            // Get image paths
+            const leftImagePath = pageData.pages[leftPage];
+            const rightImagePath = pageData.pages[rightPage];
+            
+            // Check if it's a double spread or single page
+            const hasLeftImage = !!leftImagePath;
+            const hasRightImage = !!rightImagePath;
+            const isDoubleSpread = hasLeftImage && hasRightImage;
+            
+            // Update spread info
+            if (isDoubleSpread) {
+                document.getElementById('spread-info').innerHTML = `Page <strong>${leftPage}</strong> & <strong>${rightPage}</strong>`;
+            } else if (hasLeftImage) {
+                document.getElementById('spread-info').innerHTML = `Page <strong>${leftPage}</strong>`;
+            } else if (hasRightImage) {
+                document.getElementById('spread-info').innerHTML = `Page <strong>${rightPage}</strong>`;
+            }
+            
+            let spreadHtml = '<div class="spread-container">';
+            
+            // Only show pages that have images
+            if (hasLeftImage) {
+                const imageUrl = `/image?path=${encodeURIComponent(leftImagePath)}`;
+                spreadHtml += `
+                    <div class="spread-page">
+                        <img src="${imageUrl}" alt="Page ${leftPage}" class="spread-img" />
+                    </div>`;
+            }
+            
+            if (hasRightImage) {
+                const imageUrl = `/image?path=${encodeURIComponent(rightImagePath)}`;
+                spreadHtml += `
+                    <div class="spread-page">
+                        <img src="${imageUrl}" alt="Page ${rightPage}" class="spread-img" />
+                    </div>`;
+            }
+            
+            // If neither page has an image, show a message
+            if (!hasLeftImage && !hasRightImage) {
+                spreadHtml += `
+                    <div class="spread-page-empty">
+                        <div class="spread-page-empty-text">Pages ${leftPage} & ${rightPage}<br/>No images available</div>
+                    </div>`;
+            }
+            
+            spreadHtml += '</div>';
+            document.getElementById('spread-pages').innerHTML = spreadHtml;
             
             // Update button states
             document.getElementById('spread-prev').disabled = leftPage <= 1;
@@ -172,9 +412,17 @@
         
         function closeSpread() {
             document.getElementById('spread-overlay').classList.remove('open');
+            currentArticlePages = null; // Clear article pages on close
         }
         
         function shiftSpread(delta) {
+            // If viewing article pages, use article navigation
+            if (currentArticlePages) {
+                navigateArticlePages(delta);
+                return;
+            }
+            
+            // Otherwise use old spread navigation
             const newPage = currentPage + delta;
             if (newPage >= 1 && newPage <= maxPage) {
                 openSpread(newPage, currentIssueId);

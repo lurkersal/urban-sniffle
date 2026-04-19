@@ -42,7 +42,7 @@
                  article.CategoryName.Equals("Feature", StringComparison.OrdinalIgnoreCase));
             var rowClass = showThumbnail ? "article-row has-thumbnail" : "article-row";
             
-            <div class="@rowClass" data-category="@article.CategoryName.ToLower()" data-article-id="@article.ArticleId" data-page="@article.PageStart" onclick="openSpread(@article.PageStart, @ViewBag.Issue.IssueId)">
+            <div class="@rowClass" data-category="@article.CategoryName.ToLower()" data-article-id="@article.ArticleId" data-page="@article.PageStart" onclick="openArticle(@article.ArticleId, '@(article.Title?.Replace("'", "\\'") ?? "Untitled")', '@article.CategoryName', @ViewBag.Issue.IssueId)">
                 <div class="article-pg">@article.PageStart</div>
                 <div class="article-body">
                     <span class="article-cat @catClass">@article.CategoryName</span>

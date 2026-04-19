@@ -95,7 +95,7 @@ The issue detail page has been redesigned to provide a better browsing experienc
     width: 260px;   /* Doubled from 130px */
     height: 320px;  /* Doubled from 160px */
     flex-shrink: 0;
-    background-size: cover;
+    background-size: contain;  /* Shows full image without cropping */
     background-position: center;
     background-repeat: no-repeat;
     border-radius: 4px;
@@ -104,7 +104,8 @@ The issue detail page has been redesigned to provide a better browsing experienc
 }
 ```
 
-**Size progression**: 64×64 (original) → 100×120 → 130×160 → **260×320 (current)**
+**Size progression**: 64×64 (original) → 100×120 → 130×160 → **260×320 (current)**  
+**Display mode**: `contain` - Shows full image without cropping, may have letterboxing
 ```css
 /* Allow title to wrap for thumbnail articles */
 .article-row.has-thumbnail .article-title {

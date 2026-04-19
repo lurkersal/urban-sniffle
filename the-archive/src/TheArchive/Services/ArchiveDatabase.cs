@@ -623,6 +623,57 @@ public class ArchiveDatabase
 
     #endregion
 
+    #region Pages
+
+    /// <summary>
+    /// Get all pages and their image paths for an issue
+    /// </summary>
+    public async Task<Dictionary<int, string?>> GetPageImagePathsAsync(int issueId)
+    {
+        using var conn = GetConnection();
+        const string sql = @"
+            SELECT Page, ImagePath
+            FROM Content
+            WHERE IssueId = @IssueId
+            ORDER BY Page";
+        
+        var results = await conn.QueryAsync<(int Page, string? ImagePath)>(sql, new { IssueId = issueId });
+        return results.GroupBy(r => r.Page)
+            .ToDictionary(g => g.Key, g => g.First().ImagePath);
+    }
+
+    /// <summary>
+    /// Get max page number for an issue
+    /// </summary>
+    public async Task<int> GetMaxPageAsync(int issueId)
+    {
+        using var conn = GetConnection();
+        const string sql = @"
+            SELECT COALESCE(MAX(Page), 0)
+            FROM Content
+            WHERE IssueId = @IssueId";
+        
+        return await conn.ExecuteScalarAsync<int>(sql, new { IssueId = issueId });
+    }
+
+    /// <summary>
+    /// Get all pages and their image paths for an article
+    /// </summary>
+    public async Task<List<(int Page, string? ImagePath)>> GetArticlePageImagesAsync(int articleId)
+    {
+        using var conn = GetConnection();
+        const string sql = @"
+            SELECT Page, ImagePath
+            FROM Content
+            WHERE ArticleId = @ArticleId
+            ORDER BY Page";
+        
+        var results = await conn.QueryAsync<(int Page, string? ImagePath)>(sql, new { ArticleId = articleId });
+        return results.ToList();
+    }
+
+    #endregion
+
     #region Search
 
     /// <summary>
