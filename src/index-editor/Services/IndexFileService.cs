@@ -159,7 +159,33 @@ public class IndexFileService : IIndexFileService
                 uniqueLinks.Count, linksList.Count);
         }
 
+        // Populate thumbnail paths for articles
+        PopulateThumbnailPaths(articles, folderPath);
+
         return (magazine, volume, number, year, articles, uniqueLinks);
+    }
+    
+    /// <summary>
+    /// Populates the ThumbnailPath property for each article by finding the first image file.
+    /// </summary>
+    private void PopulateThumbnailPaths(List<ArticleLine> articles, string folderPath)
+    {
+        foreach (var article in articles)
+        {
+            if (article.Pages == null || article.Pages.Count == 0)
+            {
+                continue;
+            }
+
+            // Find first image file for this article
+            var firstPage = article.Pages.OrderBy(p => p).First();
+            var imagePath = IndexEditor.Shared.ImageHelper.FindImagePath(folderPath, firstPage);
+            
+            if (!string.IsNullOrEmpty(imagePath))
+            {
+                article.ThumbnailPath = imagePath;
+            }
+        }
     }
 
     private (string, string, string, string, List<ArticleLine>, List<MagazineLink>) LoadFromTxtFile(string txtPath, string folderPath)
@@ -247,6 +273,9 @@ public class IndexFileService : IIndexFileService
         }
 
         _logger.LogInformation("LoadFromFolder: Loaded {Count} articles from TXT file", articles.Count);
+
+        // Populate thumbnail paths for articles
+        PopulateThumbnailPaths(articles, folderPath);
 
         // TXT files don't have links
         return (magazine, volume, number, year, articles, new List<MagazineLink>());

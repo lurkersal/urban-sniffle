@@ -598,33 +598,42 @@ body {
 
 /* Article List Styles */
 .article-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
+    column-count: 2;
+    column-gap: 0.75rem;
 }
 
 .article-row {
     display: grid;
-    grid-template-columns: 48px 1fr 64px;
+    grid-template-columns: 32px 1fr auto;
     align-items: center;
-    gap: 1rem;
-    padding: 12px 0;
-    border-bottom: 0.5px solid rgba(245, 240, 232, 0.07);
+    gap: 0.75rem;
+    padding: 8px;
+    border: 0.5px solid rgba(245, 240, 232, 0.12);
     cursor: pointer;
     transition: all 0.12s;
     border-radius: 4px;
+    background: rgba(245, 240, 232, 0.03);
+    min-height: 40px;
+    break-inside: avoid;  /* Prevent articles from breaking across columns */
+    margin-bottom: 0.75rem;  /* Space between articles */
+}
+
+/* Larger rows for articles with thumbnails */
+.article-row.has-thumbnail {
+    min-height: 340px;
+    align-items: flex-start;
+    padding: 16px;
 }
 
 .article-row:hover {
-    background: rgba(245, 240, 232, 0.06);
-    padding-left: 8px;
-    padding-right: 8px;
-    margin: 0 -8px;
+    background: rgba(245, 240, 232, 0.08);
+    border-color: rgba(245, 240, 232, 0.25);
+    transform: translateY(-1px);
 }
 
 .article-pg {
     font-family: var(--serif);
-    font-size: 22px;
+    font-size: 16px;
     color: var(--muted);
     text-align: right;
     line-height: 1;
@@ -632,11 +641,23 @@ body {
 
 .article-body {
     min-width: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Vertical layout for thumbnail articles */
+.article-row.has-thumbnail .article-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
 }
 
 .article-title {
     font-family: var(--serif);
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 400;
     color: var(--paper);
     white-space: nowrap;
@@ -644,22 +665,45 @@ body {
     text-overflow: ellipsis;
 }
 
+/* Allow title to wrap for thumbnail articles */
+.article-row.has-thumbnail .article-title {
+    font-size: 16px;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
 .article-thumb {
-    width: 64px;
-    height: 64px;
+    width: 260px;
+    height: 320px;
     flex-shrink: 0;
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
-    border-radius: 2px;
-    border: 0.5px solid rgba(245, 240, 232, 0.15);
+    border-radius: 4px;
+    border: 0.5px solid rgba(245, 240, 232, 0.2);
     background-color: rgba(245, 240, 232, 0.05);
 }
 
 .article-byline {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--muted);
-    margin-top: 3px;
+    white-space: nowrap;
+}
+
+/* Stack byline vertically for thumbnail articles */
+.article-row.has-thumbnail .article-byline {
+    font-size: 12px;
+    white-space: normal;
+}
+
+/* Responsive: single column on smaller screens */
+@media (max-width: 1024px) {
+    .article-list {
+        column-count: 1;
+    }
 }
 
 

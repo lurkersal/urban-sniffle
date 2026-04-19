@@ -35,12 +35,17 @@
         @foreach (var article in ViewBag.Articles)
         {
             var catClass = "cat-" + article.Category;
-            <div class="article-row" data-category="@article.CategoryName.ToLower()" data-article-id="@article.ArticleId" data-page="@article.PageStart" onclick="openSpread(@article.PageStart, @ViewBag.Issue.IssueId)">
+            var showThumbnail = !string.IsNullOrEmpty(article.FirstImagePath) && 
+                (article.CategoryName.Equals("Cover", StringComparison.OrdinalIgnoreCase) ||
+                 article.CategoryName.Equals("Model", StringComparison.OrdinalIgnoreCase) ||
+                 article.CategoryName.Equals("Group", StringComparison.OrdinalIgnoreCase) ||
+                 article.CategoryName.Equals("Feature", StringComparison.OrdinalIgnoreCase));
+            var rowClass = showThumbnail ? "article-row has-thumbnail" : "article-row";
+            
+            <div class="@rowClass" data-category="@article.CategoryName.ToLower()" data-article-id="@article.ArticleId" data-page="@article.PageStart" onclick="openSpread(@article.PageStart, @ViewBag.Issue.IssueId)">
                 <div class="article-pg">@article.PageStart</div>
                 <div class="article-body">
-                    <div>
-                        <span class="article-cat @catClass">@article.CategoryName</span>
-                    </div>
+                    <span class="article-cat @catClass">@article.CategoryName</span>
                     @if (!string.IsNullOrEmpty(article.Title))
                     {
                         <div class="article-title">@article.Title</div>
@@ -54,7 +59,7 @@
                         <div class="article-byline">
                             @if (!string.IsNullOrEmpty(article.ModelName))
                             {
-                                <span>Model: <a href="/models/@article.ModelName.ToLower().Replace(" ", "-")" onclick="event.stopPropagation()">@article.ModelName</a></span>
+                                <span>@article.ModelName</span>
                             }
                             @if (!string.IsNullOrEmpty(article.Photographer))
                             {
@@ -62,18 +67,11 @@
                                 {
                                     <span> • </span>
                                 }
-                                <span>Photo: @article.Photographer</span>
+                                <span>@article.Photographer</span>
                             }
                         </div>
                     }
                 </div>
-                @{
-                    var showThumbnail = !string.IsNullOrEmpty(article.FirstImagePath) && 
-                        (article.CategoryName.Equals("Cover", StringComparison.OrdinalIgnoreCase) ||
-                         article.CategoryName.Equals("Model", StringComparison.OrdinalIgnoreCase) ||
-                         article.CategoryName.Equals("Group", StringComparison.OrdinalIgnoreCase) ||
-                         article.CategoryName.Equals("Feature", StringComparison.OrdinalIgnoreCase));
-                }
                 @if (showThumbnail)
                 {
                     <div class="article-thumb" style="background-image: url('/image?path=@Uri.EscapeDataString(article.FirstImagePath)')"></div>

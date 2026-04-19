@@ -15,6 +15,7 @@
         <local:ArticleFieldFriendlyTextConverter x:Key="ArticleFieldFriendlyTextConverter" />
         <local:SelectedArticleBorderConverter x:Key="SelectedArticleBorderConverter" />
         <local:SegmentMissingPagesForegroundConverter x:Key="SegmentMissingPagesForeground" />
+        <local:ArticleRowHeightConverter x:Key="ArticleRowHeightConverter" />
     </UserControl.Resources>
     <Grid RowDefinitions="Auto,*">
         <TextBlock Grid.Row="0" Text="Article List" FontWeight="Bold" FontSize="16" Margin="8,8,8,4"/>
@@ -24,7 +25,7 @@
                  BorderThickness="0" KeyDown="OnListKeyDown">
             <ListBox.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <StackPanel />
+                    <WrapPanel Orientation="Horizontal" />
                 </ItemsPanelTemplate>
             </ListBox.ItemsPanel>
             <ListBox.Styles>
@@ -52,6 +53,8 @@
                 <DataTemplate>
                     <Border
                         Background="Transparent"
+                        Width="380"
+                        Height="{Binding HasThumbnail, Converter={StaticResource ArticleRowHeightConverter}}"
                         Margin="8,4" Padding="8" CornerRadius="4"
                         BorderBrush="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Converter={StaticResource SelectedArticleBorderConverter}}"
                         BorderThickness="1"
@@ -62,25 +65,37 @@
                                 <!-- Use the category color at 60% opacity for the main article bar to match spec -->
                                 <Border Background="{Binding Category, Converter={StaticResource ArticleCategoryToColorConverter}}" Opacity="0.6" CornerRadius="1" />
                             </Border>
+                            
+                            <!-- Thumbnail image (if available) - positioned on right side -->
+                            <Border Grid.Column="2" Grid.RowSpan="4" Width="120" Height="160" 
+                                    CornerRadius="4" Margin="8,0,0,0"
+                                    BorderBrush="#CCC" BorderThickness="1"
+                                    IsVisible="{Binding HasThumbnail}">
+                                <Image Source="{Binding ThumbnailPath}" 
+                                       Stretch="UniformToFill"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center" />
+                            </Border>
 
                             <!-- Top row: Title (left, bold, large), Category (right, no label) -->
                             <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DisplayTitle}" FontWeight="Bold" FontSize="18" VerticalAlignment="Top"/>
-                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding Category}" FontWeight="Bold" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Top"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding Category}" FontWeight="Bold" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                       IsVisible="{Binding !HasThumbnail}"/>
 
                             <!-- Second row: Model info for Model/Cover only -->
-                            <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" IsVisible="{Binding Category, Converter={StaticResource CoverModelCategoryConverter}}">
+                            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" IsVisible="{Binding Category, Converter={StaticResource CoverModelCategoryConverter}}">
                                 <TextBlock Text="{Binding ModelName0}" FontSize="14" Margin="0,0,12,0"/>
                                 <TextBlock Text="{Binding Age0}" FontSize="14" Margin="0,0,12,0"/>
                                 <TextBlock Text="{Binding Measurements[0]}" FontSize="14"/>
                             </StackPanel>
 
                             <!-- Third row: Photographer (left) and Pages (right, always visible) -->
-                            <Grid Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2">
+                            <Grid Grid.Row="2" Grid.Column="1">
                                 <TextBlock Text="{Binding Contributor0}" FontSize="13" FontWeight="Normal" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
                             </Grid>
 
                             <!-- Segments list: simplified rows (transparent background) -->
-                            <ItemsControl x:Name="SegmentsItems" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding Segments}" Margin="8,8,0,0">
+                            <ItemsControl x:Name="SegmentsItems" Grid.Row="3" Grid.Column="1" ItemsSource="{Binding Segments}" Margin="8,8,0,0">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Orientation="Horizontal" />
