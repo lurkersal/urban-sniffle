@@ -43,6 +43,18 @@ public class ModelsController : Controller
         var articles = await _db.GetArticlesByModelAsync(model.ModelId);
         var issues = await _db.GetIssuesByModelAsync(model.ModelId);
         
+        // Get the first image of the first article for the model thumbnail
+        string? modelThumbnail = null;
+        if (articles.Count > 0)
+        {
+            var firstArticle = articles.OrderBy(a => a.IssueId).ThenBy(a => a.PageStart).First();
+            var articlePages = await _db.GetArticlePageImagesAsync(firstArticle.ArticleId);
+            if (articlePages.Count > 0)
+            {
+                modelThumbnail = articlePages[0].ImagePath;
+            }
+        }
+        
         ViewBag.Breadcrumbs = new List<BreadcrumbItem>
         {
             new BreadcrumbItem { Text = "Home", Url = "/", IsActive = false, IsLast = false },
@@ -53,6 +65,7 @@ public class ModelsController : Controller
         ViewBag.Model = model;
         ViewBag.Articles = articles;
         ViewBag.Issues = issues;
+        ViewBag.ModelThumbnail = modelThumbnail;
         
         return View();
     }

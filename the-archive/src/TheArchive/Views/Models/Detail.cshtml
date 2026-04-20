@@ -6,12 +6,19 @@
     <div class="model-detail">
         <div>
             <div class="model-portrait">
-                @{
+                @if (!string.IsNullOrEmpty(ViewBag.ModelThumbnail))
+                {
+                    <img src="/image?path=@Uri.EscapeDataString(ViewBag.ModelThumbnail)" 
+                         alt="@ViewBag.Model.Name" 
+                         class="model-portrait-image" />
+                }
+                else
+                {
                     var modelName = ViewBag.Model.Name as string;
                     var nameWords = modelName.Split(' ');
                     var initials = string.Join("", nameWords.Select(w => w.Length > 0 ? w[0].ToString() : ""));
+                    <div class="model-portrait-initials">@initials</div>
                 }
-                <div class="model-portrait-initials">@initials</div>
                 <div class="model-portrait-name">@ViewBag.Model.Name</div>
             </div>
         </div>

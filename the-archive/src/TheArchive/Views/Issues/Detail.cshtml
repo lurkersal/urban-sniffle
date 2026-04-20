@@ -59,7 +59,14 @@
                         <div class="article-byline">
                             @if (!string.IsNullOrEmpty(article.ModelName))
                             {
-                                <span>@article.ModelName</span>
+                                @if (article.ModelId != null && article.ModelId > 0)
+                                {
+                                    <a href="/models/@article.ModelId" class="model-link" onclick="event.stopPropagation()">@article.ModelName</a>
+                                }
+                                else
+                                {
+                                    <span>@article.ModelName</span>
+                                }
                             }
                             @if (!string.IsNullOrEmpty(article.Photographer))
                             {
