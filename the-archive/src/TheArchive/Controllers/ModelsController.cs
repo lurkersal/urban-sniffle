@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TheArchive.Services;
 using TheArchive.Models;
+using TheArchive.ViewModels;
 
 namespace TheArchive.Controllers;
 
@@ -62,12 +63,15 @@ public class ModelsController : Controller
             new BreadcrumbItem { Text = model.Name, IsActive = true, IsLast = true }
         };
         
-        ViewBag.Model = model;
-        ViewBag.Articles = articles;
-        ViewBag.Issues = issues;
-        ViewBag.ModelThumbnail = modelThumbnail;
+        var viewModel = new ModelDetailViewModel
+        {
+            Model = model,
+            Articles = articles,
+            Issues = issues,
+            ModelThumbnail = modelThumbnail
+        };
         
-        return View();
+        return View(viewModel);
     }
 }
 

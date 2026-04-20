@@ -1,19 +1,19 @@
+@model TheArchive.ViewModels.IssueDetailViewModel
 @{
-    ViewData["Title"] = ViewBag.Issue.DateLabel + " - " + ViewBag.Issue.MagazineName;
+    ViewData["Title"] = Model.Issue.DateLabel + " - " + Model.Issue.MagazineName;
 }
 
 <div class="main fade-in">
     <div class="section-hd">
         <div>
-            <h1 class="section-title">@ViewBag.Issue.MagazineName <em>@ViewBag.Issue.DateLabel</em></h1>
-            <p class="section-sub">@ViewBag.Issue.VolumeDisplay, @ViewBag.Issue.IssueNumber</p>
+            <h1 class="section-title">@Model.Issue.MagazineName <em>@Model.Issue.DateLabel</em></h1>
+            <p class="section-sub">@Model.Issue.VolumeDisplay, @Model.Issue.IssueNumber</p>
         </div>
-        <span class="count-badge">@ViewBag.Articles.Count Article@(ViewBag.Articles.Count != 1 ? "s" : "")</span>
+        <span class="count-badge">@Model.Articles.Count Article@(Model.Articles.Count != 1 ? "s" : "")</span>
     </div>
 
     @{
-        var articles = ViewBag.Articles as List<TheArchive.Models.Article>;
-        var categories = articles
+        var categories = Model.Articles
             .Select(a => a.CategoryName)
             .Distinct()
             .OrderBy(c => c)
@@ -32,7 +32,7 @@
     }
 
     <div class="article-list" id="article-list">
-        @foreach (var article in ViewBag.Articles)
+        @foreach (var article in Model.Articles)
         {
             var catClass = "cat-" + article.Category;
             var showThumbnail = !string.IsNullOrEmpty(article.FirstImagePath) && 
@@ -42,7 +42,13 @@
                  article.CategoryName.Equals("Feature", StringComparison.OrdinalIgnoreCase));
             var rowClass = showThumbnail ? "article-row has-thumbnail" : "article-row";
             
-            <div class="@rowClass" data-category="@article.CategoryName.ToLower()" data-article-id="@article.ArticleId" data-page="@article.PageStart" onclick="openArticle(@article.ArticleId, '@(article.Title?.Replace("'", "\\'") ?? "Untitled")', '@article.CategoryName', @ViewBag.Issue.IssueId)">
+            <div class="@rowClass" 
+                 data-category="@article.CategoryName.ToLower()" 
+                 data-article-id="@article.ArticleId" 
+                 data-page="@article.PageStart"
+                 data-issue-id="@Model.Issue.IssueId"
+                 data-article-title="@(article.Title ?? "Untitled")"
+                 data-article-category="@article.CategoryName">
                 <div class="article-pg">@article.PageStart</div>
                 <div class="article-body">
                     <span class="article-cat @catClass">@article.CategoryName</span>
@@ -61,7 +67,7 @@
                             {
                                 @if (article.ModelId != null && article.ModelId > 0)
                                 {
-                                    <a href="/models/@article.ModelId" class="model-link" onclick="event.stopPropagation()">@article.ModelName</a>
+                                    <a href="/models/@article.ModelId" class="model-link" data-model-id="@article.ModelId">@article.ModelName</a>
                                 }
                                 else
                                 {

@@ -140,6 +140,58 @@
         let currentArticlePages = null; // Pages for current article
         let currentPageIndex = 0; // Current position in article pages array
         
+        // Toast notification system
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background: ${type === 'error' ? '#dc3545' : type === 'warning' ? '#ffc107' : '#28a745'};
+                color: white;
+                padding: 12px 20px;
+                border-radius: 4px;
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+            `;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+        
+        // Initialize event delegation for article rows
+        document.addEventListener('DOMContentLoaded', () => {
+            const articleList = document.getElementById('article-list');
+            if (articleList) {
+                articleList.addEventListener('click', (e) => {
+                    // Check if click was on a model link
+                    const modelLink = e.target.closest('.model-link');
+                    if (modelLink) {
+                        // Let the link navigate normally, don't open article
+                        return;
+                    }
+                    
+                    // Find the article row
+                    const articleRow = e.target.closest('.article-row');
+                    if (articleRow) {
+                        const articleId = parseInt(articleRow.dataset.articleId);
+                        const articleTitle = articleRow.dataset.articleTitle || 'Untitled';
+                        const category = articleRow.dataset.articleCategory;
+                        const issueId = parseInt(articleRow.dataset.issueId);
+                        
+                        if (articleId && issueId) {
+                            openArticle(articleId, articleTitle, category, issueId);
+                        }
+                    }
+                });
+            }
+        });
+        
         async function loadPageImages(issueId) {
             if (pageImageCache[issueId]) {
                 return pageImageCache[issueId];
@@ -167,10 +219,15 @@
                 
                 // Load article pages
                 const response = await fetch(`/api/v1/pages/article/${articleId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
                 
                 if (!data.pages || data.pages.length === 0) {
-                    alert('No pages found for this article');
+                    showToast('No pages found for this article', 'warning');
                     return;
                 }
                 
@@ -184,7 +241,7 @@
                 document.getElementById('spread-overlay').classList.add('open');
             } catch (error) {
                 console.error('Error loading article pages:', error);
-                alert('Error loading article pages');
+                showToast(`Failed to load article: ${error.message}`, 'error');
             }
         }
         
@@ -193,7 +250,7 @@
                 // Load all issue pages
                 const pageData = await loadPageImages(issueId);
                 if (!pageData) {
-                    alert('Error loading issue pages');
+                    showToast('Error loading issue pages', 'error');
                     return;
                 }
                 
@@ -212,7 +269,7 @@
                 currentArticlePages.sort((a, b) => a.page - b.page);
                 
                 if (currentArticlePages.length === 0) {
-                    alert('No pages found for this issue');
+                    showToast('No pages found for this issue', 'warning');
                     return;
                 }
                 
@@ -226,7 +283,7 @@
                 document.getElementById('spread-overlay').classList.add('open');
             } catch (error) {
                 console.error('Error loading issue pages:', error);
-                alert('Error loading issue pages');
+                showToast(`Failed to load issue pages: ${error.message}`, 'error');
             }
         }
         
