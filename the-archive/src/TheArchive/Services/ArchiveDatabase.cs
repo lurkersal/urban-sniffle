@@ -287,8 +287,8 @@ public class ArchiveDatabase
                 ORDER BY mc.IssueId, mc.Page
             ) cover ON i.IssueId = cover.IssueId
             WHERE LOWER(m.Name) = LOWER(@MagazineName) 
-                AND i.Volume = @Volume 
-                AND i.Number = @Number
+                AND CAST(i.Volume AS TEXT) = @Volume 
+                AND CAST(i.Number AS TEXT) = @Number
             GROUP BY i.IssueId, i.MagazineId, i.Volume, i.Number, i.Year, i.LinkScanPerformed, m.Name, cover.ImagePath";
         
         return await conn.QueryFirstOrDefaultAsync<Issue>(sql, new { MagazineName = magazineName, Volume = volume, Number = number });
