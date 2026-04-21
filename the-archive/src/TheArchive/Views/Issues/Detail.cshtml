@@ -3,7 +3,12 @@
     ViewData["Title"] = Model.Issue.DateLabel + " - " + Model.Issue.MagazineName;
 }
 
-<div class="main fade-in">
+@if (!string.IsNullOrEmpty(Model.CoverImagePath))
+{
+    <div class="issue-cover-bg" style="background-image: url('/image?path=@Uri.EscapeDataString(Model.CoverImagePath)')"></div>
+}
+
+<div class="main fade-in issue-detail-page">
     <div class="section-hd">
         <div>
             <h1 class="section-title">@Model.Issue.MagazineName <em>@Model.Issue.DateLabel</em></h1>

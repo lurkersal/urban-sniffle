@@ -3,7 +3,12 @@
     ViewData["Title"] = Model.Model.Name;
 }
 
-<div class="main fade-in">
+@if (!string.IsNullOrEmpty(Model.ModelThumbnail))
+{
+    <div class="issue-cover-bg" style="background-image: url('/image?path=@Uri.EscapeDataString(Model.ModelThumbnail)')"></div>
+}
+
+<div class="main fade-in model-detail-page">
     <div class="model-detail">
         <div>
             <div class="model-portrait">
