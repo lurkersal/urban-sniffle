@@ -1,4 +1,4 @@
-@model List<TheArchive.Models.Model>
+@model List<TheArchive.ViewModels.ModelIndexViewModel>
 @{
     ViewData["Title"] = "Models";
 }
@@ -15,18 +15,20 @@
     <div class="model-grid">
         @foreach (var item in Model)
         {
-            var initials = string.Join("", item.Name.Split(' ').Select(w => w.Length > 0 ? w[0].ToString() : ""));
-            <a class="model-card" href="/models/@item.Id">
+            <a class="model-card" href="/models/@item.Model.Id">
                 <div class="model-photo">
-                    <div class="model-initials">@initials</div>
-                    <div class="model-name-overlay">@item.Name</div>
+                    @if (!string.IsNullOrEmpty(item.ThumbnailPath))
+                    {
+                        <img src="/image?path=@Uri.EscapeDataString(item.ThumbnailPath)" alt="@item.Model.Name" />
+                    }
+                    else
+                    {
+                        <div class="model-initials">@item.Initials</div>
+                    }
                 </div>
                 <div class="model-info">
-                    @if (!string.IsNullOrEmpty(item.Measurements))
-                    {
-                        <div class="model-real-name">@item.Measurements</div>
-                    }
-                    <div class="model-appear">@item.AppearanceCount @(item.AppearanceCount != 1 ? "appearances" : "appearance")</div>
+                    <div class="model-name">@item.Model.Name</div>
+                    <div class="model-appear">@item.Model.AppearanceCount @(item.Model.AppearanceCount != 1 ? "appearances" : "appearance")</div>
                 </div>
             </a>
         }

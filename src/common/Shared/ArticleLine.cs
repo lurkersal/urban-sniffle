@@ -143,6 +143,30 @@ namespace Common.Shared
         }
 
         public bool HasPageNumberError { get; set; }
+        
+        private string? _thumbnailPath;
+        /// <summary>
+        /// Path to the first image for this article, used for thumbnail display.
+        /// </summary>
+        public string? ThumbnailPath
+        {
+            get => _thumbnailPath;
+            set
+            {
+                if (_thumbnailPath != value)
+                {
+                    _thumbnailPath = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThumbnailPath)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasThumbnail)));
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Returns true if this article has a thumbnail image available.
+        /// </summary>
+        public bool HasThumbnail => !string.IsNullOrWhiteSpace(ThumbnailPath);
+        
         public List<string> ModelNames { get; set; } = new();
         public int? Age { get; set; }
         public List<int?> Ages { get; set; } = new();

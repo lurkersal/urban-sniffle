@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TheArchive.Services;
 using TheArchive.Models;
+using TheArchive.ViewModels;
 
 namespace TheArchive.Controllers;
 
@@ -64,6 +65,9 @@ public class IssuesController : Controller
         
         var articles = await _db.GetArticlesByIssueAsync(id);
         
+        // Get cover image if available
+        string? coverImagePath = issue.CoverImagePath;
+        
         ViewBag.Breadcrumbs = new List<BreadcrumbItem>
         {
             new BreadcrumbItem { Text = "Home", Url = "/", IsActive = false, IsLast = false },
@@ -71,10 +75,14 @@ public class IssuesController : Controller
             new BreadcrumbItem { Text = issue.DateLabel, IsActive = true, IsLast = true }
         };
         
-        ViewBag.Issue = issue;
-        ViewBag.Articles = articles;
+        var viewModel = new IssueDetailViewModel
+        {
+            Issue = issue,
+            Articles = articles,
+            CoverImagePath = coverImagePath
+        };
         
-        return View();
+        return View(viewModel);
     }
 }
 

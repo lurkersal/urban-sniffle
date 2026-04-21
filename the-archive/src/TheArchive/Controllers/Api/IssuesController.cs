@@ -53,5 +53,25 @@ public class IssuesController : ControllerBase
         
         return Ok(articles);
     }
-}
 
+    /// <summary>
+    /// GET /api/v1/issues/find - Find an issue by magazine, volume, and number
+    /// </summary>
+    [HttpGet("find")]
+    public async Task<IActionResult> FindIssue([FromQuery] string magazine, [FromQuery] string volume, [FromQuery] string number)
+    {
+        if (string.IsNullOrWhiteSpace(magazine) || string.IsNullOrWhiteSpace(volume) || string.IsNullOrWhiteSpace(number))
+        {
+            return BadRequest(new { error = "Magazine, volume, and number are required" });
+        }
+
+        var issue = await _db.FindIssueByMagazineVolNoAsync(magazine, volume, number);
+        
+        if (issue == null)
+        {
+            return NotFound(new { error = $"Issue not found: {magazine} Vol.{volume} #{number}" });
+        }
+        
+        return Ok(issue);
+    }
+}
