@@ -936,6 +936,29 @@ body {
     background: rgba(245, 240, 232, 0.08);
 }
 
+.page-links-dropdown {
+    background: rgba(245, 240, 232, 0.08);
+    border: 0.5px solid rgba(245, 240, 232, 0.2);
+    border-radius: 4px;
+    color: var(--paper);
+    font-size: 12px;
+    font-family: var(--sans);
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+    max-width: 300px;
+    margin-left: 8px;
+}
+
+.page-links-dropdown:hover {
+    background: rgba(245, 240, 232, 0.15);
+}
+
+.page-links-dropdown option {
+    background: #1a1410;
+    color: var(--paper);
+}
+
 /* Back Button */
 .back-btn {
     display: inline-flex;
@@ -1441,7 +1464,3 @@ body {
     border-color: rgba(245, 240, 232, 0.25);
 }
 
-.chip-mag {
-    color: var(--muted);
-    font-size: 10px;
-}

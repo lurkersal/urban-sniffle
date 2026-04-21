@@ -56,6 +56,9 @@
         <div class="spread-nav">
             <button class="spread-btn" id="spread-prev" onclick="shiftSpread(-2)">← Prev</button>
             <button class="spread-btn" id="spread-next" onclick="shiftSpread(2)">Next →</button>
+            <select id="page-links-dropdown" class="page-links-dropdown" style="display:none;" onchange="handleLinkSelection(this)">
+                <option value="">Select linked issue...</option>
+            </select>
             <div class="spread-close" onclick="closeSpread()">✕</div>
         </div>
         <div class="spread-pages" id="spread-pages"></div>
@@ -139,6 +142,7 @@
         let pageImageCache = {}; // Cache page images
         let currentArticlePages = null; // Pages for current article
         let currentPageIndex = 0; // Current position in article pages array
+        let currentPageLinks = []; // Links from _index.json for current issue
         
         // Toast notification system
         function showToast(message, type = 'info') {
@@ -196,7 +200,7 @@
             if (pageImageCache[issueId]) {
                 return pageImageCache[issueId];
             }
-            
+
             try {
                 const response = await fetch(`/api/v1/pages/issue/${issueId}`);
                 const data = await response.json();
@@ -208,7 +212,93 @@
                 return null;
             }
         }
-        
+
+        async function loadPageLinks(issueId) {
+            try {
+                const response = await fetch(`/index-editor/${issueId}/links`);
+                if (!response.ok) {
+                    console.warn('No links found for issue');
+                    return [];
+                }
+                const data = await response.json();
+                return data.links || [];
+            } catch (error) {
+                console.error('Error loading page links:', error);
+                return [];
+            }
+        }
+
+        async function handleLinkSelection(selectElement) {
+            const selectedValue = selectElement.value;
+            if (!selectedValue) return;
+
+            try {
+                const linkData = JSON.parse(selectedValue);
+                // Find the issue ID by magazine, volume, and issue number
+                const response = await fetch(`/api/v1/issues/find?magazine=${encodeURIComponent(linkData.magazine)}&volume=${linkData.volume}&number=${linkData.issue}`);
+
+                if (response.ok) {
+                    const issue = await response.json();
+                    if (issue && issue.issueId) {
+                        // Open the linked issue in a new tab
+                        window.open(`/issues/${issue.issueId}`, '_blank');
+                    } else {
+                        showToast('Linked issue not found in database', 'warning');
+                    }
+                } else {
+                    showToast('Could not find linked issue', 'error');
+                }
+            } catch (error) {
+                console.error('Error navigating to linked issue:', error);
+                showToast(`Error: ${error.message}`, 'error');
+            }
+
+            // Reset dropdown
+            selectElement.value = '';
+        }
+
+        function updatePageLinksDropdown() {
+            const dropdown = document.getElementById('page-links-dropdown');
+            if (!currentArticlePages || currentPageIndex >= currentArticlePages.length || !currentPageLinks || currentPageLinks.length === 0) {
+                dropdown.style.display = 'none';
+                return;
+            }
+
+            // Get current page(s) being displayed
+            const currentPageData = currentArticlePages[currentPageIndex];
+            const nextPageData = currentPageIndex + 1 < currentArticlePages.length ? currentArticlePages[currentPageIndex + 1] : null;
+
+            // Check if showing a spread
+            const isSpread = nextPageData && 
+                            (nextPageData.page === currentPageData.page + 1) &&
+                            (currentPageData.page % 2 === 0) && 
+                            (nextPageData.page % 2 === 1);
+
+            // Find links for the current page(s)
+            const visiblePages = [currentPageData.page];
+            if (isSpread) {
+                visiblePages.push(nextPageData.page);
+            }
+
+            const relevantLinks = currentPageLinks.filter(link => visiblePages.includes(link.page));
+
+            if (relevantLinks.length === 0) {
+                dropdown.style.display = 'none';
+                return;
+            }
+
+            // Clear and populate dropdown
+            dropdown.innerHTML = '<option value="">Select linked issue...</option>';
+            relevantLinks.forEach(link => {
+                const option = document.createElement('option');
+                option.value = JSON.stringify(link);
+                option.textContent = `Page ${link.page} → ${link.magazine} Vol.${link.volume} #${link.issue}`;
+                dropdown.appendChild(option);
+            });
+
+            dropdown.style.display = 'inline-block';
+        }
+
         async function openArticle(articleId, articleTitle, category, issueId) {
             try {
                 // If it's a Cover article, load all issue pages instead of just the cover
@@ -217,14 +307,17 @@
                     return;
                 }
                 
-                // Load article pages
-                const response = await fetch(`/api/v1/pages/article/${articleId}`);
+                // Load article pages and page links in parallel
+                const [pagesResponse, links] = await Promise.all([
+                    fetch(`/api/v1/pages/article/${articleId}`),
+                    loadPageLinks(issueId)
+                ]);
                 
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                if (!pagesResponse.ok) {
+                    throw new Error(`HTTP ${pagesResponse.status}: ${pagesResponse.statusText}`);
                 }
                 
-                const data = await response.json();
+                const data = await pagesResponse.json();
                 
                 if (!data.pages || data.pages.length === 0) {
                     showToast('No pages found for this article', 'warning');
@@ -233,9 +326,14 @@
                 
                 currentArticlePages = data.pages;
                 currentPageIndex = 0;
+                currentIssueId = issueId;
+                currentPageLinks = links;
                 
                 // Display first page(s)
                 displayArticlePages();
+                
+                // Update links dropdown
+                updatePageLinksDropdown();
                 
                 // Show overlay
                 document.getElementById('spread-overlay').classList.add('open');
@@ -247,8 +345,12 @@
         
         async function openIssuePages(issueId) {
             try {
-                // Load all issue pages
-                const pageData = await loadPageImages(issueId);
+                // Load all issue pages and links in parallel
+                const [pageData, links] = await Promise.all([
+                    loadPageImages(issueId),
+                    loadPageLinks(issueId)
+                ]);
+                
                 if (!pageData) {
                     showToast('Error loading issue pages', 'error');
                     return;
@@ -275,9 +377,13 @@
                 
                 currentPageIndex = 0;
                 currentIssueId = issueId;
+                currentPageLinks = links;
                 
                 // Display first page(s)
                 displayArticlePages();
+                
+                // Update links dropdown
+                updatePageLinksDropdown();
                 
                 // Show overlay
                 document.getElementById('spread-overlay').classList.add('open');
@@ -395,6 +501,7 @@
             }
             
             displayArticlePages();
+            updatePageLinksDropdown();
         }
         
         async function openSpread(page, issueId) {

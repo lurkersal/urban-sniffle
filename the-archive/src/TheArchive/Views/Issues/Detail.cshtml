@@ -9,7 +9,12 @@
             <h1 class="section-title">@Model.Issue.MagazineName <em>@Model.Issue.DateLabel</em></h1>
             <p class="section-sub">@Model.Issue.VolumeDisplay, @Model.Issue.IssueNumber</p>
         </div>
-        <span class="count-badge">@Model.Articles.Count Article@(Model.Articles.Count != 1 ? "s" : "")</span>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button id="edit-index-btn" class="count-badge" style="cursor: pointer; border: 1px solid var(--muted); background: transparent;" title="Edit Index File (Ctrl+I)">
+                Edit Index
+            </button>
+            <span class="count-badge">@Model.Articles.Count Article@(Model.Articles.Count != 1 ? "s" : "")</span>
+        </div>
     </div>
 
     @{
@@ -94,8 +99,30 @@
     </div>
 </div>
 
+<!-- Index Editor Overlay -->
+<div id="index-editor-overlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.9); z-index: 10000; padding: 2rem;">
+    <div style="max-width: 1200px; margin: 0 auto; height: 100%; display: flex; flex-direction: column; gap: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2 style="color: var(--paper); margin: 0;">Edit Index File</h2>
+            <div style="display: flex; gap: 1rem;">
+                <button id="save-index-btn" style="padding: 0.5rem 1rem; background: var(--link); color: var(--paper); border: none; border-radius: 4px; cursor: pointer;">
+                    Save (Ctrl+S)
+                </button>
+                <button id="close-index-btn" style="padding: 0.5rem 1rem; background: transparent; color: var(--paper); border: 1px solid var(--muted); border-radius: 4px; cursor: pointer;">
+                    Close (Esc)
+                </button>
+            </div>
+        </div>
+        <div id="index-status" style="color: var(--paper); min-height: 1.5rem;"></div>
+        <textarea id="index-content" style="flex: 1; background: #1a1a1a; color: var(--paper); border: 1px solid var(--muted); border-radius: 4px; padding: 1rem; font-family: 'Courier New', monospace; font-size: 14px; resize: none;"></textarea>
+    </div>
+</div>
+
 @section Scripts {
     <script>
+        const issueId = @Model.Issue.IssueId;
+        let originalContent = '';
+        
         // Category filtering
         document.querySelectorAll('.filter-chip').forEach(chip => {
             chip.addEventListener('click', function() {
@@ -115,6 +142,108 @@
                     }
                 });
             });
+        });
+        
+        // Index Editor functionality
+        const overlay = document.getElementById('index-editor-overlay');
+        const textarea = document.getElementById('index-content');
+        const statusDiv = document.getElementById('index-status');
+        
+        function showStatus(message, isError = false) {
+            statusDiv.textContent = message;
+            statusDiv.style.color = isError ? '#ff6b6b' : '#51cf66';
+            setTimeout(() => {
+                statusDiv.textContent = '';
+            }, 3000);
+        }
+        
+        async function loadIndex() {
+            try {
+                statusDiv.textContent = 'Loading...';
+                const response = await fetch(`/index-editor/${issueId}`);
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to load index');
+                }
+                const content = await response.text();
+                textarea.value = content;
+                originalContent = content;
+                statusDiv.textContent = '';
+            } catch (err) {
+                showStatus(`Error: ${err.message}`, true);
+            }
+        }
+        
+        async function saveIndex() {
+            try {
+                statusDiv.textContent = 'Saving...';
+                const response = await fetch(`/index-editor/${issueId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content: textarea.value })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to save index');
+                }
+                
+                const result = await response.json();
+                originalContent = textarea.value;
+                showStatus('Index saved successfully!');
+            } catch (err) {
+                showStatus(`Error: ${err.message}`, true);
+            }
+        }
+        
+        function openIndexEditor() {
+            overlay.style.display = 'block';
+            loadIndex();
+            textarea.focus();
+        }
+        
+        function closeIndexEditor() {
+            if (textarea.value !== originalContent) {
+                if (!confirm('You have unsaved changes. Are you sure you want to close?')) {
+                    return;
+                }
+            }
+            overlay.style.display = 'none';
+        }
+        
+        // Event listeners
+        document.getElementById('edit-index-btn').addEventListener('click', openIndexEditor);
+        document.getElementById('close-index-btn').addEventListener('click', closeIndexEditor);
+        document.getElementById('save-index-btn').addEventListener('click', saveIndex);
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+I or Cmd+I to toggle overlay
+            if ((e.ctrlKey || e.metaKey) && e.key === 'i' && !e.shiftKey && !e.altKey) {
+                e.preventDefault();
+                if (overlay.style.display === 'none') {
+                    openIndexEditor();
+                } else {
+                    closeIndexEditor();
+                }
+            }
+            
+            // When overlay is open
+            if (overlay.style.display !== 'none') {
+                // Ctrl+S to save
+                if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                    e.preventDefault();
+                    saveIndex();
+                }
+                
+                // Esc to close
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    closeIndexEditor();
+                }
+            }
         });
     </script>
 }

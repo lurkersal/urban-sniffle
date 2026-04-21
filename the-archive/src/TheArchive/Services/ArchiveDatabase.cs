@@ -257,6 +257,43 @@ public class ArchiveDatabase
         return await conn.QueryFirstOrDefaultAsync<Issue>(sql, new { IssueId = issueId });
     }
 
+    /// <summary>
+    /// Find an issue by magazine name, volume, and number
+    /// </summary>
+    public async Task<Issue?> FindIssueByMagazineVolNoAsync(string magazineName, string volume, string number)
+    {
+        using var conn = GetConnection();
+        const string sql = @"
+            SELECT 
+                i.IssueId,
+                i.MagazineId,
+                i.Volume,
+                i.Number,
+                i.Year,
+                i.LinkScanPerformed,
+                m.Name as MagazineName,
+                COUNT(DISTINCT c.ArticleId) as ArticleCount,
+                MAX(c.Page) as PageCount,
+                cover.ImagePath as CoverImagePath
+            FROM Issue i
+            JOIN Magazine m ON i.MagazineId = m.MagazineId
+            LEFT JOIN Content c ON i.IssueId = c.IssueId
+            LEFT JOIN (
+                SELECT DISTINCT ON (mc.IssueId) mc.IssueId, mc.ImagePath
+                FROM Content mc
+                JOIN Article a ON mc.ArticleId = a.ArticleId
+                JOIN Category cat ON a.CategoryId = cat.CategoryId
+                WHERE cat.Name = 'Cover'
+                ORDER BY mc.IssueId, mc.Page
+            ) cover ON i.IssueId = cover.IssueId
+            WHERE LOWER(m.Name) = LOWER(@MagazineName) 
+                AND i.Volume = @Volume 
+                AND i.Number = @Number
+            GROUP BY i.IssueId, i.MagazineId, i.Volume, i.Number, i.Year, i.LinkScanPerformed, m.Name, cover.ImagePath";
+        
+        return await conn.QueryFirstOrDefaultAsync<Issue>(sql, new { MagazineName = magazineName, Volume = volume, Number = number });
+    }
+
     #endregion
 
     #region Articles
@@ -721,6 +758,31 @@ public class ArchiveDatabase
         
         var results = await conn.QueryAsync<(int Page, string? ImagePath)>(sql, new { ArticleId = articleId });
         return results.ToList();
+    }
+
+    #endregion
+
+    #region Content
+
+    /// <summary>
+    /// Get all content records for an issue (for determining folder path)
+    /// </summary>
+    public async Task<List<Content>> GetIssueContentAsync(int issueId)
+    {
+        using var conn = GetConnection();
+        const string sql = @"
+            SELECT 
+                ContentId,
+                ArticleId,
+                IssueId,
+                Page,
+                ImagePath
+            FROM Content
+            WHERE IssueId = @IssueId
+            ORDER BY Page";
+        
+        var content = await conn.QueryAsync<Content>(sql, new { IssueId = issueId });
+        return content.ToList();
     }
 
     #endregion
