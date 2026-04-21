@@ -20,6 +20,12 @@ public class Article
     public string? ModelName { get; set; }
     public string? FirstImagePath { get; set; }
     
+    // Issue date fields (from Issue table joins)
+    public int Year { get; set; }
+    public int Volume { get; set; }
+    public int Number { get; set; }
+    public string MagazineName { get; set; } = string.Empty;
+    
     // Computed properties for the spec
     public string Id => $"art-{ArticleId}";
     public string Category => MapCategoryToSpec(CategoryName);

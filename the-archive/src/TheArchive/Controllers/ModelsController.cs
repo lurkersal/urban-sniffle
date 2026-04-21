@@ -20,6 +20,13 @@ public class ModelsController : Controller
     public async Task<IActionResult> Index()
     {
         var models = await _db.GetModelsAsync();
+        var thumbnails = await _db.GetModelThumbnailsAsync();
+        
+        var viewModels = models.Select(m => new ModelIndexViewModel
+        {
+            Model = m,
+            ThumbnailPath = thumbnails.TryGetValue(m.ModelId, out var path) ? path : null
+        }).ToList();
         
         ViewBag.Breadcrumbs = new List<BreadcrumbItem>
         {
@@ -27,7 +34,7 @@ public class ModelsController : Controller
             new BreadcrumbItem { Text = "Models", IsActive = true, IsLast = true }
         };
         
-        return View(models);
+        return View(viewModels);
     }
 
     /// <summary>

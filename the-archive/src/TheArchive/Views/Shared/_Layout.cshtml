@@ -303,10 +303,11 @@
                                   (nextPageData.page % 2 === 1);
             
             // Update page info
+            const issueLinkHtml = currentIssueId ? `<a href="/issues/${currentIssueId}" class="issue-link" onclick="closeSpread()">← Issue</a>` : '';
             if (canShowSpread) {
-                document.getElementById('spread-info').innerHTML = `Page <strong>${currentPageData.page}</strong> & <strong>${nextPageData.page}</strong>`;
+                document.getElementById('spread-info').innerHTML = `${issueLinkHtml} Page <strong>${currentPageData.page}</strong> & <strong>${nextPageData.page}</strong>`;
             } else {
-                document.getElementById('spread-info').innerHTML = `Page <strong>${currentPageData.page}</strong>`;
+                document.getElementById('spread-info').innerHTML = `${issueLinkHtml} Page <strong>${currentPageData.page}</strong>`;
             }
             
             // Build HTML - always show pages in numerical order (never swap)

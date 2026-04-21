@@ -17,8 +17,8 @@
                 {
                     <div class="model-portrait-initials">@Model.Initials</div>
                 }
-                <div class="model-portrait-name">@Model.Model.Name</div>
             </div>
+            <div class="model-portrait-name">@Model.Model.Name</div>
         </div>
         
         <div class="model-stats">
@@ -64,11 +64,16 @@
             {
                 <div>
                     <div class="stat-group-label">Articles (@Model.Articles.Count)</div>
-                    <div class="article-list" style="margin-top: 0.5rem;">
+                    <div class="article-list" id="model-article-list" style="margin-top: 0.5rem;">
                         @foreach (var article in Model.Articles.Take(10))
                         {
                             var catClass = "cat-" + article.Category;
-                            <div class="article-row" style="padding: 8px 0;" onclick="window.location.href='/issues/@article.IssueId'">
+                            <div class="article-row" 
+                                 style="padding: 8px 0; cursor: pointer;"
+                                 data-article-id="@article.ArticleId"
+                                 data-article-title="@(article.Title ?? "Untitled")"
+                                 data-article-category="@article.CategoryName"
+                                 data-issue-id="@article.IssueId">
                                 <div class="article-pg" style="font-size: 16px;">@article.PageStart</div>
                                 <div class="article-body">
                                     <div>
@@ -83,7 +88,9 @@
                                         <div class="article-title" style="font-size: 14px; color: var(--muted); font-style: italic;">Untitled</div>
                                     }
                                 </div>
-                                <div style="font-size: 11px; color: var(--muted);">Issue @article.IssueId</div>
+                                <div style="font-size: 11px; color: var(--muted);">
+                                    @article.MagazineName Vol @article.Volume No @article.Number (@article.Year)
+                                </div>
                             </div>
                         }
                     </div>
@@ -92,4 +99,28 @@
         </div>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        // Handle clicks on model's articles to open article viewer
+        document.addEventListener('DOMContentLoaded', () => {
+            const articleList = document.getElementById('model-article-list');
+            if (articleList) {
+                articleList.addEventListener('click', (e) => {
+                    const articleRow = e.target.closest('.article-row');
+                    if (articleRow) {
+                        const articleId = parseInt(articleRow.dataset.articleId);
+                        const articleTitle = articleRow.dataset.articleTitle || 'Untitled';
+                        const category = articleRow.dataset.articleCategory;
+                        const issueId = parseInt(articleRow.dataset.issueId);
+                        
+                        if (articleId && issueId) {
+                            openArticle(articleId, articleTitle, category, issueId);
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+}
 

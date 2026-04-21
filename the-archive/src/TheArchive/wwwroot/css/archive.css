@@ -602,6 +602,14 @@ body {
     column-gap: 0.75rem;
 }
 
+/* Single column for model detail pages */
+.model-detail .article-list {
+    column-count: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
 .article-row {
     display: grid;
     grid-template-columns: 32px 1fr auto;
@@ -614,8 +622,13 @@ body {
     border-radius: 4px;
     background: rgba(245, 240, 232, 0.03);
     min-height: 40px;
-    break-inside: avoid;  /* Prevent articles from breaking across columns */
-    margin-bottom: 0.75rem;  /* Space between articles */
+    break-inside: avoid;
+    margin-bottom: 0.75rem;
+}
+
+/* Remove margin for model detail (using flexbox gap instead) */
+.model-detail .article-row {
+    margin-bottom: 0;
 }
 
 /* Larger rows for articles with thumbnails */
@@ -710,13 +723,13 @@ body {
     white-space: normal;
 }
 
-/* Responsive: single column on smaller screens */
+
+/* Responsive: single column on smaller screens for issue pages */
 @media (max-width: 1024px) {
     .article-list {
         column-count: 1;
     }
 }
-
 
 /* Filter Bar */
 .filter-bar {
@@ -793,6 +806,24 @@ body {
 .spread-info strong {
     color: var(--paper);
     font-weight: 400;
+}
+
+.spread-info .issue-link {
+    color: var(--paper);
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    background: rgba(245, 240, 232, 0.1);
+    border: 0.5px solid rgba(245, 240, 232, 0.2);
+    font-size: 14px;
+    transition: all 0.2s;
+    margin-right: 1rem;
+    display: inline-block;
+}
+
+.spread-info .issue-link:hover {
+    background: rgba(245, 240, 232, 0.15);
+    border-color: rgba(245, 240, 232, 0.3);
 }
 
 .spread-close {
@@ -1250,19 +1281,19 @@ body {
 .model-photo {
     width: 100%;
     aspect-ratio: 2/3;
-    display: flex;
-    align-items: flex-end;
-    padding: 1rem;
     position: relative;
     overflow: hidden;
     background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
 }
 
-.model-photo::before {
-    content: '';
+.model-photo img {
     position: absolute;
-    inset: 0;
-    background: linear-gradient(to bottom, transparent 40%, rgba(0, 0, 0, 0.8) 100%);
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
     z-index: 0;
 }
 
@@ -1277,24 +1308,24 @@ body {
     color: #fff;
 }
 
-.model-name-overlay {
-    position: relative;
-    z-index: 1;
-    font-family: var(--serif);
-    font-size: 18px;
-    font-weight: 700;
-    color: #fff;
-    line-height: 1.2;
-}
-
 .model-info {
-    padding: 10px 12px;
+    padding: 12px;
     background: rgba(245, 240, 232, 0.03);
 }
 
-.model-real-name {
+.model-name {
+    font-family: var(--serif);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--paper);
+    margin-bottom: 6px;
+    line-height: 1.2;
+}
+
+.model-measurements {
     font-size: 11px;
     color: var(--muted);
+    margin-bottom: 4px;
 }
 
 .model-appear {
@@ -1322,17 +1353,8 @@ body {
     overflow: hidden;
     border: 0.5px solid rgba(245, 240, 232, 0.1);
     position: relative;
-    display: flex;
-    align-items: flex-end;
-    padding: 1.5rem;
     background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
-}
-
-.model-portrait::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to bottom, transparent 30%, rgba(0, 0, 0, 0.85) 100%);
+    margin-bottom: 1rem;
 }
 
 .model-portrait-image {
@@ -1356,19 +1378,19 @@ body {
 }
 
 .model-portrait-name {
-    position: relative;
-    z-index: 1;
     font-family: var(--serif);
     font-size: 24px;
     font-weight: 700;
-    color: #fff;
+    color: var(--paper);
     line-height: 1.2;
+    text-align: center;
 }
 
 .model-stats {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
+    max-width: 100%;
 }
 
 .stat-group-label {

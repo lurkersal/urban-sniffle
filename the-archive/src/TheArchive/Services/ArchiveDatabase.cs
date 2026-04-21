@@ -402,6 +402,51 @@ public class ArchiveDatabase
     }
 
     /// <summary>
+    /// Get all models with their first page thumbnails
+    /// Prefers model/pictorial articles over cover articles
+    /// </summary>
+    public async Task<Dictionary<int, string?>> GetModelThumbnailsAsync()
+    {
+        using var conn = GetConnection();
+        const string sql = @"
+            WITH FirstArticle AS (
+                SELECT DISTINCT ON (cm.ModelId)
+                    cm.ModelId,
+                    a.ArticleId,
+                    MIN(c.IssueId) as IssueId,
+                    MIN(c.Page) as PageStart
+                FROM ContentModel cm
+                JOIN Article a ON cm.ArticleId = a.ArticleId
+                JOIN Category cat ON a.CategoryId = cat.CategoryId
+                JOIN Content c ON a.ArticleId = c.ArticleId
+                GROUP BY cm.ModelId, a.ArticleId, cat.Name
+                ORDER BY cm.ModelId, 
+                         CASE 
+                             WHEN LOWER(cat.Name) IN ('model', 'pictorial', 'pinup', 'feature') THEN 0
+                             WHEN LOWER(cat.Name) = 'cover' THEN 1
+                             ELSE 2
+                         END,
+                         MIN(c.IssueId), 
+                         MIN(c.Page)
+            ),
+            FirstPage AS (
+                SELECT DISTINCT ON (fa.ModelId)
+                    fa.ModelId,
+                    c.ImagePath
+                FROM FirstArticle fa
+                JOIN Content c ON fa.ArticleId = c.ArticleId
+                WHERE c.ImagePath IS NOT NULL
+                ORDER BY fa.ModelId, c.Page
+            )
+            SELECT ModelId, ImagePath
+            FROM FirstPage";
+        
+        var results = await conn.QueryAsync<(int ModelId, string? ImagePath)>(sql);
+        
+        return results.ToDictionary(r => r.ModelId, r => r.ImagePath);
+    }
+
+    /// <summary>
     /// Get a single model by ID or slug
     /// </summary>
     public async Task<Model?> GetModelAsync(string idOrSlug)
@@ -451,7 +496,7 @@ public class ArchiveDatabase
     }
 
     /// <summary>
-    /// Get all articles featuring a specific model
+    /// Get all articles featuring a specific model, ordered chronologically by publication date
     /// </summary>
     public async Task<List<Article>> GetArticlesByModelAsync(int modelId)
     {
@@ -465,22 +510,28 @@ public class ArchiveDatabase
                 c.IssueId,
                 MIN(c.Page) as PageStart,
                 cm.ModelId,
-                m.Name as ModelName
+                m.Name as ModelName,
+                i.Year,
+                i.Volume,
+                i.Number,
+                mag.Name as MagazineName
             FROM Article a
             JOIN Category cat ON a.CategoryId = cat.CategoryId
             JOIN ContentModel cm ON a.ArticleId = cm.ArticleId
             JOIN Model m ON cm.ModelId = m.ModelId
             LEFT JOIN Content c ON a.ArticleId = c.ArticleId
+            LEFT JOIN Issue i ON c.IssueId = i.IssueId
+            LEFT JOIN Magazine mag ON i.MagazineId = mag.MagazineId
             WHERE cm.ModelId = @ModelId
-            GROUP BY a.ArticleId, a.CategoryId, a.Title, cat.Name, c.IssueId, cm.ModelId, m.Name
-            ORDER BY a.ArticleId DESC";
+            GROUP BY a.ArticleId, a.CategoryId, a.Title, cat.Name, c.IssueId, cm.ModelId, m.Name, i.Year, i.Volume, i.Number, mag.Name
+            ORDER BY i.Year ASC, i.Volume ASC, i.Number ASC, MIN(c.Page) ASC";
         
         var articles = await conn.QueryAsync<Article>(sql, new { ModelId = modelId });
         return articles.ToList();
     }
 
     /// <summary>
-    /// Get all issues featuring a specific model
+    /// Get all issues featuring a specific model, ordered chronologically
     /// </summary>
     public async Task<List<Issue>> GetIssuesByModelAsync(int modelId)
     {
@@ -500,7 +551,7 @@ public class ArchiveDatabase
             JOIN Article a ON c.ArticleId = a.ArticleId
             JOIN ContentModel cm ON a.ArticleId = cm.ArticleId
             WHERE cm.ModelId = @ModelId
-            ORDER BY i.Year DESC, i.Volume DESC, i.Number DESC";
+            ORDER BY i.Year ASC, i.Volume ASC, i.Number ASC";
         
         var issues = await conn.QueryAsync<Issue>(sql, new { ModelId = modelId });
         return issues.ToList();

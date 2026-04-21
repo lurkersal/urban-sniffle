@@ -15,3 +15,11 @@ cd '/home/justin/Magazines/Club International'
 ~/repos/urban-sniffle/scripts/run-magazine-parser-by-year.sh 1992
 ~/repos/urban-sniffle/scripts/run-magazine-parser-by-year.sh 1993
 
+
+cd '/home/justin/Magazines/Mayfair'
+~/repos/urban-sniffle/scripts/run-magazine-parser-by-year.sh 1971
+~/repos/urban-sniffle/scripts/run-magazine-parser-by-year.sh 1972
+~/repos/urban-sniffle/scripts/run-magazine-parser-by-year.sh 1973
+~/repos/urban-sniffle/scripts/run-magazine-parser-by-year.sh 1974
+~/repos/urban-sniffle/scripts/run-magazine-parser-by-year.sh 1975
+~/repos/urban-sniffle/scripts/run-magazine-parser-by-year.sh 1982
