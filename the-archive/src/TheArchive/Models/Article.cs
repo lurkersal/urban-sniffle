@@ -18,6 +18,7 @@ public class Article
     public string? Photographer { get; set; }
     public int? ModelId { get; set; }
     public string? ModelName { get; set; }
+    public string? ModelIds { get; set; }  // Comma-separated IDs for multiple models (matches order of ModelName)
     public string? FirstImagePath { get; set; }
     
     // Issue date fields (from Issue table joins)

@@ -75,7 +75,30 @@
                         <div class="article-byline">
                             @if (!string.IsNullOrEmpty(article.ModelName))
                             {
-                                @if (article.ModelId != null && article.ModelId > 0)
+                                @* Handle multiple models - create individual links *@
+                                @if (article.ModelName.Contains(" • ") && !string.IsNullOrEmpty(article.ModelIds))
+                                {
+                                    var modelNames = article.ModelName.Split(" • ", StringSplitOptions.RemoveEmptyEntries);
+                                    var modelIds = article.ModelIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                                    
+                                    for (int i = 0; i < modelNames.Length; i++)
+                                    {
+                                        if (i > 0)
+                                        {
+                                            <span> • </span>
+                                        }
+                                        
+                                        if (i < modelIds.Length && int.TryParse(modelIds[i], out int modelId))
+                                        {
+                                            <a href="/models/@modelId" class="model-link" data-model-id="@modelId">@modelNames[i]</a>
+                                        }
+                                        else
+                                        {
+                                            <span>@modelNames[i]</span>
+                                        }
+                                    }
+                                }
+                                else if (article.ModelId != null && article.ModelId > 0)
                                 {
                                     <a href="/models/@article.ModelId" class="model-link" data-model-id="@article.ModelId">@article.ModelName</a>
                                 }
@@ -127,6 +150,33 @@
     <script>
         const issueId = @Model.Issue.IssueId;
         let originalContent = '';
+        
+        // Check for openArticle query parameter and auto-open the article
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const openArticleId = urlParams.get('openArticle');
+            
+            if (openArticleId) {
+                // Find the article row with this ID
+                const articleRow = document.querySelector(`[data-article-id="${openArticleId}"]`);
+                
+                if (articleRow && typeof openArticle === 'function') {
+                    const articleId = parseInt(articleRow.dataset.articleId);
+                    const articleTitle = articleRow.dataset.articleTitle;
+                    const articleCategory = articleRow.dataset.articleCategory;
+                    const issueId = parseInt(articleRow.dataset.issueId);
+                    
+                    // Small delay to ensure page is fully loaded
+                    setTimeout(function() {
+                        openArticle(articleId, articleTitle, articleCategory, issueId);
+                        
+                        // Clean up URL (remove query parameter) without reloading
+                        const cleanUrl = window.location.pathname;
+                        window.history.replaceState({}, document.title, cleanUrl);
+                    }, 100);
+                }
+            }
+        })();
         
         // Category filtering
         document.querySelectorAll('.filter-chip').forEach(chip => {

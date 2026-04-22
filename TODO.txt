@@ -1,5 +1,5 @@
-TODO
-
-
-
+the-archive.
+------------
+breadcrumb trail should be clickable
+magazines page thumbnails should be better
 

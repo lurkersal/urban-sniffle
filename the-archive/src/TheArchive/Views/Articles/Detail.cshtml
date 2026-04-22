@@ -33,7 +33,36 @@
                     <div class="meta-item">
                         <span class="meta-label">Model:</span>
                         <span class="meta-value">
-                            <a href="/models/@article.ModelId">@article.ModelName</a>
+                            @if (article.ModelName.Contains(" • ") && !string.IsNullOrEmpty(article.ModelIds))
+                            {
+                                var modelNames = article.ModelName.Split(" • ", StringSplitOptions.RemoveEmptyEntries);
+                                var modelIds = article.ModelIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                                
+                                for (int i = 0; i < modelNames.Length; i++)
+                                {
+                                    if (i > 0)
+                                    {
+                                        <span> • </span>
+                                    }
+                                    
+                                    if (i < modelIds.Length && int.TryParse(modelIds[i], out int modelId))
+                                    {
+                                        <a href="/models/@modelId">@modelNames[i]</a>
+                                    }
+                                    else
+                                    {
+                                        <span>@modelNames[i]</span>
+                                    }
+                                }
+                            }
+                            else if (article.ModelId != null && article.ModelId > 0)
+                            {
+                                <a href="/models/@article.ModelId">@article.ModelName</a>
+                            }
+                            else
+                            {
+                                <span>@article.ModelName</span>
+                            }
                         </span>
                     </div>
                 }
@@ -55,11 +84,11 @@
                 }
             </div>
             
-            <div class="article-actions">
-                @if (issue != null)
-                {
-                    <a href="/issues/@issue.IssueId" class="btn-primary">View Full Issue</a>
-                }
+            <div class="article-loading">
+                <p style="text-align: center; color: #999; padding: 2rem;">
+                    <span class="loading-spinner"></span>
+                    Opening article viewer...
+                </p>
             </div>
         </div>
     }
@@ -70,6 +99,29 @@
         </div>
     }
 </div>
+
+@if (article != null && issue != null)
+{
+    <script>
+        // Automatically open the article viewer when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            const articleId = @article.ArticleId;
+            const articleTitle = '@Html.Raw(article.Title?.Replace("'", "\\'") ?? "Untitled")';
+            const category = '@Html.Raw(article.CategoryName?.Replace("'", "\\'"))';
+            const issueId = @issue.IssueId;
+            
+            // Small delay to ensure the page is loaded
+            setTimeout(function() {
+                if (typeof openArticle === 'function') {
+                    openArticle(articleId, articleTitle, category, issueId);
+                } else {
+                    // Fallback: redirect to issue page if openArticle function not available
+                    window.location.href = '/issues/' + issueId + '#article-' + articleId;
+                }
+            }, 100);
+        });
+    </script>
+}
 
 <style>
     .article-detail {
@@ -111,26 +163,26 @@
         text-decoration: underline;
     }
     
-    .article-actions {
-        display: flex;
-        gap: 1rem;
-        padding-top: 1.5rem;
+    .article-loading {
+        padding: 2rem 0;
         border-top: 1px solid #e0e0e0;
     }
     
-    .btn-primary {
-        background: #667eea;
-        color: white;
-        padding: 0.75rem 1.5rem;
-        border-radius: 6px;
-        text-decoration: none;
-        font-weight: 500;
-        transition: all 0.2s ease;
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        vertical-align: middle;
+        margin-right: 0.5rem;
     }
     
-    .btn-primary:hover {
-        background: #5568d3;
-        transform: translateY(-1px);
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
     }
     
     .empty-state {

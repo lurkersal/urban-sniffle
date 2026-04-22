@@ -314,8 +314,19 @@ public class ArchiveDatabase
                 c.IssueId,
                 MIN(c.Page) as PageStart,
                 STRING_AGG(DISTINCT contrib.Name, ', ') as Photographer,
-                cm.ModelId,
-                m.Name as ModelName,
+                MIN(cm.ModelId) as ModelId,
+                (
+                    SELECT STRING_AGG(m2.Name, ' • ' ORDER BY m2.Name)
+                    FROM ContentModel cm2
+                    JOIN Model m2 ON cm2.ModelId = m2.ModelId
+                    WHERE cm2.ArticleId = a.ArticleId
+                ) as ModelName,
+                (
+                    SELECT STRING_AGG(cm2.ModelId::TEXT, ',' ORDER BY m2.Name)
+                    FROM ContentModel cm2
+                    JOIN Model m2 ON cm2.ModelId = m2.ModelId
+                    WHERE cm2.ArticleId = a.ArticleId
+                ) as ModelIds,
                 first_img.ImagePath as FirstImagePath
             FROM Article a
             JOIN Category cat ON a.CategoryId = cat.CategoryId
@@ -338,7 +349,7 @@ public class ArchiveDatabase
         }
         
         sql += @"
-            GROUP BY a.ArticleId, a.CategoryId, a.Title, cat.Name, c.IssueId, cm.ModelId, m.Name, first_img.ImagePath
+            GROUP BY a.ArticleId, a.CategoryId, a.Title, cat.Name, c.IssueId, first_img.ImagePath
             ORDER BY MIN(c.Page) ASC";
         
         var articles = await conn.QueryAsync<Article>(sql, new { IssueId = issueId, Category = categoryFilter });
@@ -346,9 +357,9 @@ public class ArchiveDatabase
     }
 
     /// <summary>
-    /// Get all articles (paginated) with optional category filter
+    /// Get all articles (paginated) with optional category filter and search query
     /// </summary>
-    public async Task<List<Article>> GetAllArticlesAsync(string? category = null, int page = 1, int perPage = 50)
+    public async Task<List<Article>> GetAllArticlesAsync(string? category = null, string? searchQuery = null, int page = 1, int perPage = 50)
     {
         using var conn = GetConnection();
         
@@ -359,23 +370,51 @@ public class ArchiveDatabase
                 a.Title,
                 cat.Name as CategoryName,
                 c.IssueId,
-                MIN(c.Page) as PageStart
+                MIN(c.Page) as PageStart,
+                i.Year,
+                i.Volume,
+                i.Number,
+                mag.Name as MagazineName
             FROM Article a
             JOIN Category cat ON a.CategoryId = cat.CategoryId
-            JOIN Content c ON a.ArticleId = c.ArticleId";
+            JOIN Content c ON a.ArticleId = c.ArticleId
+            JOIN Issue i ON c.IssueId = i.IssueId
+            JOIN Magazine mag ON i.MagazineId = mag.MagazineId
+            LEFT JOIN ContentModel cm ON a.ArticleId = cm.ArticleId
+            LEFT JOIN Model m ON cm.ModelId = m.ModelId
+            LEFT JOIN ContentContributor cc ON c.ContentId = cc.ContentId
+            LEFT JOIN Contributor contrib ON cc.ContributorId = contrib.ContributorId";
+        
+        var whereClauses = new List<string>();
+        var parameters = new DynamicParameters();
         
         if (!string.IsNullOrWhiteSpace(category) && category.ToLower() != "all")
         {
-            sql += " WHERE LOWER(cat.Name) = LOWER(@Category)";
+            whereClauses.Add("LOWER(cat.Name) = LOWER(@Category)");
+            parameters.Add("Category", category);
+        }
+        
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            whereClauses.Add("(LOWER(a.Title) LIKE LOWER(@SearchQuery) OR LOWER(m.Name) LIKE LOWER(@SearchQuery) OR LOWER(contrib.Name) LIKE LOWER(@SearchQuery))");
+            parameters.Add("SearchQuery", $"%{searchQuery}%");
+        }
+        
+        if (whereClauses.Count > 0)
+        {
+            sql += " WHERE " + string.Join(" AND ", whereClauses);
         }
         
         sql += @"
-            GROUP BY a.ArticleId, a.CategoryId, a.Title, cat.Name, c.IssueId
+            GROUP BY a.ArticleId, a.CategoryId, a.Title, cat.Name, c.IssueId, i.Year, i.Volume, i.Number, mag.Name
             ORDER BY a.ArticleId DESC
             LIMIT @PerPage OFFSET @Offset";
         
         var offset = (page - 1) * perPage;
-        var articles = await conn.QueryAsync<Article>(sql, new { Category = category, PerPage = perPage, Offset = offset });
+        parameters.Add("PerPage", perPage);
+        parameters.Add("Offset", offset);
+        
+        var articles = await conn.QueryAsync<Article>(sql, parameters);
         return articles.ToList();
     }
 

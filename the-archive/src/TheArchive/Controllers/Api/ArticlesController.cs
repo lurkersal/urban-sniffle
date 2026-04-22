@@ -15,12 +15,12 @@ public class ArticlesController : ControllerBase
     }
 
     /// <summary>
-    /// GET /api/v1/articles - All articles (paginated). Supports ?category= filter
+    /// GET /api/v1/articles - All articles (paginated). Supports ?category= and ?q= filters
     /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] string? category = null, [FromQuery] int page = 1, [FromQuery] int per_page = 50)
+    public async Task<IActionResult> GetAll([FromQuery] string? category = null, [FromQuery] string? q = null, [FromQuery] int page = 1, [FromQuery] int per_page = 50)
     {
-        var articles = await _db.GetAllArticlesAsync(category, page, per_page);
+        var articles = await _db.GetAllArticlesAsync(category, q, page, per_page);
         return Ok(articles);
     }
 

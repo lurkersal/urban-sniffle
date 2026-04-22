@@ -104,9 +104,18 @@
                     if (articles.length > 0) {
                         html += '<div class="search-section"><div class="search-section-label">Articles</div>';
                         articles.slice(0, 5).forEach(article => {
-                            html += `<a href="/issues/${article.issueId}" class="search-result">
+                            // Format magazine info: "Magazine Vol.X #Y (Year)"
+                            const volumeInfo = article.volume ? `Vol.${article.volume}` : '';
+                            const issueInfo = article.number ? `#${article.number}` : '';
+                            const yearInfo = article.year ? `(${article.year})` : '';
+                            const separator = (volumeInfo && issueInfo) ? ' ' : '';
+                            const metaInfo = [article.magazineName, volumeInfo + separator + issueInfo, yearInfo]
+                                .filter(x => x)
+                                .join(' ');
+                            
+                            html += `<a href="/articles/${article.articleId}" class="search-result">
                                 <span class="search-result-title">${article.title || 'Untitled'}</span>
-                                <span class="search-result-meta">Page ${article.pageStart}</span>
+                                <span class="search-result-meta">${metaInfo}</span>
                             </a>`;
                         });
                         html += '</div>';

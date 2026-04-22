@@ -18,7 +18,7 @@ public class ArticlesController : Controller
     /// </summary>
     public async Task<IActionResult> Index(string? category, int page = 1)
     {
-        var articles = await _db.GetAllArticlesAsync(category, page, perPage: 100);
+        var articles = await _db.GetAllArticlesAsync(category, searchQuery: null, page, perPage: 100);
         
         ViewBag.Breadcrumbs = new List<BreadcrumbItem>
         {
@@ -33,7 +33,7 @@ public class ArticlesController : Controller
     }
 
     /// <summary>
-    /// GET /articles/{id} - Single article detail
+    /// GET /articles/{id} - Redirects to issue page with article auto-opened
     /// </summary>
     [HttpGet("/articles/{id}")]
     public async Task<IActionResult> Detail(int id)
@@ -43,19 +43,8 @@ public class ArticlesController : Controller
         if (article == null)
             return NotFound();
         
-        var issue = await _db.GetIssueAsync(article.IssueId);
-        
-        ViewBag.Breadcrumbs = new List<BreadcrumbItem>
-        {
-            new BreadcrumbItem { Text = "Home", Url = "/", IsActive = false, IsLast = false },
-            new BreadcrumbItem { Text = "Articles", Url = "/articles", IsActive = false, IsLast = false },
-            new BreadcrumbItem { Text = article.Title ?? "Article", IsActive = true, IsLast = true }
-        };
-        
-        ViewBag.Article = article;
-        ViewBag.Issue = issue;
-        
-        return View();
+        // Redirect to issue page with article auto-open parameter
+        return Redirect($"/issues/{article.IssueId}?openArticle={id}");
     }
 }
 
