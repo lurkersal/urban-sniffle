@@ -14,6 +14,13 @@ namespace IndexEditor.Services
     /// </summary>
     public class ArticleCardRenderer : IArticleCardRenderer
     {
+        private IndexEditor.Shared.IEditorState? _editorState;
+
+        public void SetEditorState(IndexEditor.Shared.IEditorState editorState)
+        {
+            _editorState = editorState;
+        }
+
         /// <summary>
         /// Creates a visual card for an article with colored bar, title, details, and category.
         /// </summary>
@@ -193,6 +200,7 @@ namespace IndexEditor.Services
                 || category == "wives" 
                 || category == "interview";
         }
+
 
         /// <summary>
         /// Creates the category label text block

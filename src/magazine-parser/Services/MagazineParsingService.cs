@@ -587,7 +587,8 @@ public class MagazineParsingService
             // Insert article with title only
             var articleId = _repository.InsertArticle(
                 categoryId,
-                contentLine.Title);
+                contentLine.Title,
+                contentLine.ThumbnailPage);
 
             // Link article to all models if present, associating age and measurements by order
             var ages = new List<int?>();
@@ -877,7 +878,8 @@ public class MagazineParsingService
             // Insert article with title only
             var articleId = _repository.InsertArticle(
                 categoryId,
-                contentLine.Title);
+                contentLine.Title,
+                contentLine.ThumbnailPage);
 
             // Link article to all models if present
             foreach (var modelName in contentLine.ModelNames)
@@ -989,7 +991,8 @@ public class MagazineParsingService
                     BustSizes = article.BustSizes.ToList(),
                     WaistSizes = article.WaistSizes.ToList(),
                     HipSizes = article.HipSizes.ToList(),
-                    CupSizes = article.CupSizes.ToList()
+                    CupSizes = article.CupSizes.ToList(),
+                    ThumbnailPage = article.ThumbnailPage
                 };
                 contentLines.Add(contentLine);
             }

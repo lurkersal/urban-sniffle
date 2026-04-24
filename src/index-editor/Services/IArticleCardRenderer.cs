@@ -8,6 +8,11 @@ namespace IndexEditor.Services
     public interface IArticleCardRenderer
     {
         /// <summary>
+        /// Sets the editor state for the card renderer
+        /// </summary>
+        void SetEditorState(IndexEditor.Shared.IEditorState editorState);
+
+        /// <summary>
         /// Creates a visual card for an article with colored bar, title, details, and category.
         /// </summary>
         /// <param name="article">The article to render</param>

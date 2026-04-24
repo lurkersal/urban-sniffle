@@ -7,7 +7,7 @@
     <UserControl.Resources>
         <local:ArticleCategoryToColorConverter x:Key="ArticleCategoryToColorConverter" />
     </UserControl.Resources>
-    <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" RowDefinitions="*,Auto">
+    <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" RowDefinitions="*,Auto,Auto">
         <!-- Row 0: Scrollable content area (article cards and page image) -->
         <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="12" Spacing="12" VerticalAlignment="Stretch">
@@ -35,6 +35,19 @@
                 </Border>
             </StackPanel>
         </ScrollViewer>
+        
+        <!-- Row 1: Thumbnail Page Selection Panel (shows when article is selected) -->
+        <Border Grid.Row="1" Background="#F8F8F8" BorderBrush="#CCCCCC" BorderThickness="0,1,0,1" Padding="12" Name="ThumbnailPanel" IsVisible="False">
+            <StackPanel Spacing="8">
+                <TextBlock Text="Thumbnail Page:" FontWeight="Bold" FontSize="14" />
+                <TextBlock Name="ThumbnailInstructionText" Text="Select which page to use as the thumbnail for this article:" FontSize="12" Foreground="#666" TextWrapping="Wrap" />
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" MaxHeight="100">
+                    <StackPanel Name="ThumbnailPagesContainer" Orientation="Horizontal" Spacing="4">
+                        <!-- Checkboxes for each page will be dynamically added here -->
+                    </StackPanel>
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
         
         <!-- Row 1: Fixed Page Navigation Controls at bottom -->
         <Border Grid.Row="1" Background="#F0F0F0" BorderBrush="#CCCCCC" BorderThickness="0,1,0,0" Padding="12">

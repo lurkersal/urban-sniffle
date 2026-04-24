@@ -117,7 +117,8 @@ namespace Common.Shared
                 ModelNames = article.ModelNames?.Count > 0 ? new List<string>(article.ModelNames) : null,
                 Ages = article.Ages?.Count > 0 ? new List<int?>(article.Ages) : null,
                 Contributors = article.Contributors?.Count > 0 ? new List<string>(article.Contributors) : null,
-                Measurements = article.Measurements?.Count > 0 ? new List<string>(article.Measurements) : null
+                Measurements = article.Measurements?.Count > 0 ? new List<string>(article.Measurements) : null,
+                ThumbnailPage = article.ThumbnailPage
             };
         }
 
@@ -158,6 +159,11 @@ namespace Common.Shared
             if (json.Measurements != null && json.Measurements.Count > 0)
             {
                 article.Measurements = new System.Collections.Generic.List<string>(json.Measurements);
+            }
+
+            if (json.ThumbnailPage.HasValue)
+            {
+                article.ThumbnailPage = json.ThumbnailPage;
             }
 
             return article;

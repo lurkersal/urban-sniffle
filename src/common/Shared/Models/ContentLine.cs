@@ -24,6 +24,7 @@ public class ContentLine
     public List<string> ValidationErrors { get; set; } = new();
     public bool HasValidationError => ValidationErrors.Count > 0;
     public bool WasAutoInserted { get; set; }
+    public int? ThumbnailPage { get; set; }  // Page number to use for article thumbnail
 
     // Helper properties for backward compatibility during parsing
     public string ModelName

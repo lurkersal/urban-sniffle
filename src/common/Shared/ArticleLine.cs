@@ -182,6 +182,7 @@ namespace Common.Shared
         public List<int?> WaistSizes { get; set; } = new();
         public List<int?> HipSizes { get; set; } = new();
         public List<string?> CupSizes { get; set; } = new();
+        public int? ThumbnailPage { get; set; }  // Page number to use for article thumbnail (defaults to first page)
         public List<string> ValidationErrors { get; set; } = new();
         public System.Collections.ObjectModel.ObservableCollection<Segment> Segments { get; set; } = new System.Collections.ObjectModel.ObservableCollection<Segment>();
         // The segment that was most recently modified (added/ended/reopened) on this article. Not persisted.

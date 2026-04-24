@@ -83,6 +83,9 @@ namespace Common.Shared
 
         [JsonPropertyName("measurements")]
         public List<string>? Measurements { get; set; }
+
+        [JsonPropertyName("thumbnailPage")]
+        public int? ThumbnailPage { get; set; }
     }
 
     /// <summary>

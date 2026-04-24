@@ -338,8 +338,10 @@ public class ArchiveDatabase
             LEFT JOIN (
                 SELECT DISTINCT ON (c2.ArticleId) c2.ArticleId, c2.ImagePath
                 FROM Content c2
+                JOIN Article a2 ON c2.ArticleId = a2.ArticleId
                 WHERE c2.ImagePath IS NOT NULL
-                ORDER BY c2.ArticleId, c2.Page
+                    AND c2.Page = COALESCE(a2.ThumbnailPage, (SELECT MIN(c3.Page) FROM Content c3 WHERE c3.ArticleId = c2.ArticleId))
+                ORDER BY c2.ArticleId
             ) first_img ON a.ArticleId = first_img.ArticleId
             WHERE c.IssueId = @IssueId";
         

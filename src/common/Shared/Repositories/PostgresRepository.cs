@@ -138,14 +138,15 @@ public class PostgresRepository : IDatabaseRepository
         return (int)insCmd.ExecuteScalar()!;
     }
 
-    public int InsertArticle(int categoryId, string? title)
+    public int InsertArticle(int categoryId, string? title, int? thumbnailPage = null)
     {
         using var cmd = new NpgsqlCommand(
-            "INSERT INTO Article (CategoryId, Title) " +
-            "VALUES (@catid, @title) RETURNING ArticleId",
+            "INSERT INTO Article (CategoryId, Title, ThumbnailPage) " +
+            "VALUES (@catid, @title, @thumbnailPage) RETURNING ArticleId",
             _connection);
         cmd.Parameters.AddWithValue("catid", categoryId);
         cmd.Parameters.AddWithValue("title", string.IsNullOrEmpty(title) ? DBNull.Value : title);
+        cmd.Parameters.AddWithValue("thumbnailPage", thumbnailPage.HasValue ? thumbnailPage.Value : DBNull.Value);
         return (int)cmd.ExecuteScalar()!;
     }
     

@@ -47,6 +47,10 @@ namespace IndexEditor.Views
             }
             
             _editorState = editorState;
+            
+            // Update the article card renderer with new editor state
+            _articleCardRenderer?.SetEditorState(_editorState);
+            
             var folder = _editorState?.CurrentFolder ?? "(null)";
             System.Console.WriteLine($"[DEBUG] PageControllerView.SetEditorState: CurrentFolder = '{folder}'");
             DebugLogger.Log($"PageControllerView.SetEditorState: CurrentFolder = '{folder}'");
@@ -133,7 +137,6 @@ namespace IndexEditor.Views
                 DebugLogger.LogException("PageControllerView.UpdateCurrentArticleDisplay", ex);
             }
         }
-
 
         public int Page
         {
@@ -253,6 +256,7 @@ namespace IndexEditor.Views
             _imageLoadingService = new Services.ImageLoadingService();
             _linkManagementService = new Services.LinkManagementService();
             _articleCardRenderer = new Services.ArticleCardRenderer();
+            _articleCardRenderer.SetEditorState(_editorState);
             _articleDisplayCoordinator = new Services.ArticleDisplayCoordinator(_editorState, _articleCardRenderer);
             _articleFocusManager = new Services.ArticleFocusManager(_editorState);
             _segmentManagementService = new Services.SegmentManagementService(_editorState);
@@ -282,6 +286,7 @@ namespace IndexEditor.Views
             _imageLoadingService = imageLoadingService ?? throw new ArgumentNullException(nameof(imageLoadingService));
             _linkManagementService = linkManagementService ?? throw new ArgumentNullException(nameof(linkManagementService));
             _articleCardRenderer = articleCardRenderer ?? throw new ArgumentNullException(nameof(articleCardRenderer));
+            _articleCardRenderer.SetEditorState(_editorState);
             _articleDisplayCoordinator = articleDisplayCoordinator ?? throw new ArgumentNullException(nameof(articleDisplayCoordinator));
             _articleFocusManager = articleFocusManager ?? throw new ArgumentNullException(nameof(articleFocusManager));
             _segmentManagementService = segmentManagementService ?? throw new ArgumentNullException(nameof(segmentManagementService));
@@ -309,6 +314,7 @@ namespace IndexEditor.Views
             _imageLoadingService = imageLoadingService ?? throw new ArgumentNullException(nameof(imageLoadingService));
             _linkManagementService = linkManagementService ?? throw new ArgumentNullException(nameof(linkManagementService));
             _articleCardRenderer = articleCardRenderer ?? throw new ArgumentNullException(nameof(articleCardRenderer));
+            _articleCardRenderer.SetEditorState(_editorState);
             _articleDisplayCoordinator = articleDisplayCoordinator ?? throw new ArgumentNullException(nameof(articleDisplayCoordinator));
             _articleFocusManager = articleFocusManager ?? throw new ArgumentNullException(nameof(articleFocusManager));
             _segmentManagementService = segmentManagementService ?? throw new ArgumentNullException(nameof(segmentManagementService));

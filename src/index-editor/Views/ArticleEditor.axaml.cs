@@ -622,6 +622,7 @@ namespace IndexEditor.Views
             catch (Exception ex) { DebugLogger.LogException("OnMeasurementsTextBoxLostFocus", ex); }
         }
 
+
         // Event handler for Title TextBox LostFocus - ensure changes are persisted
         private void OnTitleTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
         {
