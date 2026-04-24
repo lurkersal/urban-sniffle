@@ -11,7 +11,8 @@ namespace IndexEditor.Views
             if (value is string category)
             {
                 return category.Equals("Cover", StringComparison.OrdinalIgnoreCase)
-                    || category.Equals("Model", StringComparison.OrdinalIgnoreCase);
+                    || category.Equals("Model", StringComparison.OrdinalIgnoreCase)
+                    || category.Equals("Group", StringComparison.OrdinalIgnoreCase);
             }
             return false;
         }

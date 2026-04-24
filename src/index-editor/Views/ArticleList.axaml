@@ -14,6 +14,8 @@
         <local:SegmentsToTextConverter x:Key="SegmentsToTextConverter" />
         <local:ArticleFieldFriendlyTextConverter x:Key="ArticleFieldFriendlyTextConverter" />
         <local:SelectedArticleBorderConverter x:Key="SelectedArticleBorderConverter" />
+        <local:SegmentMissingPagesForegroundConverter x:Key="SegmentMissingPagesForeground" />
+        <local:ArticleRowHeightConverter x:Key="ArticleRowHeightConverter" />
     </UserControl.Resources>
     <Grid RowDefinitions="Auto,*">
         <TextBlock Grid.Row="0" Text="Article List" FontWeight="Bold" FontSize="16" Margin="8,8,8,4"/>
@@ -23,7 +25,7 @@
                  BorderThickness="0" KeyDown="OnListKeyDown">
             <ListBox.ItemsPanel>
                 <ItemsPanelTemplate>
-                    <StackPanel />
+                    <WrapPanel Orientation="Horizontal" />
                 </ItemsPanelTemplate>
             </ListBox.ItemsPanel>
             <ListBox.Styles>
@@ -51,6 +53,8 @@
                 <DataTemplate>
                     <Border
                         Background="Transparent"
+                        Width="380"
+                        Height="100"
                         Margin="8,4" Padding="8" CornerRadius="4"
                         BorderBrush="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Converter={StaticResource SelectedArticleBorderConverter}}"
                         BorderThickness="1"
@@ -67,19 +71,19 @@
                             <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding Category}" FontWeight="Bold" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Top"/>
 
                             <!-- Second row: Model info for Model/Cover only -->
-                            <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" IsVisible="{Binding Category, Converter={StaticResource CoverModelCategoryConverter}}">
+                            <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" IsVisible="{Binding Category, Converter={StaticResource CoverModelCategoryConverter}}">
                                 <TextBlock Text="{Binding ModelName0}" FontSize="14" Margin="0,0,12,0"/>
                                 <TextBlock Text="{Binding Age0}" FontSize="14" Margin="0,0,12,0"/>
                                 <TextBlock Text="{Binding Measurements[0]}" FontSize="14"/>
                             </StackPanel>
 
                             <!-- Third row: Photographer (left) and Pages (right, always visible) -->
-                            <Grid Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2">
+                            <Grid Grid.Row="2" Grid.Column="1">
                                 <TextBlock Text="{Binding Contributor0}" FontSize="13" FontWeight="Normal" HorizontalAlignment="Left" VerticalAlignment="Bottom"/>
                             </Grid>
 
                             <!-- Segments list: simplified rows (transparent background) -->
-                            <ItemsControl x:Name="SegmentsItems" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" ItemsSource="{Binding Segments}" Margin="8,8,0,0">
+                            <ItemsControl x:Name="SegmentsItems" Grid.Row="3" Grid.Column="1" ItemsSource="{Binding Segments}" Margin="8,8,0,0">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
                                         <StackPanel Orientation="Horizontal" />
@@ -99,8 +103,13 @@
                                                 <!-- Active overlay (article category color) -->
                                                 <Border Background="{Binding DataContext.Category, RelativeSource={RelativeSource AncestorType=ItemsControl}, Converter={StaticResource ArticleCategoryToColorConverter}}"
                                                         Opacity="0.6" CornerRadius="12" IsVisible="{Binding IsHighlighted}" />
-                                                <!-- Text label (black) -->
-                                                <TextBlock Text="{Binding Display}" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="Black" FontSize="13" FontWeight="SemiBold" />
+                                                <!-- Text label with red foreground when pages are missing -->
+                                                <TextBlock Text="{Binding Display}" 
+                                                           HorizontalAlignment="Center" 
+                                                           VerticalAlignment="Center" 
+                                                           Foreground="{Binding HasMissingPages, Converter={StaticResource SegmentMissingPagesForeground}}" 
+                                                           FontSize="13" 
+                                                           FontWeight="SemiBold" />
                                             </Grid>
                                          </Border>
                                     </DataTemplate>

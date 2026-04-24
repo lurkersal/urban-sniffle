@@ -1,0 +1,194 @@
+@{
+    ViewData["Title"] = ViewBag.Article?.Title ?? "Article";
+    var article = ViewBag.Article as TheArchive.Models.Article;
+    var issue = ViewBag.Issue as TheArchive.Models.Issue;
+}
+
+<div class="main fade-in">
+    <div class="section-hd">
+        <div>
+            <h1 class="section-title">@(article?.Title ?? "Untitled Article")</h1>
+            @if (issue != null)
+            {
+                <p class="section-sub">
+                    <a href="/magazines/@issue.MagazineSlug">@issue.MagazineName</a> &middot; 
+                    <a href="/issues/@issue.IssueId">@issue.DateLabel</a> &middot; 
+                    Page @article?.PageStart
+                </p>
+            }
+        </div>
+    </div>
+
+    @if (article != null)
+    {
+        <div class="article-detail">
+            <div class="article-meta-grid">
+                <div class="meta-item">
+                    <span class="meta-label">Category:</span>
+                    <span class="meta-value">@article.CategoryName</span>
+                </div>
+                
+                @if (!string.IsNullOrEmpty(article.ModelName))
+                {
+                    <div class="meta-item">
+                        <span class="meta-label">Model:</span>
+                        <span class="meta-value">
+                            @if (article.ModelName.Contains(" • ") && !string.IsNullOrEmpty(article.ModelIds))
+                            {
+                                var modelNames = article.ModelName.Split(" • ", StringSplitOptions.RemoveEmptyEntries);
+                                var modelIds = article.ModelIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                                
+                                for (int i = 0; i < modelNames.Length; i++)
+                                {
+                                    if (i > 0)
+                                    {
+                                        <span> • </span>
+                                    }
+                                    
+                                    if (i < modelIds.Length && int.TryParse(modelIds[i], out int modelId))
+                                    {
+                                        <a href="/models/@modelId">@modelNames[i]</a>
+                                    }
+                                    else
+                                    {
+                                        <span>@modelNames[i]</span>
+                                    }
+                                }
+                            }
+                            else if (article.ModelId != null && article.ModelId > 0)
+                            {
+                                <a href="/models/@article.ModelId">@article.ModelName</a>
+                            }
+                            else
+                            {
+                                <span>@article.ModelName</span>
+                            }
+                        </span>
+                    </div>
+                }
+                
+                @if (!string.IsNullOrEmpty(article.Photographer))
+                {
+                    <div class="meta-item">
+                        <span class="meta-label">Photographer:</span>
+                        <span class="meta-value">@article.Photographer</span>
+                    </div>
+                }
+                
+                @if (!string.IsNullOrEmpty(article.Author))
+                {
+                    <div class="meta-item">
+                        <span class="meta-label">Author:</span>
+                        <span class="meta-value">@article.Author</span>
+                    </div>
+                }
+            </div>
+            
+            <div class="article-loading">
+                <p style="text-align: center; color: #999; padding: 2rem;">
+                    <span class="loading-spinner"></span>
+                    Opening article viewer...
+                </p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="empty-state">
+            <p>Article not found.</p>
+        </div>
+    }
+</div>
+
+@if (article != null && issue != null)
+{
+    <script>
+        // Automatically open the article viewer when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            const articleId = @article.ArticleId;
+            const articleTitle = '@Html.Raw(article.Title?.Replace("'", "\\'") ?? "Untitled")';
+            const category = '@Html.Raw(article.CategoryName?.Replace("'", "\\'"))';
+            const issueId = @issue.IssueId;
+            
+            // Small delay to ensure the page is loaded
+            setTimeout(function() {
+                if (typeof openArticle === 'function') {
+                    openArticle(articleId, articleTitle, category, issueId);
+                } else {
+                    // Fallback: redirect to issue page if openArticle function not available
+                    window.location.href = '/issues/' + issueId + '#article-' + articleId;
+                }
+            }, 100);
+        });
+    </script>
+}
+
+<style>
+    .article-detail {
+        max-width: 800px;
+        margin: 2rem auto;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 2rem;
+    }
+    
+    .article-meta-grid {
+        display: grid;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .meta-item {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .meta-label {
+        font-weight: 600;
+        color: #666;
+        min-width: 120px;
+    }
+    
+    .meta-value {
+        color: #333;
+    }
+    
+    .meta-value a {
+        color: #667eea;
+        text-decoration: none;
+    }
+    
+    .meta-value a:hover {
+        text-decoration: underline;
+    }
+    
+    .article-loading {
+        padding: 2rem 0;
+        border-top: 1px solid #e0e0e0;
+    }
+    
+    .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #f3f3f3;
+        border-top: 3px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        vertical-align: middle;
+        margin-right: 0.5rem;
+    }
+    
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: #999;
+    }
+</style>
+

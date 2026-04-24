@@ -1,0 +1,38 @@
+@model List<TheArchive.ViewModels.ModelIndexViewModel>
+@{
+    ViewData["Title"] = "Models";
+}
+
+<div class="main fade-in">
+    <div class="section-hd">
+        <div>
+            <h1 class="section-title">The <em>Models</em></h1>
+            <p class="section-sub">Featured models across all magazines</p>
+        </div>
+        <span class="count-badge">@Model.Count @(Model.Count != 1 ? "Models" : "Model")</span>
+    </div>
+
+    <div class="model-grid">
+        @foreach (var item in Model)
+        {
+            <a class="model-card" href="/models/@item.Model.Id">
+                <div class="model-photo">
+                    @if (!string.IsNullOrEmpty(item.ThumbnailPath))
+                    {
+                        <img src="/image?path=@Uri.EscapeDataString(item.ThumbnailPath)" alt="@item.Model.Name" />
+                    }
+                    else
+                    {
+                        <div class="model-initials">@item.Initials</div>
+                    }
+                </div>
+                <div class="model-info">
+                    <div class="model-name">@item.Model.Name</div>
+                    <div class="model-appear">@item.Model.AppearanceCount @(item.Model.AppearanceCount != 1 ? "appearances" : "appearance")</div>
+                </div>
+            </a>
+        }
+    </div>
+</div>
+
+

@@ -84,5 +84,45 @@ namespace IndexEditor.Shared
             catch (Exception ex) { DebugLogger.LogException("ImageHelper.FindNearestExistingPageBothDirections", ex); }
             return null;
         }
+
+        /// <summary>
+        /// Get all image files in the folder with their page numbers
+        /// </summary>
+        public static List<(int pageNumber, string imagePath)> GetAllImageFiles(string folder)
+        {
+            var result = new List<(int, string)>();
+            try
+            {
+                if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+                    return result;
+
+                var dir = new DirectoryInfo(folder);
+                var files = dir.GetFiles("*.jpg")
+                    .Concat(dir.GetFiles("*.jpeg"))
+                    .Concat(dir.GetFiles("*.png"))
+                    .Concat(dir.GetFiles("*.JPG"))
+                    .Concat(dir.GetFiles("*.JPEG"))
+                    .Concat(dir.GetFiles("*.PNG"));
+
+                foreach (var file in files)
+                {
+                    var name = Path.GetFileNameWithoutExtension(file.Name);
+                    // Try to parse as page number
+                    if (int.TryParse(name.TrimStart('0'), out int page) && page > 0)
+                    {
+                        result.Add((page, file.FullName));
+                    }
+                    else if (int.TryParse(name, out page) && page > 0)
+                    {
+                        result.Add((page, file.FullName));
+                    }
+                }
+
+                // Sort by page number
+                result.Sort((a, b) => a.Item1.CompareTo(b.Item1));
+            }
+            catch (Exception ex) { DebugLogger.LogException("ImageHelper.GetAllImageFiles", ex); }
+            return result;
+        }
     }
 }

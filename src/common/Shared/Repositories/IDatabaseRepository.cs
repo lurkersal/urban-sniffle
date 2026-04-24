@@ -11,7 +11,7 @@ public interface IDatabaseRepository
     void CreateCategory(string categoryName); // Category
     List<string> GetAllCategories(); // Category
     int? GetOrCreateModelId(string modelName, int? bustSize, int? waistSize, int? hipSize, string? cupSize); // Model
-    int InsertArticle(int categoryId, string? title); // Article
+    int InsertArticle(int categoryId, string? title, int? thumbnailPage = null); // Article
     int InsertContent(int issueId, int page, int articleId, string? imagePath); // Content
     void LinkArticleToModel(int articleId, int modelId, int? age, string? measurements); // ContentModel
     int GetOrCreateContributorId(string contributorName); // Contributor

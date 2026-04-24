@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace IndexEditor.Shared
 {
@@ -9,6 +10,15 @@ namespace IndexEditor.Shared
         public double Width { get; set; }
         public double Height { get; set; }
         public bool IsMaximized { get; set; }
+        public double Column0Width { get; set; }
+        public double Column1Width { get; set; }
+        public double Column2Width { get; set; }
+    }
+
+    [JsonSerializable(typeof(WindowState))]
+    [JsonSourceGenerationOptions(WriteIndented = true, PropertyNameCaseInsensitive = true)]
+    internal partial class WindowStateJsonContext : JsonSerializerContext
+    {
     }
 
     public static class WindowStateStore
@@ -18,7 +28,14 @@ namespace IndexEditor.Shared
             try
             {
                 var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                if (string.IsNullOrWhiteSpace(appData)) appData = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) ?? ".";
+                if (string.IsNullOrWhiteSpace(appData))
+                {
+                    appData = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                    if (string.IsNullOrWhiteSpace(appData))
+                    {
+                        appData = ".";
+                    }
+                }
                 var dir = Path.Combine(appData, "urban-sniffle");
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
                 return Path.Combine(dir, "index-editor-windowstate.json");
@@ -37,8 +54,7 @@ namespace IndexEditor.Shared
                 if (!File.Exists(path)) return null;
                 var txt = File.ReadAllText(path);
                 if (string.IsNullOrWhiteSpace(txt)) return null;
-                var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                var st = JsonSerializer.Deserialize<WindowState>(txt, opts);
+                var st = JsonSerializer.Deserialize(txt, WindowStateJsonContext.Default.WindowState);
                 return st;
             }
             catch (Exception ex)
@@ -48,14 +64,22 @@ namespace IndexEditor.Shared
             }
         }
 
-        public static void SetWindowState(double width, double height, bool isMaximized)
+        public static void SetWindowState(double width, double height, bool isMaximized, double col0Width = 0, double col1Width = 0, double col2Width = 0)
         {
             try
             {
                 var path = GetStoragePath();
                 var temp = path + ".tmp";
-                var st = new WindowState { Width = width, Height = height, IsMaximized = isMaximized };
-                var txt = JsonSerializer.Serialize(st);
+                var st = new WindowState 
+                { 
+                    Width = width, 
+                    Height = height, 
+                    IsMaximized = isMaximized,
+                    Column0Width = col0Width,
+                    Column1Width = col1Width,
+                    Column2Width = col2Width
+                };
+                var txt = JsonSerializer.Serialize(st, WindowStateJsonContext.Default.WindowState);
                 File.WriteAllText(temp, txt);
                 if (File.Exists(path)) File.Replace(temp, path, null);
                 else File.Move(temp, path);

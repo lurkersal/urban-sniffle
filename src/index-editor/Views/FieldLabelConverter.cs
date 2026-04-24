@@ -15,7 +15,7 @@ namespace IndexEditor.Views
             {
                 case "photographer":
                     if (category == "cartoons") return "Cartoonist:";
-                    if (category == "motoring" || category == "feature" || category == "fiction" || category == "review") return "Author:";
+                    if (category == "motoring" || category == "feature" || category == "fiction" || category == "review" || category == "humour" || category == "humor" || category == "interview") return "Author:";
                     return "Photographer:";
                 case "model":
                     return "Model:";

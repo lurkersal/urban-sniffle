@@ -6,9 +6,11 @@
         <local:CategoryToBrushConverter x:Key="CategoryToBrush"/>
         <local:CategoryDisplayModeMatchesConverter x:Key="CategoryModeMatches" />
         <local:ShowPhotographerCategoryConverter x:Key="ShowPhotographer" />
+        <local:ShowAgeCategoryConverter x:Key="ShowAge" />
         <local:FieldLabelConverter x:Key="FieldLabelConverter" />
         <local:ShowMeasurementsConverter x:Key="ShowMeasurements" />
         <local:ShowContributorCategoryConverter x:Key="ShowContributor" />
+        <local:SegmentMissingPagesForegroundConverter x:Key="SegmentMissingPagesForeground" />
     </UserControl.Resources>
     <Grid>
         <StackPanel Margin="16">
@@ -31,12 +33,12 @@
 
                     <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle.Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter='2'}">
                         <TextBlock Text="Model:" FontWeight="Bold" Width="120"/>
-                        <TextBox Text="{Binding SelectedArticle.ModelNames[0], Mode=TwoWay}" Width="240"/>
+                        <TextBox Text="{Binding SelectedArticle.ModelName0, Mode=TwoWay}" Width="240"/>
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle.Category, Converter={StaticResource CategoryModeMatches}, ConverterParameter='2'}">
+                    <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle.Category, Converter={StaticResource ShowAge}}">
                         <TextBlock Text="Age:" FontWeight="Bold" Width="120"/>
-                        <TextBox Text="{Binding SelectedArticle.Ages[0], Mode=TwoWay}" Width="120"/>
+                        <TextBox Text="{Binding SelectedArticle.Age0, Mode=TwoWay}" Width="120"/>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle, Converter={StaticResource ShowMeasurements}}">
@@ -47,8 +49,10 @@
                             </TextBox.Text>
                         </TextBox>
                     </StackPanel>
-                    <TextBlock Text="{Binding SelectedArticle.MeasurementsErrorMessage}" Foreground="Red" FontSize="12" Margin="124,2,0,0" IsVisible="{Binding SelectedArticle.HasMeasurementsError}" />
-                    <TextBlock Text="Format: bust(+cup)-waist-hip — e.g. '36B-28-38' (separator must be '-')" Foreground="Gray" FontSize="11" Margin="124,2,0,0" IsVisible="{Binding SelectedArticle.HasMeasurementsError}" />
+                    <!-- Measurements validation message - only shown when measurements field is visible AND there's an error -->
+                    <StackPanel IsVisible="{Binding SelectedArticle, Converter={StaticResource ShowMeasurements}}">
+                        <TextBlock Text="{Binding SelectedArticle.MeasurementsErrorMessage}" Foreground="Red" FontSize="12" Margin="124,2,0,0" IsVisible="{Binding SelectedArticle.HasMeasurementsError}" />
+                    </StackPanel>
 
                     <StackPanel Orientation="Horizontal" IsVisible="{Binding SelectedArticle.Category, Converter={StaticResource ShowContributor}}">
                         <TextBlock Text="{Binding SelectedArticle.Category, Converter={StaticResource FieldLabelConverter}, ConverterParameter=Photographer}" FontWeight="Bold" Width="120"/>
@@ -80,7 +84,9 @@
                                             <Border BorderBrush="#0000001A" BorderThickness="0,0,1,1" CornerRadius="14" IsHitTestVisible="False" />
                                             <!-- Active overlay (category colour) shown only when segment.IsHighlighted is true -->
                                             <Border Background="{Binding DataContext.SelectedArticle.Category, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource CategoryToBrush}}" Opacity="0.6" CornerRadius="14" IsVisible="{Binding IsHighlighted}" />
-                                            <TextBlock Text="{Binding Display}" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="Black" FontWeight="Normal" />
+                                            <TextBlock Text="{Binding Display}" VerticalAlignment="Center" HorizontalAlignment="Center" 
+                                                       Foreground="{Binding HasMissingPages, Converter={StaticResource SegmentMissingPagesForeground}}" 
+                                                       FontWeight="Normal" />
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

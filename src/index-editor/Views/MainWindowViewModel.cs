@@ -3,6 +3,8 @@ using System.Linq;
 using System.Windows.Input;
 using IndexEditor.Shared;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Views
 {
     public class MainWindowViewModel
@@ -69,20 +71,21 @@ namespace IndexEditor.Views
                 var folder = EditorState.CurrentFolder;
                 if (string.IsNullOrWhiteSpace(folder))
                 {
-                    ToastService.Show("No folder open; cannot save _index.txt");
+                    ToastService.Show("No folder open; cannot save index");
                     return;
                 }
 
                 try
                 {
-                    IndexSaver.SaveIndex(folder);
-                    ToastService.Show("_index.txt saved");
+                    var links = MainWindow.Instance?.GetDiscoveredLinks();
+                    IndexSaver.SaveIndex(folder, links);
+                    ToastService.Show("Index saved");
                     EditorState.NotifyStateChanged();
                 }
                 catch (Exception ex)
                 {
                     DebugLogger.LogException("MainWindowViewModel.SaveIndex", ex);
-                    ToastService.Show("Failed to save _index.txt");
+                    ToastService.Show("Failed to save index");
                 }
             }
             catch (Exception ex)
@@ -100,12 +103,24 @@ namespace IndexEditor.Views
                 if (string.IsNullOrWhiteSpace(folder)) { ToastService.Show("No folder open; cannot save _index.txt"); return; }
                 var indexPath = System.IO.Path.Combine(folder, "_index.txt");
                 var temp = indexPath + ".tmp";
+                var backupPath = indexPath + "~";
                 System.IO.File.WriteAllText(temp, overlayText ?? string.Empty);
-                if (System.IO.File.Exists(indexPath)) System.IO.File.Replace(temp, indexPath, null);
+                if (System.IO.File.Exists(indexPath))
+                {
+                    // Create backup before replacing
+                    if (System.IO.File.Exists(backupPath))
+                    {
+                        System.IO.File.Delete(backupPath);
+                    }
+                    System.IO.File.Copy(indexPath, backupPath);
+                    System.IO.File.Replace(temp, indexPath, null);
+                }
                 else System.IO.File.Move(temp, indexPath);
-                ToastService.Show("_index.txt saved");
+                ToastService.Show("Index saved");
+                // Clear unsaved changes flag after successful save
+                EditorState.HasUnsavedChanges = false;
             }
-            catch (Exception ex) { DebugLogger.LogException("MainWindowViewModel.SaveIndexFromOverlay", ex); ToastService.Show("Failed to save _index.txt"); }
+            catch (Exception ex) { DebugLogger.LogException("MainWindowViewModel.SaveIndexFromOverlay", ex); ToastService.Show("Failed to save index"); }
         }
     }
 }

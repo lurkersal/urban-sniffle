@@ -6,16 +6,19 @@ namespace IndexEditor.Views
 {
     public class ArticleCategoryDisplayConverter : IValueConverter
     {
-        // Returns: 0 = Category only, 1 = Category+Title, 2 = Cover/Model fields, 3 = Category+Title+Photographer only
+        // Returns: 0 = Category only, 1 = Category+Title, 2 = Cover/Model/Group/Wives/Letters fields, 3 = Category+Title+Photographer only
         public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
             if (value is string category)
             {
                 if (category.Equals("Contents", StringComparison.OrdinalIgnoreCase) || category.Equals("Content", StringComparison.OrdinalIgnoreCase))
                     return 0;
-                if (category.Equals("Letters", StringComparison.OrdinalIgnoreCase))
-                    return 1;
-                if (category.Equals("Cover", StringComparison.OrdinalIgnoreCase) || category.Equals("Model", StringComparison.OrdinalIgnoreCase))
+                if (category.Equals("Cover", StringComparison.OrdinalIgnoreCase) || 
+                    category.Equals("Model", StringComparison.OrdinalIgnoreCase) ||
+                    category.Equals("Group", StringComparison.OrdinalIgnoreCase) ||
+                    category.Equals("Wives", StringComparison.OrdinalIgnoreCase) ||
+                    category.Equals("Letters", StringComparison.OrdinalIgnoreCase) ||
+                    category.Equals("Interview", StringComparison.OrdinalIgnoreCase))
                     return 2;
                 if (category.Equals("Review", StringComparison.OrdinalIgnoreCase) ||
                     category.Equals("Fiction", StringComparison.OrdinalIgnoreCase) ||

@@ -8,6 +8,8 @@ using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using IndexEditor.Shared;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Views
 {
     public partial class ArticleEditor : UserControl
@@ -15,7 +17,10 @@ namespace IndexEditor.Views
         public ArticleEditor()
         {
             InitializeComponent();
-            // When the global EditorState changes, if the ActiveArticle matches our DataContext, focus the category combobox.
+            
+            // Category ComboBox is now bound directly in XAML, no code-behind setup needed
+            
+            // Listen for global EditorState changes
             IndexEditor.Shared.EditorState.StateChanged += OnEditorStateChanged;
             // Also listen for explicit focus requests initiated by the window/key handlers
             IndexEditor.Shared.EditorState.StateChanged += OnEditorStateFocusRequested;
@@ -310,33 +315,65 @@ namespace IndexEditor.Views
             catch (Exception ex) { DebugLogger.LogException("ArticleEditor.TriggerOverlayFlash: outer", ex); }
         }
 
+        // Helper method to clear focus and selections from all TextBox controls
+        /// <summary>
+        /// Clears text selections in all TextBoxes and makes them invisible by setting SelectionBrush to Transparent.
+        /// This is called when the user presses ESC to exit editing mode.
+        /// </summary>
+        private void ClearAllTextSelections()
+        {
+            try
+            {
+                var textBoxes = new System.Collections.Generic.List<TextBox>();
+                
+                // Try to find TextBoxes via ContentControl first (works when inside DataTemplate)
+                var host = this.FindControl<ContentControl>("EditorContent");
+                if (host?.Content is Avalonia.Controls.Control hostContent)
+                {
+                    textBoxes = hostContent.GetLogicalDescendants().OfType<TextBox>().ToList();
+                }
+                else
+                {
+                    // Fallback: search entire visual tree of this ArticleEditor
+                    textBoxes = this.GetVisualDescendants().OfType<TextBox>().ToList();
+                }
+                
+                if (textBoxes.Count == 0) return;
+                
+                foreach (var tb in textBoxes)
+                {
+                    try 
+                    {
+                        // Clear selection and caret position
+                        tb.SelectionStart = 0;
+                        tb.SelectionEnd = 0;
+                        tb.CaretIndex = 0;
+                        
+                        // Hide selection by making it transparent
+                        tb.SelectionBrush = Brushes.Transparent;
+                        tb.SelectionForegroundBrush = tb.Foreground;
+                        
+                        // Force visual refresh to ensure changes are visible
+                        tb.InvalidateVisual();
+                    } 
+                    catch (Exception ex) 
+                    { 
+                        DebugLogger.LogException($"ArticleEditor.ClearAllTextSelections: TextBox {tb.Name}", ex); 
+                    }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("ArticleEditor.ClearAllTextSelections", ex); }
+        }
+
         // End editing in the article editor: close open dropdowns and move focus away so edits stop.
         public void EndEdit()
         {
             try
             {
-                // Close any open ComboBox dropdowns inside the editor
-                try
-                {
-                    var host = this.FindControl<ContentControl>("EditorContent");
-                    if (host?.Content is Avalonia.Controls.Control hostContent)
-                    {
-                        foreach (var cb in hostContent.GetLogicalDescendants().OfType<ComboBox>())
-                        {
-                            try { cb.IsDropDownOpen = false; } catch { }
-                        }
-                        foreach (var tb in hostContent.GetLogicalDescendants().OfType<TextBox>())
-                        {
-                            // Optionally trigger LostFocus by moving focus off the textbox later
-                        }
-                    }
-                }
-                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.EndEdit: close dropdowns", ex); }
-
-                // Clear editor-focused flag so global handlers know editor is no longer focused
+                // Clear editor-focused flag FIRST
                 try { IndexEditor.Shared.EditorState.IsArticleEditorFocused = false; } catch { }
 
-                // Move keyboard focus to the invisible host to remove focus from inner editor controls
+                // Move keyboard focus away from editor controls immediately
                 try
                 {
                     var wnd = this.VisualRoot as Window;
@@ -346,18 +383,36 @@ namespace IndexEditor.Views
                         if (host != null)
                         {
                             host.Focus();
-                            return;
                         }
-                        // Fallback: focus the window itself
-                        wnd.Focus();
+                        else
+                        {
+                            wnd.Focus();
+                        }
                     }
                 }
-                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.EndEdit: move focus to host/window", ex); }
+                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.EndEdit: move focus", ex); }
+
+                // Close any open ComboBox dropdowns
+                try
+                {
+                    var host = this.FindControl<ContentControl>("EditorContent");
+                    if (host?.Content is Avalonia.Controls.Control hostContent)
+                    {
+                        foreach (var cb in hostContent.GetLogicalDescendants().OfType<ComboBox>())
+                        {
+                            try { cb.IsDropDownOpen = false; } catch { }
+                        }
+                    }
+                }
+                catch (Exception ex) { DebugLogger.LogException("ArticleEditor.EndEdit: close dropdowns", ex); }
+
+                // Clear all text selections synchronously
+                ClearAllTextSelections();
             }
             catch (Exception ex) { DebugLogger.LogException("ArticleEditor.EndEdit: outer", ex); }
         }
 
-        // Flash a control briefly so the user can see which control got focus (debugging aid)
+        // Flash a control briefly so the user can see which control got focus (visual debugging aid)
         private void FlashControl(Control ctrl)
         {
             if (ctrl == null) return;
@@ -369,7 +424,6 @@ namespace IndexEditor.Views
                     // Save originals and apply highlight depending on concrete control type
                     if (ctrl is TextBox tb)
                     {
-                        DebugLogger.Log("[DEBUG] ArticleEditor.FlashControl: flashing TextBox");
                         var origBg = tb.Background;
                         var origBorder = tb.BorderBrush;
                         tb.Background = Brushes.LightGoldenrodYellow;
@@ -390,7 +444,6 @@ namespace IndexEditor.Views
                     }
                     else if (ctrl is ComboBox cb)
                     {
-                        DebugLogger.Log("[DEBUG] ArticleEditor.FlashControl: flashing ComboBox");
                         var origBg = cb.Background;
                         cb.Background = Brushes.LightGoldenrodYellow;
                         _ = System.Threading.Tasks.Task.Run(async () =>
@@ -404,7 +457,6 @@ namespace IndexEditor.Views
                     }
                     else if (ctrl is Border br)
                     {
-                        DebugLogger.Log("[DEBUG] ArticleEditor.FlashControl: flashing Border");
                         var origBg = br.Background;
                         br.Background = Brushes.LightGoldenrodYellow;
                         _ = System.Threading.Tasks.Task.Run(async () =>
@@ -418,7 +470,6 @@ namespace IndexEditor.Views
                     }
                     else if (ctrl is Panel p)
                     {
-                        DebugLogger.Log("[DEBUG] ArticleEditor.FlashControl: flashing Panel");
                         var origBg = p.Background;
                         p.Background = Brushes.LightGoldenrodYellow;
                         _ = System.Threading.Tasks.Task.Run(async () =>
@@ -439,6 +490,9 @@ namespace IndexEditor.Views
         {
             try
             {
+                // Clear text selections when article changes to prevent selection from persisting
+                ClearAllTextSelections();
+                
                 // Post to UI thread and start a background retry loop to focus Title when the DataTemplate is realized.
                 Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
@@ -496,6 +550,145 @@ namespace IndexEditor.Views
                 });
             }
             catch (Exception ex) { DebugLogger.LogException("ArticleEditor.OnEditorStateChanged: outermost", ex); }
+        }
+
+        /// <summary>
+        /// Restores normal SelectionBrush when a TextBox receives focus, allowing normal text selection.
+        /// This reverses the Transparent brush set by ClearAllTextSelections().
+        /// </summary>
+        private void OnTextBoxGotFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is TextBox tb)
+                {
+                    // Restore default SelectionBrush by clearing the local value
+                    tb.ClearValue(TextBox.SelectionBrushProperty);
+                    tb.ClearValue(TextBox.SelectionForegroundBrushProperty);
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnTextBoxGotFocus", ex); }
+        }
+
+        // Event handler for Pages TextBox LostFocus - trigger validation when editing is complete
+        private void OnPagesTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                // Manually sync the text value to ensure it's saved
+                if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
+                {
+                    var text = tb.Text ?? string.Empty;
+                    if (article.PagesText != text)
+                    {
+                        article.PagesText = text;
+                    }
+                    
+                    article.Validate();
+                    
+                    // Also validate segments for missing pages
+                    try
+                    {
+                        var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                        if (!string.IsNullOrWhiteSpace(folder))
+                        {
+                            article.ValidateSegments(folder, (f, p) => IndexEditor.Shared.ImageHelper.ImageExists(f, p));
+                        }
+                    }
+                    catch (Exception ex) { DebugLogger.LogException("OnPagesTextBoxLostFocus: validate segments", ex); }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnPagesTextBoxLostFocus: outer", ex); }
+        }
+
+        // Event handler for Measurements TextBox LostFocus - trigger validation when editing is complete
+        private void OnMeasurementsTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
+                {
+                    // Manually trigger the setter if binding didn't work
+                    var text = tb.Text ?? string.Empty;
+                    if (article.Measurements0 != text)
+                    {
+                        article.Measurements0 = text;
+                    }
+                    
+                    // Trigger validation to update error messages
+                    article.Validate();
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnMeasurementsTextBoxLostFocus", ex); }
+        }
+
+
+        // Event handler for Title TextBox LostFocus - ensure changes are persisted
+        private void OnTitleTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
+                {
+                    var text = tb.Text ?? string.Empty;
+                    if (article.Title != text)
+                    {
+                        article.Title = text;
+                    }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnTitleTextBoxLostFocus", ex); }
+        }
+
+        // Event handler for ModelName TextBox LostFocus - ensure changes are persisted
+        private void OnModelNameTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
+                {
+                    var text = tb.Text ?? string.Empty;
+                    if (article.ModelName0 != text)
+                    {
+                        article.ModelName0 = text;
+                    }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnModelNameTextBoxLostFocus", ex); }
+        }
+
+        // Event handler for Age TextBox LostFocus - ensure changes are persisted
+        private void OnAgeTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
+                {
+                    var text = tb.Text ?? string.Empty;
+                    if (article.Age0 != text)
+                    {
+                        article.Age0 = text;
+                    }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnAgeTextBoxLostFocus", ex); }
+        }
+
+        // Event handler for Contributor TextBox LostFocus - ensure changes are persisted
+        private void OnContributorTextBoxLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is TextBox tb && tb.DataContext is Common.Shared.ArticleLine article)
+                {
+                    var text = tb.Text ?? string.Empty;
+                    if (article.Contributor0 != text)
+                    {
+                        article.Contributor0 = text;
+                    }
+                }
+            }
+            catch (Exception ex) { DebugLogger.LogException("OnContributorTextBoxLostFocus", ex); }
         }
     }
 }

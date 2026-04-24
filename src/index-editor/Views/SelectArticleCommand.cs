@@ -5,6 +5,9 @@ using System.Collections.Generic;
 using System.Windows.Input;
 using Common.Shared;
 using System.Collections.ObjectModel;
+using System.Threading.Tasks;
+
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
 
 namespace IndexEditor.Views
 {
@@ -58,6 +61,9 @@ namespace IndexEditor.Views
                 IndexEditor.Shared.EditorState.ActiveArticle = toSelect;
                 IndexEditor.Shared.EditorState.NotifyStateChanged();
                 _viewModel.SelectedArticle = toSelect;
+                
+                // Note: Babepedia check moved to EditorStateViewModel.SelectedArticle setter
+                // so it's called regardless of how the article is selected
             }
         }
 

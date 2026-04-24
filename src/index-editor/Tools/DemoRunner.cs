@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using Common.Shared;
 using IndexEditor.Shared;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Tools
 {
     public static class DemoRunner

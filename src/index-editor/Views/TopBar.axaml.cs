@@ -7,6 +7,8 @@ using Common.Shared;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Views
 {
     public partial class TopBar : UserControl
@@ -19,6 +21,7 @@ namespace IndexEditor.Views
             var magTypeText = this.FindControl<TextBlock>("MagTypeText");
             var volText = this.FindControl<TextBlock>("VolumeText");
             var numText = this.FindControl<TextBlock>("NumberText");
+            var yearText = this.FindControl<TextBlock>("YearText");
             // Initialize magazine metadata display from EditorState (may be populated by MainWindow when loading _index.txt)
             void RefreshMetadataDisplay()
             {
@@ -27,9 +30,11 @@ namespace IndexEditor.Views
                     var mag = IndexEditor.Shared.EditorState.CurrentMagazine ?? "—";
                     var vol = IndexEditor.Shared.EditorState.CurrentVolume ?? "—";
                     var num = IndexEditor.Shared.EditorState.CurrentNumber ?? "—";
+                    var year = IndexEditor.Shared.EditorState.CurrentYear ?? "—";
                     if (magTypeText != null) magTypeText.Text = $"Magazine: {mag}";
                     if (volText != null) volText.Text = $"Vol: {vol}";
                     if (numText != null) numText.Text = $"No: {num}";
+                    if (yearText != null) yearText.Text = $"Year: {year}";
                 }
                 catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar.RefreshMetadataDisplay", ex); }
             }
@@ -50,7 +55,7 @@ namespace IndexEditor.Views
                         var folder = IndexEditor.Shared.EditorState.CurrentFolder;
                         if (string.IsNullOrWhiteSpace(folder))
                         {
-                            IndexEditor.Shared.ToastService.Show("No folder opened; cannot save _index.txt");
+                            IndexEditor.Shared.ToastService.Show("No folder opened; cannot save index");
                             return;
                         }
 
@@ -58,13 +63,14 @@ namespace IndexEditor.Views
                         btn.IsEnabled = false;
                         try
                         {
-                            IndexEditor.Shared.IndexSaver.SaveIndex(folder);
-                            IndexEditor.Shared.ToastService.Show("_index.txt saved");
+                            var links = MainWindow.Instance?.GetDiscoveredLinks();
+                            IndexEditor.Shared.IndexSaver.SaveIndex(folder, links);
+                            IndexEditor.Shared.ToastService.Show("Index saved");
                         }
                         catch (Exception ex)
                         {
-                            IndexEditor.Shared.ToastService.Show("Failed to save _index.txt");
-                            IndexEditor.Shared.DebugLogger.LogException("TopBar: save _index.txt", ex);
+                            IndexEditor.Shared.ToastService.Show("Failed to save index");
+                            IndexEditor.Shared.DebugLogger.LogException("TopBar: save index", ex);
                         }
                         finally
                         {
@@ -81,13 +87,88 @@ namespace IndexEditor.Views
                 {
                     try
                     {
-                        // Use custom folder browser window that lists only folders and selects a folder when it has no subfolders on double-click
                         var wnd = this.VisualRoot as Window;
+                        
+                        // Check if link discovery scan is in progress
+                        try
+                        {
+                            var main = wnd as MainWindow;
+                            if (main != null)
+                            {
+                                // Use reflection to access _linkDiscoveryService
+                                var field = typeof(MainWindow).GetField("_linkDiscoveryService", 
+                                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                                if (field != null)
+                                {
+                                    var linkDiscoveryService = field.GetValue(main) as Services.LinkDiscoveryService;
+                                    if (linkDiscoveryService?.IsScanning ?? false)
+                                    {
+                                        bool shouldWait = await ConfirmDialog.ShowDialog(
+                                            wnd,
+                                            "A link discovery scan is currently in progress. Do you want to wait for it to complete before opening a new folder?");
+                                        
+                                        if (shouldWait)
+                                        {
+                                            IndexEditor.Shared.ToastService.Show("Waiting for scan to complete. Try opening again when scan finishes.");
+                                            return; // Don't open folder
+                                        }
+                                        else
+                                        {
+                                            // User chose to cancel scan and proceed
+                                            linkDiscoveryService.StopDiscovery();
+                                            IndexEditor.Shared.ToastService.Show("Link discovery scan cancelled.");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: check scan in progress", ex); }
+                        
+                        // Check for unsaved changes and prompt user
+                        if (IndexEditor.Shared.EditorState.HasUnsavedChanges)
+                        {
+                            try
+                            {
+                                if (wnd != null)
+                                {
+                                    var result = await IndexEditor.Views.ConfirmDialog.ShowDialog(
+                                        wnd, 
+                                        "You have unsaved changes. Do you want to save before opening a new folder?");
+                                    
+                                    if (result)
+                                    {
+                                        // User wants to save
+                                        try
+                                        {
+                                            var folder = IndexEditor.Shared.EditorState.CurrentFolder;
+                                            if (!string.IsNullOrWhiteSpace(folder))
+                                            {
+                                                var links = MainWindow.Instance?.GetDiscoveredLinks();
+                                                IndexEditor.Shared.IndexSaver.SaveIndex(folder, links);
+                                                IndexEditor.Shared.ToastService.Show("Index saved");
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            IndexEditor.Shared.ToastService.Show("Failed to save index");
+                                            IndexEditor.Shared.DebugLogger.LogException("TopBar: save before open", ex);
+                                            return; // Don't proceed with opening if save failed
+                                        }
+                                    }
+                                    // If user chose not to save (result == false), proceed with opening
+                                }
+                            }
+                            catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: prompt save before open", ex); }
+                        }
+                        
+                        // Use custom folder browser window that lists only folders and selects a folder when it has no subfolders on double-click
                         var start = IndexEditor.Shared.EditorState.CurrentFolder;
+                        IndexEditor.Shared.DebugLogger.Log($"TopBar.OpenClick: Current folder is: {start ?? "(null)"}");
                         string? path = null;
                         try
                         {
                             path = await IndexEditor.Shared.FolderPicker.PickFolderAsync(wnd, start);
+                            IndexEditor.Shared.DebugLogger.Log($"TopBar.OpenClick: FolderPicker returned: {path ?? "(null)"}");
                         }
                         catch (Exception ex)
                         {
@@ -96,7 +177,12 @@ namespace IndexEditor.Views
                             return;
                         }
                         if (string.IsNullOrWhiteSpace(path))
+                        {
+                            IndexEditor.Shared.DebugLogger.Log("TopBar.OpenClick: Path is null or empty, returning");
                             return;
+                        }
+
+                        IndexEditor.Shared.DebugLogger.Log($"TopBar.OpenClick: Loading folder: {path}");
 
                         // Clear existing articles before loading new ones
                         IndexEditor.Shared.EditorState.Articles = new List<Common.Shared.ArticleLine>();
@@ -111,13 +197,17 @@ namespace IndexEditor.Views
                         try
                         {
                             var main = this.VisualRoot as MainWindow;
+                            IndexEditor.Shared.DebugLogger.Log($"TopBar.OpenClick: MainWindow found: {main != null}");
                             if (main != null)
                             {
                                 // Use reflection to call LoadArticlesFromFolder in case its protection level changes
                                 var mi = typeof(MainWindow).GetMethod("LoadArticlesFromFolder", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                                IndexEditor.Shared.DebugLogger.Log($"TopBar.OpenClick: LoadArticlesFromFolder method found: {mi != null}");
                                 if (mi != null)
                                 {
+                                    IndexEditor.Shared.DebugLogger.Log($"TopBar.OpenClick: Invoking LoadArticlesFromFolder with path: {path}");
                                     mi.Invoke(main, new object[] { path });
+                                    IndexEditor.Shared.DebugLogger.Log("TopBar.OpenClick: LoadArticlesFromFolder invoked successfully");
                                     return;
                                 }
                             }
@@ -131,216 +221,6 @@ namespace IndexEditor.Views
                     catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: Open button click handler outer", ex); }
                 };
             }
-            
-            var testBtn = this.FindControl<Button>("TestBtn");
-            if (testBtn != null)
-            {
-                // Test button should remain enabled at all times per spec
-                testBtn.IsEnabled = true;
-                testBtn.Click += async (s, e) =>
-                {
-                    try
-                    {
-                        var folder = IndexEditor.Shared.EditorState.CurrentFolder;
-                        if (string.IsNullOrWhiteSpace(folder))
-                        {
-                            IndexEditor.Shared.ToastService.Show("No folder opened; cannot run test");
-                            return;
-                        }
-
-                        // Save current edits first
-                        try
-                        {
-                            IndexEditor.Shared.IndexSaver.SaveIndex(folder);
-                            IndexEditor.Shared.ToastService.Show("_index.txt saved");
-                        }
-                        catch (Exception ex)
-                        {
-                            IndexEditor.Shared.ToastService.Show("Failed to save _index.txt before test");
-                            IndexEditor.Shared.DebugLogger.LogException("TopBar: Test save before run", ex);
-                            return;
-                        }
-
-                         // Prepare to run magazine-parser with --no-insert
-                         var wnd = this.VisualRoot as MainWindow;
-                         try
-                         {
-                             // Use dotnet run to invoke the project in-repo; compute absolute project path
-                             var repoRoot = System.IO.Path.GetFullPath(System.IO.Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-                             // If the app is running from build output, try to locate the repository root via the VisualRoot location fallback
-                             var projectPath = System.IO.Path.Combine(repoRoot, "src", "magazine-parser", "magazine-parser.csproj");
-                             if (!System.IO.File.Exists(projectPath))
-                             {
-                                 // Fallback: assume repo root is two levels up from the executable location
-                                 projectPath = System.IO.Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "src", "magazine-parser", "magazine-parser.csproj");
-                                 projectPath = System.IO.Path.GetFullPath(projectPath);
-                             }
-
-                            if (!System.IO.File.Exists(projectPath))
-                            {
-                                var msg = $"magazine-parser project not found at expected location: {projectPath}";
-                                IndexEditor.Shared.DebugLogger.Log(msg);
-                                IndexEditor.Shared.ToastService.Show("Test run failed: magazine-parser project not found");
-                                // Still show overlay with message
-                                if (wnd != null)
-                                {
-                                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                    {
-                                        try
-                                        {
-                                            var overlay = wnd.FindControl<Border>("ParserOutputOverlay");
-                                            var tb = wnd.FindControl<TextBox>("ParserOutputTextBox");
-                                            if (overlay != null && tb != null)
-                                            {
-                                                tb.Text = msg;
-                                                tb.CaretIndex = tb.Text.Length;
-                                                overlay.IsVisible = true;
-                                            }
-                                        }
-                                        catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: show missing project msg", ex); }
-                                    });
-                                }
-                                return;
-                            }
-
-                            var psi = new System.Diagnostics.ProcessStartInfo
-                             {
-                                 FileName = "dotnet",
-                                 Arguments = $"run --project \"{projectPath}\" -- --no-insert \"{folder}\"",
-                                 RedirectStandardOutput = true,
-                                 RedirectStandardError = true,
-                                 UseShellExecute = false,
-                                 CreateNoWindow = true,
-                             };
-
-                            // Prepare overlay for streaming output (if available)
-                            Border? overlayRef = null;
-                            TextBox? tbRef = null;
-                            if (wnd != null)
-                            {
-                                try
-                                {
-                                    overlayRef = wnd.FindControl<Border>("ParserOutputOverlay");
-                                    tbRef = wnd.FindControl<TextBox>("ParserOutputTextBox");
-                                    if (overlayRef != null && tbRef != null)
-                                    {
-                                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                        {
-                                            try { tbRef.Text = ""; overlayRef.IsVisible = true; tbRef.Focus(); } catch { }
-                                        });
-                                    }
-                                }
-                                catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: find overlay before run", ex); }
-                            }
-
-                            var proc = new System.Diagnostics.Process { StartInfo = psi };
-
-                             var outputBuilder = new System.Text.StringBuilder();
-                             proc.OutputDataReceived += (sender, ea) =>
-                             {
-                                 if (ea.Data == null) return;
-                                 outputBuilder.AppendLine(ea.Data);
-                                 if (tbRef != null)
-                                 {
-                                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                     {
-                                         try
-                                         {
-                                             tbRef.Text += ea.Data + "\n";
-                                             tbRef.CaretIndex = tbRef.Text.Length;
-                                         }
-                                         catch { }
-                                     });
-                                 }
-                             };
-                             proc.ErrorDataReceived += (sender, ea) =>
-                             {
-                                 if (ea.Data == null) return;
-                                 outputBuilder.AppendLine(ea.Data);
-                                 if (tbRef != null)
-                                 {
-                                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                     {
-                                         try
-                                         {
-                                             tbRef.Text += ea.Data + "\n";
-                                             tbRef.CaretIndex = tbRef.Text.Length;
-                                         }
-                                         catch { }
-                                     });
-                                 }
-                             };
-
-                            // Start process
-                            try
-                            {
-                                proc.Start();
-                            }
-                            catch (System.ComponentModel.Win32Exception wx)
-                            {
-                                // Could not start 'dotnet' - try to run published binary in ~/bin
-                                IndexEditor.Shared.DebugLogger.LogException("TopBar: process start failed", wx);
-                                var home = Environment.GetFolderPath(Environment.SpecialFolder.Personal);
-                                var binCandidate = System.IO.Path.Combine(home, "bin", "magazine-parser");
-                                if (System.IO.File.Exists(binCandidate))
-                                {
-                                    psi = new System.Diagnostics.ProcessStartInfo
-                                    {
-                                        FileName = binCandidate,
-                                        Arguments = $"--no-insert \"{folder}\"",
-                                        RedirectStandardOutput = true,
-                                        RedirectStandardError = true,
-                                        UseShellExecute = false,
-                                        CreateNoWindow = true,
-                                    };
-                                    proc = new System.Diagnostics.Process { StartInfo = psi };
-                                    proc.OutputDataReceived += (sender, ea) =>
-                                    {
-                                        if (ea.Data == null) return;
-                                        outputBuilder.AppendLine(ea.Data);
-                                        if (tbRef != null) Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { tbRef.Text += ea.Data + "\n"; tbRef.CaretIndex = tbRef.Text.Length; } catch { } });
-                                    };
-                                    proc.ErrorDataReceived += (sender, ea) =>
-                                    {
-                                        if (ea.Data == null) return;
-                                        outputBuilder.AppendLine(ea.Data);
-                                        if (tbRef != null) Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { tbRef.Text += ea.Data + "\n"; tbRef.CaretIndex = tbRef.Text.Length; } catch { } });
-                                    };
-                                    try { proc.Start(); } catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: fallback binary start failed", ex); throw; }
-                                }
-                                else
-                                {
-                                    throw; // propagate original exception to outer catch
-                                }
-                            }
-
-                            proc.BeginOutputReadLine();
-                            proc.BeginErrorReadLine();
-                            await System.Threading.Tasks.Task.Run(() => proc.WaitForExit());
-
-                            var output = outputBuilder.ToString();
-
-                            // Append exit code info
-                            var exitInfo = $"\n[Process exited with code {proc.ExitCode}]";
-                            if (tbRef != null)
-                            {
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() => { try { tbRef.Text += exitInfo; tbRef.CaretIndex = tbRef.Text.Length; } catch { } });
-                            }
-                            else
-                            {
-                                IndexEditor.Shared.DebugLogger.Log("Parser test output:\n" + output + exitInfo);
-                                IndexEditor.Shared.ToastService.Show("Test run completed. Output length: " + output.Length + " ExitCode:" + proc.ExitCode);
-                            }
-                         }
-                         catch (Exception ex)
-                         {
-                             IndexEditor.Shared.ToastService.Show("Test run failed: " + ex.Message);
-                             IndexEditor.Shared.DebugLogger.LogException("TopBar: Test run process", ex);
-                         }
-                     }
-                     catch (Exception ex) { IndexEditor.Shared.DebugLogger.LogException("TopBar: Test click outer", ex); }
-                 };
-             }
         }
     }
 }

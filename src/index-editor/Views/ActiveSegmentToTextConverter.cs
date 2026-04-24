@@ -3,6 +3,8 @@ using Avalonia.Data.Converters;
 using Common.Shared;
 using System.Globalization;
 
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+
 namespace IndexEditor.Views
 {
     public class ActiveSegmentToTextConverter : IValueConverter

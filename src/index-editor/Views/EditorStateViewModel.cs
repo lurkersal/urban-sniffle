@@ -8,6 +8,8 @@ using IndexEditor.Shared;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
+
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
 using Avalonia.Threading;
 using System.Windows.Input;
 using System.Collections.Specialized;
@@ -83,6 +85,8 @@ namespace IndexEditor.Views
             get => _selectedArticle;
             set
             {
+                try { DebugLogger.Debug($"==> SelectedArticle SETTER CALLED: incoming='{value?.Title}', current='{_selectedArticle?.Title}'"); } catch { }
+                
                 // Normalize the incoming article to an instance from our Articles collection if possible
                 ArticleLine? incoming = value;
                 if (incoming != null)
@@ -99,6 +103,7 @@ namespace IndexEditor.Views
                 {
                     if (activeArticle != null && !object.ReferenceEquals(activeArticle, incoming))
                     {
+                        try { DebugLogger.Debug($"==> SelectedArticle SETTER: BLOCKED - active segment prevents selection change"); } catch { }
                         // Inform user and do not change selection while a segment is open
                         IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first");
                         // Push a property changed so UI bindings revert to the existing selected article
@@ -111,23 +116,30 @@ namespace IndexEditor.Views
                 // exists in our Articles collection, ignore the transient null to avoid losing the editor view.
                 if (incoming == null && _selectedArticle != null && Articles.Contains(_selectedArticle))
                 {
+                    try { DebugLogger.Debug($"==> SelectedArticle SETTER: IGNORING transient null (current article still in collection)"); } catch { }
                     // ignore transient clear
                     return;
                 }
 
                 if (_selectedArticle != incoming)
                 {
-                    try { DebugLogger.Log($"SelectedArticle changing. incoming.Title='{incoming?.Title}', Category='{incoming?.Category}', Contributor0='{incoming?.Contributor0}'"); } catch {}
+                    try { DebugLogger.Debug($"SelectedArticle changing. incoming.Title='{incoming?.Title}', Category='{incoming?.Category}'"); } catch {}
                      _selectedArticle = incoming;
                       // Update IsSelected flags on all articles so UI bindings reflect selection
+                      // Suppress HasUnsavedChanges since this is just a UI state change
                       try
                       {
+                          _suppressHasUnsavedChanges = true;
                           foreach (var a in Articles)
                           {
                               try { a.IsSelected = object.ReferenceEquals(a, _selectedArticle); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: set IsSelected", ex); }
                           }
                       }
                       catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: updating IsSelected flags", ex); }
+                      finally
+                      {
+                          _suppressHasUnsavedChanges = false;
+                      }
                       // Ensure the global EditorState reflects the current selected article so
                       // other views (PageController, etc.) can read the active article details.
                       try
@@ -137,7 +149,26 @@ namespace IndexEditor.Views
                       }
                       catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: set active article/notify", ex); }
                       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
-                    try { DebugLogger.Log($"SelectedArticle set. current.Title='{_selectedArticle?.Title}', Category='{_selectedArticle?.Category}', Contributor0='{_selectedArticle?.Contributor0}'"); } catch {}
+                    try { 
+                        var pagesStr = _selectedArticle?.Pages != null ? string.Join(",", _selectedArticle.Pages) : "(null)";
+                        var pagesTextStr = _selectedArticle?.PagesText ?? "(null)";
+                        DebugLogger.Debug($"SelectedArticle set. current.Title='{_selectedArticle?.Title}', Category='{_selectedArticle?.Category}', Pages=[{pagesStr}], PagesText='{pagesTextStr}'"); 
+                    } catch {}
+                    
+                    // Note: Babepedia check removed from automatic selection - now triggered manually
+                    
+                      // Force the ArticleLine to notify all UI-bound properties changed so TextBox bindings refresh
+                      // Suppress HasUnsavedChanges during this refresh since no actual data is changing
+                      try
+                      {
+                          _suppressHasUnsavedChanges = true;
+                          _selectedArticle?.RefreshUIBindings();
+                      }
+                      catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.SelectedArticle: RefreshUIBindings", ex); }
+                      finally
+                      {
+                          _suppressHasUnsavedChanges = false;
+                      }
                       // Notify SelectedCategory so the editor ComboBox updates to the new article's category
                       PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
                       // Also notify CurrentShownArticle which may change when SelectedArticle changes
@@ -158,9 +189,20 @@ namespace IndexEditor.Views
          }
 
          private bool _suppressCategorySet = false;
+         private bool _suppressHasUnsavedChanges = false;
+         private bool _isReordering = false;
          public string? SelectedCategory
          {
-             get => SelectedArticle?.Category;
+             get
+             {
+                 var category = SelectedArticle?.Category;
+                 // Debug: Log when category is accessed to verify binding is working
+                 if (category != null)
+                 {
+                     try { DebugLogger.Debug($"SelectedCategory GET: '{category}' for article '{SelectedArticle?.Title}'"); } catch { }
+                 }
+                 return category;
+             }
              set
              {
                  if (_suppressCategorySet) return;
@@ -185,11 +227,19 @@ namespace IndexEditor.Views
                      // Forward notify so bindings update
                      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
                  }
-             }
-         }
+              }
+          }
 
-         public ObservableCollection<Common.Shared.ArticleLine> Articles { get; } = new();
-         public ObservableCollection<string> Categories { get; } = new();
+          /// <summary>
+          /// Notify that SelectedCategory changed. Used to refresh bindings after programmatic setup.
+          /// </summary>
+          public void NotifySelectedCategoryChanged()
+          {
+              PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
+          }
+
+          public ObservableCollection<Common.Shared.ArticleLine> Articles { get; } = new();
+          public ObservableCollection<string> Categories { get; } = new();
 
          private bool _isLoadingCategories = false;
          public bool IsLoadingCategories
@@ -208,71 +258,46 @@ namespace IndexEditor.Views
          public EditorStateViewModel()
          {
              SelectArticleCommand = new SelectArticleCommand(this);
-             // Initialize from static EditorState
+             
+             // CRITICAL: Initialize categories FIRST, before loading articles
+             // Categories load from enum (instant), so do it synchronously to avoid race conditions
+             // This ensures ComboBox ItemsSource is populated before articles with categories are loaded
+             try
+             {
+                 // Initialize CategoryService synchronously if not already done
+                 // Since it loads from enum, this is instant (no I/O, no async needed)
+                 if (IndexEditor.Shared.CategoryService.Categories.Count == 0)
+                 {
+                     // Call InitializeAsync synchronously - it's instant for enum-based loading
+                     IndexEditor.Shared.CategoryService.InitializeAsync().Wait();
+                 }
+                 
+                 // Mirror categories to our VM's collection
+                 Categories.Clear();
+                 foreach (var c in IndexEditor.Shared.CategoryService.Categories)
+                     Categories.Add(c);
+                 
+                 _categoriesLoadedFromDb = IndexEditor.Shared.CategoryService.Categories.Count > 0;
+                 
+                 // Explicitly ensure the loading indicator is off (should already be false, but ensure binding updates)
+                 IsLoadingCategories = false;
+                 
+                 DebugLogger.Log($"EditorStateViewModel: Categories initialized synchronously, count={Categories.Count}, IsLoadingCategories={IsLoadingCategories}");
+             }
+             catch (Exception ex)
+             {
+                 DebugLogger.LogException("EditorStateViewModel: category initialization", ex);
+                 IsLoadingCategories = false;  // Ensure it's false even on error
+             }
+
+             // Now load articles - categories are guaranteed to be available
              foreach (var article in EditorState.Articles ?? new System.Collections.Generic.List<Common.Shared.ArticleLine>())
                  Articles.Add(article);
 
-             // IMPORTANT: Categories must come only from the database. Do not populate from Articles.
-             // Leave Categories empty until DB load completes. The ComboBox will show DB-provided values only.
-
-            // Initialize the shared CategoryService once and mirror its collection into our VM's Categories
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await IndexEditor.Shared.CategoryService.InitializeAsync();
-                    // Mirror the service collection to our VM on UI thread
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        Categories.Clear();
-                        foreach (var c in IndexEditor.Shared.CategoryService.Categories) Categories.Add(c);
-                        // Mark that categories came from DB
-                        try { _categoriesLoadedFromDb = IndexEditor.Shared.CategoryService.Categories.Count > 0; } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel: mirror categories count", ex); }
-                        // Subscribe to future changes so we mirror updates
-                        try
-                        {
-                            IndexEditor.Shared.CategoryService.Categories.CollectionChanged += (s, e) =>
-                            {
-                                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                                {
-                                    Categories.Clear();
-                                    foreach (var cc in IndexEditor.Shared.CategoryService.Categories) Categories.Add(cc);
-                                });
-                            };
-                        }
-                        catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel: subscribe CategoryService.CollectionChanged", ex); }
-                     });
-                 }
-                 catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel: initial CategoryService.InitializeAsync", ex); }
-             });
-
-             // Asynchronously try to load categories from DB (do not block UI thread)
-             IsLoadingCategories = true;
-             Task.Run(async () =>
-             {
-                 try
-                 {
-                     // The CategoryService already loads categories; we just mirror from it above. Keep IsLoadingCategories for compatibility.
-                     await IndexEditor.Shared.CategoryService.InitializeAsync();
-                     Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                     {
-                         Categories.Clear();
-                         foreach (var c in IndexEditor.Shared.CategoryService.Categories) Categories.Add(c);
-                     });
-                 }
-                 catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel: CategoryService.InitializeAsync (secondary)", ex); }
-                 finally
-                 {
-                     Dispatcher.UIThread.Post(() => IsLoadingCategories = false);
-                 }
-             });
-
-             // Debug: Print type of every item
-             // Skip debug printing of article types
-              // Listen for changes
-              EditorState.StateChanged += SyncArticles;
-              // Also raise SelectedArticle when the global EditorState changes (e.g., CurrentPage) so bindings like SelectedArticle.ActiveSegment re-evaluate
-              EditorState.StateChanged += OnEditorStateChanged;
+             // Listen for changes
+             EditorState.StateChanged += SyncArticles;
+             // Also raise SelectedArticle when the global EditorState changes (e.g., CurrentPage) so bindings like SelectedArticle.ActiveSegment re-evaluate
+             EditorState.StateChanged += OnEditorStateChanged;
           }
 
         // Returns the article that should be shown for active-segment display: prefer the selected article, otherwise the global active article
@@ -308,138 +333,40 @@ namespace IndexEditor.Views
 
          private async Task<List<string>?> LoadCategoriesFromDatabaseAsync()
          {
+            // Categories are now loaded from ArticleCategory enum, not from database.
+            // This method is kept for compatibility but now returns enum-based categories.
             try
             {
-                // Try multiple likely locations for appsettings.json to avoid issues when working directory differs from app folder.
-                var candidates = new List<string>();
-                try { candidates.Add(Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json")); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: add candidate current dir", ex); }
-                try { candidates.Add(Path.Combine(AppContext.BaseDirectory ?? string.Empty, "appsettings.json")); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: add candidate base dir", ex); }
-                // Also try the application's assembly folder as a fallback
-                try
-                {
-                    var asmFolder = Path.GetDirectoryName(typeof(EditorStateViewModel).Assembly.Location);
-                    if (!string.IsNullOrWhiteSpace(asmFolder)) candidates.Add(Path.Combine(asmFolder, "appsettings.json"));
-                }
-                catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: asmFolder detection", ex); }
-
-                string? foundPath = null;
-                foreach (var c in candidates.Where(p => !string.IsNullOrWhiteSpace(p)).Distinct())
-                {
-                    try
-                    {
-                        if (File.Exists(c))
-                        {
-                            foundPath = c;
-                            break;
-                        }
-                    }
-                    catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: File.Exists check", ex); }
-                }
-
-                try { DebugLogger.Log($"LoadCategories: candidates={string.Join(";", candidates)} found={foundPath}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append debug file", ex); }
-
-                if (string.IsNullOrWhiteSpace(foundPath))
-                    return null;
-
-                using var fs = File.OpenRead(foundPath);
-                using var doc = await JsonDocument.ParseAsync(fs);
-                if (!doc.RootElement.TryGetProperty("ConnectionStrings", out var connSection))
-                    return null;
-                if (!connSection.TryGetProperty("MagazineDb", out var connStringElem))
-                    return null;
-                var connString = connStringElem.GetString();
-                if (string.IsNullOrWhiteSpace(connString))
-                    return null;
-
-                try
-                {
-                    var cats = await IndexEditor.Shared.CategoryRepository.GetCategoriesAsync(connString);
-                    try { DebugLogger.Log($"DB returned {cats?.Count ?? 0} categories"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append DB count", ex); }
-                    if (cats != null && cats.Count > 0)
-                    {
-                        return cats;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    try { DebugLogger.Log($"DB error: {ex}"); } catch (Exception ex2) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: append DB error", ex2); }
-                    DebugLogger.LogException("EditorStateViewModel.LoadCategories: DB error", ex);
-                }
-                return null;
-             }
-             catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.LoadCategories: outer", ex); return null; }
+                var cats = ArticleCategoryHelper.GetAllCategories();
+                DebugLogger.Log($"LoadCategories: Loaded {cats.Count} categories from ArticleCategory enum");
+                return cats;
+            }
+            catch (Exception ex) 
+            { 
+                DebugLogger.LogException("EditorStateViewModel.LoadCategories: outer", ex); 
+                return null; 
+            }
          }
 
         private void UpdateCategories(List<string> newCats, bool fromDatabase = false)
          {
             if (newCats == null) newCats = new List<string>();
-             // Ensure selected category is preserved
-             var selectedCat = SelectedArticle?.Category;
-            // If categories are already loaded from DB, ignore any non-DB updates
-            if (!fromDatabase && _categoriesLoadedFromDb)
-            {
-                try { DebugLogger.Log("UpdateCategories: skipped non-DB update because DB list already loaded"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append skipped non-DB", ex); }
-                return;
-            }
+            
+            // Ensure selected category is preserved
+            var selectedCat = SelectedArticle?.Category;
+            
+            // Categories now come from the ArticleCategory enum
+            // We merge discovered categories with enum categories to preserve any custom ones
+            var sorted = newCats.OrderBy(s => s).ToList();
+            if (!string.IsNullOrWhiteSpace(selectedCat) && !sorted.Contains(selectedCat))
+                sorted.Add(selectedCat);
 
-            // If this update comes from the database, prefer showing DB categories exactly (preserve selectedCategory if missing)
-            if (fromDatabase && newCats != null && newCats.Count > 0)
-            {
-                var sorted = newCats.OrderBy(s => s).ToList();
-                if (!string.IsNullOrWhiteSpace(selectedCat) && !sorted.Contains(selectedCat))
-                    sorted.Add(selectedCat);
-
-                // If we already have DB-loaded categories, avoid downgrading to a smaller set.
-                if (_categoriesLoadedFromDb)
-                {
-                    var currentSet = new HashSet<string>(Categories);
-                    var newSet = new HashSet<string>(sorted);
-                    if (newSet.SetEquals(currentSet))
-                    {
-                        try { DebugLogger.Log("UpdateCategories: DB update identical to current set - ignored"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append identical", ex); }
-                        return;
-                    }
-                    // Accept only if new set is a superset or strictly larger (new categories added)
-                    if (newSet.IsSupersetOf(currentSet) && newSet.Count >= currentSet.Count)
-                    {
-                        Categories.Clear();
-                        foreach (var c in sorted)
-                            Categories.Add(c);
-                        try { DebugLogger.Log($"Updated Categories (DB superset applied): {string.Join(",", sorted)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append superset", ex); }
-                        return;
-                    }
-                    else
-                    {
-                        try { DebugLogger.Log($"UpdateCategories: DB update skipped (would shrink/replace smaller set): {string.Join(",", sorted)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append skip shrink", ex); }
-                        return;
-                    }
-                }
-
-                // First DB load: accept unconditionally
-                Categories.Clear();
-                foreach (var c in sorted)
-                    Categories.Add(c);
-                _categoriesLoadedFromDb = true;
-                try { DebugLogger.Log($"Updated Categories (DB preferred first load): {string.Join(",", sorted)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append first load", ex); }
-                return;
-            }
-
-            // Fallback: merge categories discovered from articles (existing behavior)
-            if (newCats == null) newCats = new List<string>();
-            if (!string.IsNullOrWhiteSpace(selectedCat) && !newCats.Contains(selectedCat))
-            {
-                newCats.Add(selectedCat);
-            }
-            var union = new HashSet<string>(Categories ?? new ObservableCollection<string>());
-            foreach (var c in newCats)
-                if (!string.IsNullOrWhiteSpace(c)) union.Add(c);
-            var merged = union.OrderBy(s => s).ToList();
-            foreach (var c in merged)
-            {
-                if (Categories != null && !Categories.Contains(c))
-                    Categories.Add(c);
-            }
-            try { DebugLogger.Log($"Updated Categories (merged): {string.Join(",", merged)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append merged", ex); }
+            // Update the collection
+            Categories.Clear();
+            foreach (var c in sorted)
+                Categories.Add(c);
+            
+            try { DebugLogger.Log($"Updated Categories: {string.Join(",", sorted)}"); } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.UpdateCategories: append", ex); }
          }
 
         private void SyncArticles()
@@ -489,11 +416,50 @@ namespace IndexEditor.Views
         {
             if (sender is ArticleLine article)
             {
+                // Mark that we have unsaved changes only for properties that represent actual user data changes
+                // Exclude UI-only properties like ActiveSegment, LastModifiedSegment, WasAutoHighlighted, FormattedCardText, IsSelected, etc.
+                var dataProperties = new[] 
+                { 
+                    nameof(ArticleLine.Pages), 
+                    nameof(ArticleLine.PagesText), 
+                    nameof(ArticleLine.Category), 
+                    nameof(ArticleLine.Title),
+                    nameof(ArticleLine.ModelNames),
+                    nameof(ArticleLine.Age),
+                    nameof(ArticleLine.Ages),
+                    nameof(ArticleLine.Contributors),
+                    nameof(ArticleLine.Illustrators),
+                    nameof(ArticleLine.ModelSize),
+                    nameof(ArticleLine.Measurements),
+                    nameof(ArticleLine.BustSize),
+                    nameof(ArticleLine.WaistSize),
+                    nameof(ArticleLine.HipSize),
+                    nameof(ArticleLine.CupSize),
+                    nameof(ArticleLine.BustSizes),
+                    nameof(ArticleLine.WaistSizes),
+                    nameof(ArticleLine.HipSizes),
+                    nameof(ArticleLine.CupSizes),
+                    nameof(ArticleLine.Notes)
+                };
+                
+                if (dataProperties.Contains(e.PropertyName))
+                {
+                    // Only set HasUnsavedChanges if we're not in the middle of refreshing UI bindings
+                    if (!_suppressHasUnsavedChanges)
+                    {
+                        try { IndexEditor.Shared.EditorState.HasUnsavedChanges = true; } catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.OnArticlePropertyChanged: set HasUnsavedChanges", ex); }
+                    }
+                }
+                
                 // OnArticlePropertyChanged
                 // If pages or category changed, we may need to reorder
                 if (e.PropertyName == nameof(ArticleLine.Pages) || e.PropertyName == nameof(ArticleLine.PagesText) || e.PropertyName == nameof(ArticleLine.Category))
                  {
-                     ReorderArticlesByPage();
+                     // Skip if already reordering to prevent recursive calls
+                     if (!_isReordering)
+                     {
+                         ReorderArticlesByPage();
+                     }
                  }
                 // If the article's active segment or last-modified segment changed, notify ActiveSegmentDisplay
                 if (e.PropertyName == nameof(ArticleLine.ActiveSegment) || e.PropertyName == nameof(ArticleLine.LastModifiedSegment))
@@ -505,8 +471,22 @@ namespace IndexEditor.Views
 
         private void ReorderArticlesByPage()
         {
-            // Suppress category writes while we reorder/move items to avoid transient writes
-            _suppressCategorySet = true;
+            // Prevent recursive calls during reordering
+            if (_isReordering)
+            {
+                try { DebugLogger.Log("ReorderArticlesByPage: Skipping - already reordering"); } catch { }
+                return;
+            }
+            
+            _isReordering = true;
+            try
+            {
+                // Preserve the current selection so it doesn't get lost during reordering
+                var currentSelection = _selectedArticle;
+                try { DebugLogger.Log($"ReorderArticlesByPage: Saving selection: '{currentSelection?.Title}' (Category: {currentSelection?.Category})"); } catch { }
+                
+                // Suppress category writes while we reorder/move items to avoid transient writes
+                _suppressCategorySet = true;
             // Compute ordered list (articles with no pages end up after those with pages)
             var ordered = (EditorState.Articles ?? new System.Collections.Generic.List<Common.Shared.ArticleLine>())
                 .OrderBy(a => (a.Pages != null && a.Pages.Count > 0) ? a.Pages.Min() : int.MaxValue)
@@ -533,23 +513,158 @@ namespace IndexEditor.Views
                 }
             }
 
+            // Restore the selection after reordering to prevent article from disappearing
+            // This must happen AFTER the ObservableCollection is updated so the Contains check in the setter works
+            if (currentSelection != null && ordered.Contains(currentSelection))
+            {
+                try { DebugLogger.Log($"ReorderArticlesByPage: currentSelection found in ordered list, attempting restore"); } catch { }
+                // Find the article in the new ordered list (it might be the same reference or a matching one)
+                var restored = ordered.FirstOrDefault(a => object.ReferenceEquals(a, currentSelection))
+                            ?? ordered.FirstOrDefault(a => a.Pages != null && currentSelection.Pages != null && 
+                                                          a.Pages.SequenceEqual(currentSelection.Pages) && 
+                                                          (a.Title ?? string.Empty) == (currentSelection.Title ?? string.Empty));
+                if (restored != null)
+                {
+                    try { DebugLogger.Log($"ReorderArticlesByPage: Restoring selection to '{restored.Title}' (same ref: {object.ReferenceEquals(currentSelection, restored)})"); } catch { }
+                    // Directly set the backing field to avoid the setter's guard logic
+                    // which might reject the restoration
+                    var wasSelected = _selectedArticle;
+                    _selectedArticle = restored;
+                    
+                    // Only raise PropertyChanged if the selection actually changed
+                    if (!object.ReferenceEquals(wasSelected, restored))
+                    {
+                        try
+                        {
+                            // Update IsSelected flags on all articles
+                            foreach (var a in Articles)
+                            {
+                                try { a.IsSelected = object.ReferenceEquals(a, _selectedArticle); } 
+                                catch (Exception ex) { DebugLogger.LogException("ReorderArticlesByPage: set IsSelected", ex); }
+                            }
+                            
+                            // Update global state
+                            IndexEditor.Shared.EditorState.ActiveArticle = _selectedArticle;
+                            
+                            // Notify bindings
+                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle)));
+                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedCategory)));
+                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentShownArticle)));
+                        }
+                        catch (Exception ex) { DebugLogger.LogException("ReorderArticlesByPage: restore selection notifications", ex); }
+                    }
+                    else
+                    {
+                        try { DebugLogger.Log($"ReorderArticlesByPage: Selection unchanged (same reference), no notification needed"); } catch { }
+                    }
+                }
+                else
+                {
+                    try { DebugLogger.Log($"ReorderArticlesByPage: WARNING - Could not find restored article in ordered list!"); } catch { }
+                }
+            }
+            else
+            {
+                try { DebugLogger.Log($"ReorderArticlesByPage: WARNING - currentSelection is null or not in ordered list (currentSelection null: {currentSelection == null})"); } catch { }
+            }
+
             // Categories are exclusively DB-sourced; do not recompute or update Categories from articles here.
             // ReorderArticlesByPage completed
             _suppressCategorySet = false;
+            }
+            finally
+            {
+                _isReordering = false;
+            }
         }
 
         private void OnEditorStateChanged()
         {
             try
             {
+                try { DebugLogger.Debug($"==> OnEditorStateChanged CALLED: SelectedArticle is currently '{_selectedArticle?.Title}'"); } catch { }
                 Dispatcher.UIThread.Post(() =>
                 {
-                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedArticle))); } catch { }
-                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CurrentShownArticle))); } catch { }
-                    try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegmentDisplay))); } catch { }
+                    // ...existing code...
+                    
+                    try { DebugLogger.Debug($"==> OnEditorStateChanged COMPLETED: SelectedArticle is still '{_selectedArticle?.Title}'"); } catch { }
                 });
             }
             catch (Exception ex) { DebugLogger.LogException("EditorStateViewModel.OnEditorStateChanged", ex); }
+        }
+
+        /// <summary>
+        /// Manually check babepedia.com for the currently selected article
+        /// </summary>
+        public void CheckBabepediaForSelectedArticle()
+        {
+            if (_selectedArticle != null)
+            {
+                CheckBabepediaAsync(_selectedArticle);
+            }
+            else
+            {
+                IndexEditor.Shared.ToastService.Show("No article selected");
+            }
+        }
+
+        /// <summary>
+        /// Check babepedia.com for a specific article's model
+        /// </summary>
+        public async void CheckBabepediaAsync(Common.Shared.ArticleLine article)
+        {
+            try
+            {
+                DebugLogger.Debug($"CheckBabepediaAsync: Called for article '{article.Title}' (Category: {article.Category})");
+                
+                // Only check Model and Cover categories
+                if (article.Category != "Model" && article.Category != "Cover")
+                {
+                    DebugLogger.Debug($"CheckBabepediaAsync: Skipping - not a Model or Cover article");
+                    return;
+                }
+
+                DebugLogger.Debug($"CheckBabepediaAsync: Starting babepedia check for Model/Cover article");
+                var (exists, modelName, url) = await IndexEditor.Services.BabepediaService.CheckArticleModelAsync(article);
+                DebugLogger.Debug($"CheckBabepediaAsync: Result - exists={exists}, modelName='{modelName}', url='{url}'");
+
+                if (exists)
+                {
+                    // Log to info (success is worth knowing)
+                    DebugLogger.Info($"BABEPEDIA: Model '{modelName}' found at {url}");
+                    
+                    // Show debug popup on UI thread
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        try
+                        {
+                            // Find the main window
+                            var mainWindow = Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+                                ? desktop.MainWindow
+                                : null;
+
+                            if (mainWindow != null)
+                            {
+                                BabepediaDebugDialog.ShowDialog(mainWindow, modelName, url);
+                            }
+                            else
+                            {
+                                // Fallback to toast if we can't find the main window
+                                IndexEditor.Shared.ToastService.Show($"✓ Babepedia: {modelName}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            DebugLogger.LogException("CheckBabepediaAsync: Show babepedia dialog", ex);
+                            IndexEditor.Shared.ToastService.Show($"✓ Babepedia: {modelName}");
+                        }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLogger.LogException("CheckBabepediaAsync", ex);
+            }
         }
     }
 }

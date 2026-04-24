@@ -32,7 +32,7 @@ public class MagazineParsingService
     {
         if (!File.Exists(indexPath))
         {
-            _userInteraction.DisplayMessage($"No _index.txt file found at {indexPath}");
+            _userInteraction.DisplayMessage($"No index file found at {indexPath}");
             return 0;
         }
 
@@ -40,6 +40,21 @@ public class MagazineParsingService
         _magazineDirectory = Path.GetFullPath(directory);
         _userInteraction.DisplayMessage($"Reading {indexPath}...\n");
         
+        // Phase 2: Detect if this is a JSON file
+        bool isJsonFormat = Path.GetFileName(indexPath).EndsWith(".json", StringComparison.OrdinalIgnoreCase);
+        
+        if (isJsonFormat)
+        {
+            return ParseJsonFile(indexPath);
+        }
+        else
+        {
+            return ParseCsvFile(indexPath);
+        }
+    }
+    
+    private int ParseCsvFile(string indexPath)
+    {
         // Extract year from end of folder name (e.g., "1975", "1975-01", "Mayfair 17-03, 1982")
         var folderName = Path.GetFileName(_magazineDirectory);
         var yearMatch = Regex.Match(folderName, @"(19\d{2}|20\d{2})\s*$");
@@ -261,18 +276,30 @@ public class MagazineParsingService
             
             _userInteraction.DisplayMessage($"\nProcessing line {lineNum}: {allLines[lineNumbers[i] - 1]}");
             
-            var result = InsertContentLineWithoutConfirmation(issueId, contentLine);
-            if (result.Success)
+            // Skip actual database insertion if --no-insert flag is used
+            if (_noInsert)
             {
                 var pageInfo = contentLine.Pages.Count > 1 
                     ? $"pages {contentLine.Pages.Min()}-{contentLine.Pages.Max()}" 
                     : $"page {contentLine.Pages[0]}";
-                _userInteraction.DisplayMessage($"  ✓ Inserted {contentLine.Category} ({pageInfo})");
+                _userInteraction.DisplayMessage($"  ✓ [no-insert] Would insert {contentLine.Category} ({pageInfo})");
                 successCount++;
             }
             else
             {
-                _userInteraction.DisplayMessage($"  ✗ Failed: {result.ErrorMessage}");
+                var result = InsertContentLineWithoutConfirmation(issueId, contentLine);
+                if (result.Success)
+                {
+                    var pageInfo = contentLine.Pages.Count > 1 
+                        ? $"pages {contentLine.Pages.Min()}-{contentLine.Pages.Max()}" 
+                        : $"page {contentLine.Pages[0]}";
+                    _userInteraction.DisplayMessage($"  ✓ Inserted {contentLine.Category} ({pageInfo})");
+                    successCount++;
+                }
+                else
+                {
+                    _userInteraction.DisplayMessage($"  ✗ Failed: {result.ErrorMessage}");
+                }
             }
         }
 
@@ -560,7 +587,8 @@ public class MagazineParsingService
             // Insert article with title only
             var articleId = _repository.InsertArticle(
                 categoryId,
-                contentLine.Title);
+                contentLine.Title,
+                contentLine.ThumbnailPage);
 
             // Link article to all models if present, associating age and measurements by order
             var ages = new List<int?>();
@@ -850,7 +878,8 @@ public class MagazineParsingService
             // Insert article with title only
             var articleId = _repository.InsertArticle(
                 categoryId,
-                contentLine.Title);
+                contentLine.Title,
+                contentLine.ThumbnailPage);
 
             // Link article to all models if present
             foreach (var modelName in contentLine.ModelNames)
@@ -904,6 +933,176 @@ public class MagazineParsingService
         catch (Exception ex)
         {
             return new InsertResult { Success = false, ErrorMessage = ex.Message };
+        }
+    }
+    
+    private int ParseJsonFile(string indexPath)
+    {
+        try
+        {
+            _userInteraction.DisplayMessage("Parsing JSON format index file...\n");
+            
+            // Load JSON using the common serializer
+            var directory = Path.GetDirectoryName(indexPath) ?? string.Empty;
+            var (magazine, volume, number, year, articles, _) = Common.Shared.IndexJsonSerializer.LoadFromJson(directory);
+            
+            var magazineTitle = magazine;
+            int.TryParse(volume, out int volumeNum);
+            int.TryParse(number, out int numberNum);
+            int.TryParse(year, out int yearNum);
+            
+            if (string.IsNullOrEmpty(magazineTitle))
+            {
+                _userInteraction.DisplayMessage("ERROR: Magazine title not found in JSON metadata");
+                return 0;
+            }
+            
+            _userInteraction.DisplayMessage($"Extracted year from JSON metadata: {yearNum}\n");
+            
+            var magazineId = _repository.GetMagazineId(magazineTitle);
+            if (magazineId == 0)
+            {
+                _userInteraction.DisplayMessage($"Magazine {magazineTitle} not found in database");
+                return 0;
+            }
+            
+            // Check if issue already exists
+            var existingIssueId = _repository.GetExistingIssueId(magazineId, volumeNum, numberNum);
+            if (existingIssueId.HasValue)
+            {
+                _userInteraction.DisplayMessage($"WARNING: Issue already exists: {magazineTitle} V{volumeNum} N{numberNum} (IssueId: {existingIssueId.Value})");
+                _userInteraction.DisplayMessage("Aborting parser execution.");
+                return 0;
+            }
+            
+            // Convert ArticleLine objects to ContentLine objects for processing
+            var contentLines = new List<ContentLine>();
+            foreach (var article in articles)
+            {
+                var contentLine = new ContentLine
+                {
+                    Pages = article.Pages.ToList(),
+                    Category = article.Category,
+                    Title = article.Title,
+                    ModelNames = article.ModelNames.ToList(),
+                    Ages = article.Ages.ToList(),
+                    Contributors = article.Contributors.ToList(),
+                    Measurements = article.Measurements.ToList(),
+                    BustSizes = article.BustSizes.ToList(),
+                    WaistSizes = article.WaistSizes.ToList(),
+                    HipSizes = article.HipSizes.ToList(),
+                    CupSizes = article.CupSizes.ToList(),
+                    ThumbnailPage = article.ThumbnailPage
+                };
+                contentLines.Add(contentLine);
+            }
+            
+            if (contentLines.Count == 0)
+            {
+                _userInteraction.DisplayMessage("No articles found in JSON file");
+                return 0;
+            }
+            
+            // Display summary and resolve issues
+            DisplayMagazineSummary(magazineTitle, volumeNum, numberNum, contentLines);
+            
+            // Check for missing categories
+            var dbCategories = new HashSet<string>(_repository.GetAllCategories(), StringComparer.OrdinalIgnoreCase);
+            var missingCategories = contentLines
+                .Select(c => c.Category)
+                .Where(cat => !string.IsNullOrEmpty(cat) && !dbCategories.Contains(cat))
+                .Distinct()
+                .ToList();
+                
+            if (missingCategories.Any())
+            {
+                foreach (var cat in missingCategories)
+                {
+                    var affected = contentLines.Count(c => string.Equals(c.Category, cat, StringComparison.OrdinalIgnoreCase));
+                    var choice = _userInteraction.ChooseIssueResolution(cat, affected);
+                    if (choice == 1)
+                    {
+                        _repository.CreateCategory(cat);
+                        _userInteraction.DisplayMessage($"✓ Created category {cat}");
+                    }
+                }
+            }
+            
+            bool hasIssues = missingCategories.Any();
+            bool hasValidationErrors = contentLines.Any(c => c.HasValidationError);
+            
+            if (hasIssues || hasValidationErrors)
+            {
+                if (!_userInteraction.ConfirmAction("\nCommit all content to database? (y/n)"))
+                {
+                    _userInteraction.DisplayMessage("Import cancelled");
+                    return 0;
+                }
+            }
+            else
+            {
+                _userInteraction.DisplayMessage("\n✓ No errors found - proceeding with import");
+            }
+            
+            // Create issue
+            int issueId;
+            if (_noInsert)
+            {
+                var issueInfo = $"Would create issue: {magazineTitle} V{volumeNum} N{numberNum} Year: {yearNum}";
+                _userInteraction.DisplayMessage($"\n[no-insert] {issueInfo}");
+                issueId = 0;
+            }
+            else
+            {
+                issueId = _repository.InsertIssue(magazineId, volumeNum, numberNum, yearNum);
+                var issueInfo = $"Issue created: {magazineTitle} V{volumeNum} N{numberNum} Year: {yearNum} (IssueId: {issueId})";
+                _userInteraction.DisplayMessage($"\n{issueInfo}");
+            }
+            
+            // Insert all content
+            int successCount = 0;
+            for (int i = 0; i < contentLines.Count; i++)
+            {
+                var contentLine = contentLines[i];
+                
+                _userInteraction.DisplayMessage($"\nProcessing article {i + 1}: {contentLine.Title}");
+                
+                // Skip actual database insertion if --no-insert flag is used
+                if (_noInsert)
+                {
+                    var pageInfo = contentLine.Pages.Count > 1 
+                        ? $"pages {contentLine.Pages.Min()}-{contentLine.Pages.Max()}" 
+                        : $"page {contentLine.Pages[0]}";
+                    _userInteraction.DisplayMessage($"  ✓ [no-insert] Would insert: {contentLine.Title} ({pageInfo})");
+                    successCount++;
+                }
+                else
+                {
+                    var result = InsertContentLineWithoutConfirmation(issueId, contentLine);
+                    if (result.Success)
+                    {
+                        var pageInfo = contentLine.Pages.Count > 1 
+                            ? $"pages {contentLine.Pages.Min()}-{contentLine.Pages.Max()}" 
+                            : $"page {contentLine.Pages[0]}";
+                        _userInteraction.DisplayMessage($"  ✓ Inserted: {contentLine.Title} ({pageInfo})");
+                        successCount++;
+                    }
+                    else
+                    {
+                        _userInteraction.DisplayMessage($"  ✗ Failed: {result.ErrorMessage}");
+                    }
+                }
+            }
+            
+            _userInteraction.DisplayMessage($"\n{'=',-60}");
+            _userInteraction.DisplayMessage($"Summary: {successCount}/{contentLines.Count} articles inserted successfully");
+            
+            return successCount;
+        }
+        catch (Exception ex)
+        {
+            _userInteraction.DisplayMessage($"ERROR parsing JSON file: {ex.Message}");
+            return 0;
         }
     }
 }

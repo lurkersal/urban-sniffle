@@ -7,6 +7,27 @@ namespace Common.Shared
     public class ArticleLine : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler? PropertyChanged;
+        
+        /// <summary>
+        /// Force all UI-bound properties to notify PropertyChanged so bindings refresh.
+        /// Use this when an article is selected/displayed in the editor.
+        /// </summary>
+        public void RefreshUIBindings()
+        {
+            try
+            {
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Title)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Category)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PagesText)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ModelName0)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Age0)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Measurements0)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Contributor0)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Segments)));
+            }
+            catch { /* ignore */ }
+        }
+        
         private bool _isSelected;
         public bool IsSelected
         {
@@ -113,11 +134,39 @@ namespace Common.Shared
                 Segments.Clear();
                 foreach (var s in newSegs) Segments.Add(s);
                 try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ActiveSegment))); } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.RecomputeSegmentsFromPages: notify ActiveSegment", ex); }
+                
+                // Trigger validation for the newly created segments
+                // Note: This requests validation but doesn't do it directly since we don't have folder context here
+                try { PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Segments))); } catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.RecomputeSegmentsFromPages: notify Segments", ex); }
             }
             catch (Exception ex) { Common.Shared.Logger.LogException("ArticleLine.RecomputeSegmentsFromPages: outer", ex); }
         }
 
         public bool HasPageNumberError { get; set; }
+        
+        private string? _thumbnailPath;
+        /// <summary>
+        /// Path to the first image for this article, used for thumbnail display.
+        /// </summary>
+        public string? ThumbnailPath
+        {
+            get => _thumbnailPath;
+            set
+            {
+                if (_thumbnailPath != value)
+                {
+                    _thumbnailPath = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThumbnailPath)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasThumbnail)));
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Returns true if this article has a thumbnail image available.
+        /// </summary>
+        public bool HasThumbnail => !string.IsNullOrWhiteSpace(ThumbnailPath);
+        
         public List<string> ModelNames { get; set; } = new();
         public int? Age { get; set; }
         public List<int?> Ages { get; set; } = new();
@@ -133,6 +182,7 @@ namespace Common.Shared
         public List<int?> WaistSizes { get; set; } = new();
         public List<int?> HipSizes { get; set; } = new();
         public List<string?> CupSizes { get; set; } = new();
+        public int? ThumbnailPage { get; set; }  // Page number to use for article thumbnail (defaults to first page)
         public List<string> ValidationErrors { get; set; } = new();
         public System.Collections.ObjectModel.ObservableCollection<Segment> Segments { get; set; } = new System.Collections.ObjectModel.ObservableCollection<Segment>();
         // The segment that was most recently modified (added/ended/reopened) on this article. Not persisted.
@@ -258,27 +308,42 @@ namespace Common.Shared
         // PagesText property for user-friendly editing (e.g. "2|3-4")
         public string PagesText
         {
-            get => string.Join("|", PagesToSegments(Pages));
+            get
+            {
+                var result = string.Join("|", PagesToSegments(Pages));
+                // Debug: Log when PagesText is accessed
+                try { Console.WriteLine($"[PagesText GET] Title='{Title}', Pages={Pages?.Count ?? 0}, Result='{result}'"); } catch { }
+                return result;
+            }
             set
             {
+                try { Console.WriteLine($"[PagesText SET] Title='{Title}', Value='{value}'"); } catch { }
                 var parsed = ParsePageText(value, out bool hasError);
                 Pages = parsed;
                 HasPageNumberError = hasError;
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PagesText)));
-                Validate();
+                // Don't call Validate() here - let it be triggered when the field loses focus
+                // Calling Validate() during editing interferes with text input (e.g., backspace)
             }
         }
 
         // Helper properties so bindings to [0] are easier to two-way bind and notify
+        // Supports pipe-separated values (e.g., "Model1|Model2|Model3")
         public string ModelName0
         {
-            get => ModelNames.Count > 0 ? ModelNames[0] : string.Empty;
+            get => string.Join("|", ModelNames.Where(n => !string.IsNullOrWhiteSpace(n)));
             set
             {
-                if (ModelNames.Count == 0) ModelNames.Add(string.Empty);
-                if (ModelNames[0] != value)
+                var names = (value ?? string.Empty).Split('|', StringSplitOptions.TrimEntries)
+                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                    .ToList();
+                if (names.Count == 0) names.Add(string.Empty);
+                
+                // Only update if changed
+                if (!ModelNames.SequenceEqual(names))
                 {
-                    ModelNames[0] = value;
+                    ModelNames.Clear();
+                    ModelNames.AddRange(names);
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ModelNames)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ModelName0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
@@ -340,15 +405,23 @@ namespace Common.Shared
             }
         }
 
-        public int? Age0
+        // Supports pipe-separated values (e.g., "23|25|27")
+        public string Age0
         {
-            get => Ages.Count > 0 ? Ages[0] : null;
+            get => string.Join("|", Ages.Where(a => a.HasValue).Select(a => a.GetValueOrDefault().ToString()));
             set
             {
-                if (Ages.Count == 0) Ages.Add(null);
-                if (Ages[0] != value)
+                var ageStrings = (value ?? string.Empty).Split('|', StringSplitOptions.TrimEntries);
+                var ages = ageStrings
+                    .Select(s => int.TryParse(s, out var age) ? (int?)age : null)
+                    .ToList();
+                if (ages.Count == 0) ages.Add(null);
+                
+                // Only update if changed
+                if (!Ages.SequenceEqual(ages))
                 {
-                    Ages[0] = value;
+                    Ages.Clear();
+                    Ages.AddRange(ages);
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Ages)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Age0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
@@ -356,17 +429,23 @@ namespace Common.Shared
             }
         }
 
+        // Supports pipe-separated values (e.g., "36B-28-38|34C-24-34")
         public string Measurements0
         {
-            get => Measurements.Count > 0 ? Measurements[0] : string.Empty;
+            get => string.Join("|", Measurements.Where(m => !string.IsNullOrWhiteSpace(m)));
             set
             {
-                if (Measurements.Count == 0) Measurements.Add(string.Empty);
-                // Normalize user input to canonical form before storing (removes cm, normalizes dashes, trims, uppercases cup letters)
-                var normalized = MeasurementsValidator.NormalizeMeasurement(value);
-                if (Measurements[0] != normalized)
+                var measurementStrings = (value ?? string.Empty).Split('|', StringSplitOptions.TrimEntries)
+                    .Select(m => MeasurementsValidator.NormalizeMeasurement(m))
+                    .Where(m => !string.IsNullOrWhiteSpace(m))
+                    .ToList();
+                if (measurementStrings.Count == 0) measurementStrings.Add(string.Empty);
+                
+                // Only update if changed
+                if (!Measurements.SequenceEqual(measurementStrings))
                 {
-                    Measurements[0] = normalized;
+                    Measurements.Clear();
+                    Measurements.AddRange(measurementStrings);
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Measurements)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Measurements0)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedCardText)));
@@ -455,9 +534,17 @@ namespace Common.Shared
             if (cat == "cartoons")
                 return $"{categoryText}\n{pagesText}\nTitle: {Title}\nCartoonist: {string.Join(", ", Contributors)}";
 
-            // Model and Cover: show photographer, model, age, measurements (use Contributors if populated)
-            if (cat == "model" || cat == "cover")
-                return $"{categoryText}\n{pagesText}\nModel: {string.Join(", ", ModelNames)}\nAge: {string.Join(", ", Ages.Where(a => a.HasValue).Select(a => a.GetValueOrDefault().ToString()))}\nPhotographer: {string.Join(", ", Contributors)}\nMeasurements: {string.Join(", ", Measurements)}";
+            // Model, Cover, and Group: show photographer, model, age, measurements (use Contributors if populated)
+            if (cat == "model" || cat == "cover" || cat == "group")
+                return $"{categoryText}\n{pagesText}\nModel: {string.Join(" | ", ModelNames)}\nAge: {string.Join(" | ", Ages.Where(a => a.HasValue).Select(a => a.GetValueOrDefault().ToString()))}\nPhotographer: {string.Join(", ", Contributors)}\nMeasurements: {string.Join(" | ", Measurements)}";
+
+            // Wives: show model name
+            if (cat == "wives")
+                return $"{categoryText}\n{pagesText}\nModel: {string.Join(" | ", ModelNames)}\nTitle: {Title}";
+
+            // Interview: show author and model
+            if (cat == "interview")
+                return $"{categoryText}\n{pagesText}\nTitle: {Title}\nModel: {string.Join(" | ", ModelNames)}\nAuthor: {string.Join(", ", Contributors)}";
 
             // Feature, Fiction, Review, Humour: show contributors as Author
             if (cat == "feature" || cat == "fiction" || cat == "review" || cat == "humour" || cat == "humor")
@@ -480,37 +567,64 @@ namespace Common.Shared
         /// </summary>
         public void Validate()
         {
+            Logger.Log($"[VALIDATE] Validate() called for article '{Title}', Category='{Category}'");
             var errors = new List<string>();
             if (Pages == null || Pages.Count == 0)
                 errors.Add("Pages");
             if (string.IsNullOrWhiteSpace(Category))
                 errors.Add("Category");
-            // Category-specific validation: Model/Cover measurements are optional; if provided, validate format
+            // Category-specific validation: Model/Cover/Group measurements are optional; if provided, validate format
             HasMeasurementsError = false;
             var cat = (Category ?? string.Empty).Trim().ToLowerInvariant();
-            if (cat == "model" || cat == "cover")
+            Logger.Log($"[VALIDATE] Category (lowercase)='{cat}'");
+            if (cat == "model" || cat == "cover" || cat == "group")
             {
-                // Use Measurements0 as the user-editable input (first measurement string)
-                if (!string.IsNullOrWhiteSpace(Measurements0))
+                Logger.Log($"[VALIDATE] Category requires measurement validation");
+                // Validate each pipe-separated measurement
+                var measurementStrings = Measurements.Where(m => !string.IsNullOrWhiteSpace(m)).ToList();
+                Logger.Log($"[VALIDATE] Found {measurementStrings.Count} non-empty measurements: [{string.Join(", ", measurementStrings.Select(s => $"'{s}'"))}]");
+                if (measurementStrings.Count > 0)
                 {
-                    // If the user provided a measurements string, validate its format
-                    if (!Common.Shared.MeasurementsValidator.TryParseMeasurements(Measurements0, out var b, out var cup, out var w, out var h, out var mErr))
+                    var allErrors = new List<string>();
+                    for (int i = 0; i < measurementStrings.Count; i++)
                     {
+                        Logger.Log($"[VALIDATE] Validating measurement {i + 1}: '{measurementStrings[i]}'");
+                        if (!Common.Shared.MeasurementsValidator.TryParseMeasurements(measurementStrings[i], out var b, out var cup, out var w, out var h, out var mErr))
+                        {
+                            var errorMsg = $"Measurement {i + 1}: {mErr ?? "Invalid format"}";
+                            Logger.Log($"[VALIDATE] ❌ Validation FAILED: {errorMsg}");
+                            allErrors.Add(errorMsg);
+                        }
+                        else
+                        {
+                            Logger.Log($"[VALIDATE] ✓ Validation PASSED: bust={b}, cup='{cup}', waist={w}, hip={h}");
+                        }
+                    }
+                    
+                    if (allErrors.Count > 0)
+                    {
+                        Logger.Log($"[VALIDATE] Setting HasMeasurementsError=true, MeasurementsErrorMessage='{string.Join("; ", allErrors)}'");
                         errors.Add("Measurements");
                         HasMeasurementsError = true;
-                        MeasurementsErrorMessage = mErr ?? "Invalid measurements format";
+                        MeasurementsErrorMessage = string.Join("; ", allErrors);
                     }
                     else
                     {
+                        Logger.Log($"[VALIDATE] All measurements valid, clearing error message");
                         MeasurementsErrorMessage = null;
                     }
                 }
                 else
                 {
+                    Logger.Log($"[VALIDATE] No measurements provided (optional), clearing error");
                     // Measurements left empty: optional -> clear any previous message
                     MeasurementsErrorMessage = null;
                     HasMeasurementsError = false;
                 }
+            }
+            else
+            {
+                Logger.Log($"[VALIDATE] Category does not require measurement validation");
             }
             // You can add more category-specific rules here later.
 
@@ -520,6 +634,7 @@ namespace Common.Shared
             if (had != HasValidationError)
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasValidationError)));
 
+            Logger.Log($"[VALIDATE] Final: HasMeasurementsError={HasMeasurementsError}, MeasurementsErrorMessage='{MeasurementsErrorMessage}'");
             // Raise per-field notifications so UI can update
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ValidationErrors)));
             // Raise convenience boolean properties for bindings
@@ -527,6 +642,7 @@ namespace Common.Shared
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasCategoryError)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasMeasurementsError)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MeasurementsErrorMessage)));
+            Logger.Log($"[VALIDATE] PropertyChanged events fired for validation properties");
         }
 
         public bool HasFieldError(string fieldName)
@@ -537,5 +653,39 @@ namespace Common.Shared
         // Convenience boolean properties for XAML bindings
         public bool HasPagesError => HasFieldError("Pages");
         public bool HasCategoryError => HasFieldError("Category");
+
+        /// <summary>
+        /// Validates all segments to check if any pages in their ranges are missing image files.
+        /// Requires a folder path to check for image existence.
+        /// </summary>
+        public void ValidateSegments(string? folder, Func<string, int, bool>? imageExistsChecker = null)
+        {
+            if (string.IsNullOrWhiteSpace(folder) || Segments == null)
+                return;
+
+            foreach (var segment in Segments)
+            {
+                if (segment.End.HasValue)
+                {
+                    // Closed segment - check all pages in range
+                    bool hasMissing = false;
+                    for (int page = segment.Start; page <= segment.End.Value; page++)
+                    {
+                        bool exists = imageExistsChecker?.Invoke(folder, page) ?? false;
+                        if (!exists)
+                        {
+                            hasMissing = true;
+                            break;
+                        }
+                    }
+                    segment.HasMissingPages = hasMissing;
+                }
+                else
+                {
+                    // Active segment - don't validate yet
+                    segment.HasMissingPages = false;
+                }
+            }
+        }
     }
 }

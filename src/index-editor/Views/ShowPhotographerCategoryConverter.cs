@@ -12,6 +12,7 @@ namespace IndexEditor.Views
             "cartoons",
             "model",
             "cover",
+            "group",
             "photographer",
             "motoring"
         };

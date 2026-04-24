@@ -1,0 +1,64 @@
+{
+  "metadata": {
+    "magazine": "Club International",
+    "volume": "17",
+    "number": "1",
+    "year": "1988"
+  },
+  "articles": [
+    {
+      "pages": [
+        1,
+        2,
+        3
+      ],
+      "category": "Cover",
+      "title": "January Cover",
+      "modelNames": [
+        "Jane Doe"
+      ],
+      "ages": [
+        25
+      ],
+      "contributors": [
+        "John Smith"
+      ],
+      "measurements": [
+        "36-24-36"
+      ]
+    },
+    {
+      "pages": [
+        10,
+        11,
+        12
+      ],
+      "category": "Feature",
+      "title": "The Year in Review",
+      "contributors": [
+        "Bob Johnson"
+      ]
+    }
+  ],
+  "links": [
+    {
+      "page": 10,
+      "magazine": "Club International",
+      "volume": "16",
+      "issue": "12"
+    },
+    {
+      "page": 15,
+      "magazine": "Club International",
+      "volume": "17",
+      "issue": "2"
+    },
+    {
+      "page": 22,
+      "magazine": "Mayfair",
+      "volume": "23",
+      "issue": "4"
+    }
+  ]
+}
+

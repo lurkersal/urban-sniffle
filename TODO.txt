@@ -1,8 +1,7 @@
-TODO
-
-make phone interface better
-Fiona Richmond's articles
-c/Also known as/Also appeared in
-
-
+the-archive.
+------------
+breadcrumb trail should be clickable
+magazines page thumbnails should be better
+the <-- issue button in page view should state the magazine, issue and volume
+this top bar should also include the article meta data, clickable where required
 

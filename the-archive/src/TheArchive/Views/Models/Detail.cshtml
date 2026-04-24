@@ -1,0 +1,131 @@
+@model TheArchive.ViewModels.ModelDetailViewModel
+@{
+    ViewData["Title"] = Model.Model.Name;
+}
+
+@if (!string.IsNullOrEmpty(Model.ModelThumbnail))
+{
+    <div class="issue-cover-bg" style="background-image: url('/image?path=@Uri.EscapeDataString(Model.ModelThumbnail)')"></div>
+}
+
+<div class="main fade-in model-detail-page">
+    <div class="model-detail">
+        <div>
+            <div class="model-portrait">
+                @if (!string.IsNullOrEmpty(Model.ModelThumbnail))
+                {
+                    <img src="/image?path=@Uri.EscapeDataString(Model.ModelThumbnail)" 
+                         alt="@Model.Model.Name" 
+                         class="model-portrait-image" />
+                }
+                else
+                {
+                    <div class="model-portrait-initials">@Model.Initials</div>
+                }
+            </div>
+            <div class="model-portrait-name">@Model.Model.Name</div>
+        </div>
+        
+        <div class="model-stats">
+            <div>
+                <div class="stat-group-label">Profile</div>
+                @if (!string.IsNullOrEmpty(Model.Model.Measurements))
+                {
+                    <div class="stat-row">
+                        <span class="stat-label">Measurements</span>
+                        <span class="stat-val">@Model.Model.Measurements</span>
+                    </div>
+                }
+                @if (Model.Model.YearOfBirth != null && Model.Model.YearOfBirth.HasValue)
+                {
+                    <div class="stat-row">
+                        <span class="stat-label">Year of Birth</span>
+                        <span class="stat-val">@Model.Model.YearOfBirth</span>
+                    </div>
+                }
+                <div class="stat-row">
+                    <span class="stat-label">Appearances</span>
+                    <span class="stat-val">@Model.Model.AppearanceCount</span>
+                </div>
+            </div>
+            
+            @if (Model.Issues != null && Model.Issues.Count > 0)
+            {
+                <div>
+                    <div class="stat-group-label">Appearances (@Model.Issues.Count issue@(Model.Issues.Count != 1 ? "s" : ""))</div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
+                        @foreach (var issue in Model.Issues)
+                        {
+                            <a class="appearance-chip" href="/issues/@issue.IssueId">
+                                <span class="chip-mag">@issue.MagazineName</span>
+                                <span>@issue.DateLabel</span>
+                            </a>
+                        }
+                    </div>
+                </div>
+            }
+            
+            @if (Model.Articles != null && Model.Articles.Count > 0)
+            {
+                <div>
+                    <div class="stat-group-label">Articles (@Model.Articles.Count)</div>
+                    <div class="article-list" id="model-article-list" style="margin-top: 0.5rem;">
+                        @foreach (var article in Model.Articles.Take(10))
+                        {
+                            var catClass = "cat-" + article.Category;
+                            <div class="article-row" 
+                                 style="padding: 8px 0; cursor: pointer;"
+                                 data-article-id="@article.ArticleId"
+                                 data-article-title="@(article.Title ?? "Untitled")"
+                                 data-article-category="@article.CategoryName"
+                                 data-issue-id="@article.IssueId">
+                                <div class="article-pg" style="font-size: 16px;">@article.PageStart</div>
+                                <div class="article-body">
+                                    <div>
+                                        <span class="article-cat @catClass">@article.CategoryName</span>
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(article.Title))
+                                    {
+                                        <div class="article-title" style="font-size: 14px;">@article.Title</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="article-title" style="font-size: 14px; color: var(--muted); font-style: italic;">Untitled</div>
+                                    }
+                                </div>
+                                <div style="font-size: 11px; color: var(--muted);">
+                                    @article.MagazineName Vol @article.Volume No @article.Number (@article.Year)
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Handle clicks on model's articles to open article viewer
+        document.addEventListener('DOMContentLoaded', () => {
+            const articleList = document.getElementById('model-article-list');
+            if (articleList) {
+                articleList.addEventListener('click', (e) => {
+                    const articleRow = e.target.closest('.article-row');
+                    if (articleRow) {
+                        const articleId = parseInt(articleRow.dataset.articleId);
+                        const articleTitle = articleRow.dataset.articleTitle || 'Untitled';
+                        const category = articleRow.dataset.articleCategory;
+                        const issueId = parseInt(articleRow.dataset.issueId);
+                        
+                        if (articleId && issueId) {
+                            openArticle(articleId, articleTitle, category, issueId);
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+}
+

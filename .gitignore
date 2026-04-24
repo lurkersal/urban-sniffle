@@ -52,3 +52,33 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# ============================================
+# Security - Environment files and secrets
+# ============================================
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+*.secret.*
+
+# User secrets
+secrets.json
+
+# Local launch settings with credentials (user-specific)
+**/launchSettings.local.json
+
+# Configuration with credentials
+appsettings.Development.json
+appsettings.Production.json
+appsettings.*.json
+!appsettings.json
+!appsettings.template.json
+
+# ============================================
+# Documentation (keep markdown files)
+# ============================================
+# Removed: *.md - we want to track documentation
+
+*.log

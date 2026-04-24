@@ -10,8 +10,20 @@ using IndexEditor.Shared;
 
 namespace IndexEditor.Views
 {
+#pragma warning disable CS0618 // Intentional use of backward-compatible static wrappers
+    
     public partial class ArticleList : UserControl
     {
+        private IEditorState? _editorState;
+
+        /// <summary>
+        /// Inject EditorState after XAML construction
+        /// </summary>
+        public void SetEditorState(IEditorState editorState)
+        {
+            _editorState = editorState;
+        }
+
         // Helper: find the owning article for a given segment
         private Common.Shared.ArticleLine? GetArticleForSegment(Common.Shared.Segment? seg)
         {
@@ -28,7 +40,7 @@ namespace IndexEditor.Views
             catch (Exception ex) { DebugLogger.LogException("ArticleList.GetArticleForSegment: vm search", ex); }
             try
             {
-                return IndexEditor.Shared.EditorState.Articles?.FirstOrDefault(ar => ar.Segments != null && ar.Segments.Contains(seg));
+                return _editorState?.Articles?.FirstOrDefault(ar => ar.Segments != null && ar.Segments.Contains(seg));
             }
             catch (Exception ex) { DebugLogger.LogException("ArticleList.GetArticleForSegment: state search", ex); }
             return null;
@@ -135,27 +147,32 @@ namespace IndexEditor.Views
                 // Initial enable/selection state based on EditorState
                 try
                 {
-                    var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
-                    // Disable the list entirely when an active segment exists to prevent user selecting any other article
-                    list.IsEnabled = !(activeSeg != null && activeSeg.IsActive);
-                    if (activeSeg != null && activeSeg.IsActive)
+                    if (_editorState != null)
                     {
-                        var owner = GetArticleForSegment(activeSeg);
-                        if (owner != null) list.SelectedItem = owner;
+                        var activeSeg = _editorState.ActiveSegment;
+                        // Disable the list entirely when an active segment exists to prevent user selecting any other article
+                        list.IsEnabled = !(activeSeg != null && activeSeg.IsActive);
+                        if (activeSeg != null && activeSeg.IsActive)
+                        {
+                            var owner = GetArticleForSegment(activeSeg);
+                            if (owner != null) list.SelectedItem = owner;
+                        }
                     }
                 }
                 catch (Exception ex) { DebugLogger.LogException("ArticleList.constructor: initial enable state", ex); }
 
                 // Subscribe to global state changes to enforce selection and enabledness
-                IndexEditor.Shared.EditorState.StateChanged += () =>
+                if (_editorState != null)
                 {
-                    var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
-                    Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    _editorState.StateChanged += () =>
                     {
-                        // Disable the list entirely while there's an active open segment
-                        list.IsEnabled = !(activeSeg != null && activeSeg.IsActive);
-                        // If a segment is active, force the SelectedItem to the owning article (derived from the segment)
-                        if (activeSeg != null && activeSeg.IsActive)
+                        var activeSeg = _editorState.ActiveSegment;
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        {
+                            // Disable the list entirely while there's an active open segment
+                            list.IsEnabled = !(activeSeg != null && activeSeg.IsActive);
+                            // If a segment is active, force the SelectedItem to the owning article (derived from the segment)
+                            if (activeSeg != null && activeSeg.IsActive)
                         {
                             var owner = GetArticleForSegment(activeSeg);
                             if (owner != null) list.SelectedItem = owner;
@@ -164,7 +181,7 @@ namespace IndexEditor.Views
                         // Clear highlighting on all segments, then set only the active one
                         try
                         {
-                            foreach (var a in IndexEditor.Shared.EditorState.Articles ?? new System.Collections.Generic.List<Common.Shared.ArticleLine>())
+                            foreach (var a in _editorState.Articles ?? new System.Collections.Generic.List<Common.Shared.ArticleLine>())
                             {
                                 if (a.Segments != null)
                                 {
@@ -179,9 +196,11 @@ namespace IndexEditor.Views
                     });
                 };
 
+
                 list.SelectionChanged += (s, e) =>
                 {
-                    var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
+                    if (_editorState == null) return;
+                    var activeSeg = _editorState.ActiveSegment;
                     var activeArticle = GetArticleForSegment(activeSeg);
                     var selected = list.SelectedItem as Common.Shared.ArticleLine;
                     if (activeSeg != null && activeSeg.IsActive && selected != null && activeArticle != null && !object.ReferenceEquals(selected, activeArticle))
@@ -205,12 +224,12 @@ namespace IndexEditor.Views
                         catch (Exception ex) { DebugLogger.LogException("ArticleList.SelectionChanged: mark selected", ex); }
                     }
                 };
-            }
+            } // Close if (_editorState != null)
+            }; // Close AttachedToVisualTree event handler
+        } // Close constructor
 
-            // Public helper to scroll to an article (used by MainWindow)
-            // Keep this method instance-level so other components can call ArticleListControl.ScrollToArticle(article)
-        }
-
+        // Public helper to scroll to an article (used by MainWindow)
+        // Keep this method instance-level so other components can call ArticleListControl.ScrollToArticle(article)
         public void ScrollToArticle(Common.Shared.ArticleLine? article)
         {
             if (article == null) return;
@@ -236,7 +255,7 @@ namespace IndexEditor.Views
                      try {
                          #pragma warning disable CS0618 // use legacy ItemContainerGenerator.ContainerFromIndex as compatibility fallback
                          container = list.ItemContainerGenerator.ContainerFromIndex(idx) as Control;
-                         #pragma warning restore CS0618
+                         // Note: CS0618 remains disabled for EditorState static wrapper usage below
                      } catch (Exception ex) { DebugLogger.LogException("ArticleList.Article_PropertyChanged: ContainerFromIndex", ex); }
                  }
                  if (container == null) return;
@@ -302,14 +321,18 @@ namespace IndexEditor.Views
                 if (sender is Border b && b.Tag is Common.Shared.ArticleLine art)
                 {
                     try { DebugLogger.Log($"ArticleList.OnArticlePointerPressed: ClickCount={e.ClickCount} Article='{art.DisplayTitle}'"); } catch { }
-                     // Respect active segment: disallow selecting other articles
-                     var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
-                     var activeArticle = IndexEditor.Shared.EditorState.ActiveArticle;
-                     if (activeSeg != null && activeSeg.IsActive && activeArticle != null && !object.ReferenceEquals(art, activeArticle))
-                     {
-                         try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch (Exception ex) { DebugLogger.LogException("ArticleList.OnArticlePointerPressed: toast", ex); }
-                         return;
-                     }
+                    
+                    // Respect active segment: disallow selecting other articles
+                    if (_editorState != null)
+                    {
+                        var activeSeg = _editorState.ActiveSegment;
+                        var activeArticle = _editorState.ActiveArticle;
+                        if (activeSeg != null && activeSeg.IsActive && activeArticle != null && !object.ReferenceEquals(art, activeArticle))
+                        {
+                            try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch (Exception ex) { DebugLogger.LogException("ArticleList.OnArticlePointerPressed: toast", ex); }
+                            return;
+                        }
+                    }
 
                      var vm = this.DataContext as EditorStateViewModel;
                      if (vm != null)
@@ -343,26 +366,29 @@ namespace IndexEditor.Views
                             if (isDouble)
                             {
                                 // Only allow jumping pages if there is no active open segment
-                                var activeSeg2 = IndexEditor.Shared.EditorState.ActiveSegment;
-                                if (activeSeg2 != null && activeSeg2.IsActive)
+                                if (_editorState != null)
                                 {
-                                    try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch (Exception ex) { DebugLogger.LogException("ArticleList.OnArticlePointerPressed: double-click blocked", ex); }
-                                }
-                                else
-                                {
-                                    try
+                                    var activeSeg2 = _editorState.ActiveSegment;
+                                    if (activeSeg2 != null && activeSeg2.IsActive)
                                     {
-                                        var pages = toSelect.Pages ?? new System.Collections.Generic.List<int>();
-                                        if (pages.Count > 0)
-                                        {
-                                            var first = pages.Min();
-                                            IndexEditor.Shared.EditorState.CurrentPage = first;
-                                            IndexEditor.Shared.EditorState.NotifyStateChanged();
-                                            e.Handled = true;
-                                            try { DebugLogger.Log($"ArticleList.OnArticlePointerPressed: double-click set CurrentPage={first} for '{toSelect.DisplayTitle}'"); } catch { }
-                                        }
+                                        try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch (Exception ex) { DebugLogger.LogException("ArticleList.OnArticlePointerPressed: double-click blocked", ex); }
                                     }
-                                    catch (Exception ex) { DebugLogger.LogException("ArticleList.OnArticlePointerPressed: double-click action", ex); }
+                                    else
+                                    {
+                                        try
+                                        {
+                                            var pages = toSelect.Pages ?? new System.Collections.Generic.List<int>();
+                                            if (pages.Count > 0)
+                                            {
+                                                var first = pages.Min();
+                                                _editorState.CurrentPage = first;
+                                                _editorState.NotifyStateChanged();
+                                                e.Handled = true;
+                                                try { DebugLogger.Log($"ArticleList.OnArticlePointerPressed: double-click set CurrentPage={first} for '{toSelect.DisplayTitle}'"); } catch { }
+                                            }
+                                        }
+                                        catch (Exception ex) { DebugLogger.LogException("ArticleList.OnArticlePointerPressed: double-click action", ex); }
+                                    }
                                 }
                             }
                         }
@@ -380,11 +406,14 @@ namespace IndexEditor.Views
                 if (sender is Border b && b.Tag is Common.Shared.ArticleLine art)
                 {
                     // Only allow jumping pages if there is no active open segment
-                    var activeSeg2 = IndexEditor.Shared.EditorState.ActiveSegment;
-                    if (activeSeg2 != null && activeSeg2.IsActive)
+                    if (_editorState != null)
                     {
-                        try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch (Exception ex) { DebugLogger.LogException("ArticleList.OnArticleDoubleTapped: blocked", ex); }
-                        return;
+                        var activeSeg2 = _editorState.ActiveSegment;
+                        if (activeSeg2 != null && activeSeg2.IsActive)
+                        {
+                            try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch (Exception ex) { DebugLogger.LogException("ArticleList.OnArticleDoubleTapped: blocked", ex); }
+                            return;
+                        }
                     }
 
                     // Resolve VM instance and act on it
@@ -398,7 +427,7 @@ namespace IndexEditor.Views
                         try { vm.SelectedArticle = toSelect; } catch { }
                     }
 
-                    if (toSelect != null)
+                    if (toSelect != null && _editorState != null)
                     {
                         try
                         {
@@ -406,8 +435,8 @@ namespace IndexEditor.Views
                             if (pages.Count > 0)
                             {
                                 var first = pages.Min();
-                                IndexEditor.Shared.EditorState.CurrentPage = first;
-                                IndexEditor.Shared.EditorState.NotifyStateChanged();
+                                _editorState.CurrentPage = first;
+                                _editorState.NotifyStateChanged();
                                 try { DebugLogger.Log($"ArticleList.OnArticleDoubleTapped: set CurrentPage={first} for '{toSelect.DisplayTitle}'"); } catch { }
                             }
                         }
@@ -488,20 +517,23 @@ namespace IndexEditor.Views
                          owner = vm.Articles.FirstOrDefault(a => a.Segments != null && a.Segments.Contains(seg));
                      }
                      // Fallback: search shared EditorState.Articles
-                     if (owner == null)
+                     if (owner == null && _editorState != null)
                      {
-                         owner = IndexEditor.Shared.EditorState.Articles.FirstOrDefault(a => a.Segments != null && a.Segments.Contains(seg));
+                         owner = _editorState.Articles.FirstOrDefault(a => a.Segments != null && a.Segments.Contains(seg));
                      }
 
                      if (owner == null) return;
 
                      // If there's already an active segment on a different article, block and toast
-                     var activeSeg = IndexEditor.Shared.EditorState.ActiveSegment;
-                     var activeArticle = IndexEditor.Shared.EditorState.ActiveArticle;
-                     if (activeSeg != null && activeSeg.IsActive && activeArticle != null && !object.ReferenceEquals(activeArticle, owner))
+                     if (_editorState != null)
                      {
-                         try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch (Exception ex) { DebugLogger.LogException("ArticleList.OnSegmentPointerPressed: toast", ex); }
-                         return;
+                         var activeSeg = _editorState.ActiveSegment;
+                         var activeArticle = _editorState.ActiveArticle;
+                         if (activeSeg != null && activeSeg.IsActive && activeArticle != null && !object.ReferenceEquals(activeArticle, owner))
+                         {
+                             try { IndexEditor.Shared.ToastService.Show("Finish or cancel the open segment first"); } catch (Exception ex) { DebugLogger.LogException("ArticleList.OnSegmentPointerPressed: toast", ex); }
+                             return;
+                         }
                      }
 
                      // Set the owner as selected/active article
@@ -512,29 +544,33 @@ namespace IndexEditor.Views
                      }
                      catch (Exception ex) { DebugLogger.LogException("ArticleList.OnSegmentPointerPressed: clear IsSelected", ex); }
                      owner.IsSelected = true;
-                     IndexEditor.Shared.EditorState.ActiveArticle = owner;
-
-                     // Ensure the clicked segment becomes active (End == null) so IsActive becomes true
-                     try
+                     
+                     if (_editorState != null)
                      {
-                         if (seg.End.HasValue)
+                         _editorState.ActiveArticle = owner;
+
+                         // Ensure the clicked segment becomes active (End == null) so IsActive becomes true
+                         try
                          {
-                             // Opening a previously closed segment: remember the original end to allow cancel to restore it
-                             seg.OriginalEnd = seg.End;
-                             seg.WasNew = false;
-                             seg.End = null;
+                             if (seg.End.HasValue)
+                             {
+                                 // Opening a previously closed segment: remember the original end to allow cancel to restore it
+                                 seg.OriginalEnd = seg.End;
+                                 seg.WasNew = false;
+                                 seg.End = null;
+                             }
                          }
+                         catch (Exception ex) { DebugLogger.LogException("ArticleList.OnSegmentPointerPressed: reopen seg", ex); }
+
+                         // Set global active segment (if it's not already)
+                         _editorState.ActiveSegment = seg;
+
+                         // Jump page controller to the segment start
+                         _editorState.CurrentPage = seg.Start;
                      }
-                     catch (Exception ex) { DebugLogger.LogException("ArticleList.OnSegmentPointerPressed: reopen seg", ex); }
-
-                     // Set global active segment (if it's not already)
-                     IndexEditor.Shared.EditorState.ActiveSegment = seg;
-
-                     // Jump page controller to the segment start
-                     IndexEditor.Shared.EditorState.CurrentPage = seg.Start;
 
                      // Notify UI to update (selection, buttons, etc.)
-                     IndexEditor.Shared.EditorState.NotifyStateChanged();
+                     _editorState.NotifyStateChanged();
                  }
              }
              catch (Exception ex) { DebugLogger.LogException("ArticleList.OnSegmentPointerPressed: outer", ex); }

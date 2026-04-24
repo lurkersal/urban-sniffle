@@ -1,21 +1,19 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:IndexEditor.Views"
              x:Class="IndexEditor.Views.PageControllerView"
              HorizontalAlignment="Stretch"
              VerticalAlignment="Stretch">
-    <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-        <!-- Allow the controller to scroll if the window is small -->
-        <!-- Disable horizontal scrolling so the image is always scaled to fit the pane width -->
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <UserControl.Resources>
+        <local:ArticleCategoryToColorConverter x:Key="ArticleCategoryToColorConverter" />
+    </UserControl.Resources>
+    <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" RowDefinitions="*,Auto,Auto">
+        <!-- Row 0: Scrollable content area (article cards and page image) -->
+        <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="12" Spacing="12" VerticalAlignment="Stretch">
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
-                    <Button Name="PrevPageBtn" Content="◀" Width="36" Height="36" Background="White" Foreground="Black"/>
-                    <TextBox Name="PageInput" Text="8" Width="80" HorizontalContentAlignment="Center" FontWeight="Bold" FontSize="18" VerticalAlignment="Center" Background="White" Foreground="Black"/>
-                    <Button Name="NextPageBtn" Content="▶" Width="36" Height="36" Background="White" Foreground="Black"/>
-                    <!-- Sync button removed per request -->
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <!-- Add Segment button removed in favor of Ctrl+A shortcut; End Segment removed -->
+                <!-- Article Cards Container - Shows all articles that contain the current page -->
+                <StackPanel Name="ArticleCardsContainer" Spacing="8">
+                    <!-- Article cards will be dynamically added here -->
                 </StackPanel>
 
                 <!-- Transient toast for short messages (fades out) -->
@@ -23,19 +21,59 @@
                     <TextBlock Name="ToastText" Foreground="White" FontWeight="Bold" FontSize="12" />
                 </Border>
 
-                <!-- Active Article and Active Segment panes removed from PageController; ActiveSegment will be shown in ArticleEditor -->
-
-                 <!-- Page image (full width) with overlay message when missing -->
-                <Border Background="#FFFFFF" CornerRadius="4" Padding="4" Name="PageImageBorder">
+                <!-- Page image (full width) with overlay message when missing -->
+                <Border Background="#FFFFFF" CornerRadius="4" Padding="4" Name="PageImageBorder" Margin="0,0,0,12">
                     <Grid>
                         <!-- Bind MaxWidth to the Border's bounds so the image will never exceed the pane width; Stretch="Uniform" preserves aspect ratio.
                              StretchDirection="DownOnly" avoids upscaling so the image is only reduced to fit the width. Center horizontally. -->
                         <Image Name="PageImage" Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Center"
-                               MaxWidth="{Binding Path=Bounds.Width, ElementName=PageImageBorder}" />
+                               MaxWidth="{Binding Path=Bounds.Width, ElementName=PageImageBorder}" 
+                               DoubleTapped="OnImageDoubleTapped"
+                               Cursor="Hand" />
                         <TextBlock Name="ImageMissingText" Text="Page image not found" Foreground="Red" Background="#80FFFFFF" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False" Padding="8"/>
                     </Grid>
                 </Border>
             </StackPanel>
         </ScrollViewer>
+        
+        <!-- Row 1: Thumbnail Page Selection Panel (shows when article is selected) -->
+        <Border Grid.Row="1" Background="#F8F8F8" BorderBrush="#CCCCCC" BorderThickness="0,1,0,1" Padding="12" Name="ThumbnailPanel" IsVisible="False">
+            <StackPanel Spacing="8">
+                <TextBlock Text="Thumbnail Page:" FontWeight="Bold" FontSize="14" />
+                <TextBlock Name="ThumbnailInstructionText" Text="Select which page to use as the thumbnail for this article:" FontSize="12" Foreground="#666" TextWrapping="Wrap" />
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" MaxHeight="100">
+                    <StackPanel Name="ThumbnailPagesContainer" Orientation="Horizontal" Spacing="4">
+                        <!-- Checkboxes for each page will be dynamically added here -->
+                    </StackPanel>
+                </ScrollViewer>
+            </StackPanel>
+        </Border>
+        
+        <!-- Row 1: Fixed Page Navigation Controls at bottom -->
+        <Border Grid.Row="1" Background="#F0F0F0" BorderBrush="#CCCCCC" BorderThickness="0,1,0,0" Padding="12">
+            <Grid ColumnDefinitions="*,Auto,*">
+                <!-- Page Navigation Controls (center) -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+                    <Button Name="PrevPageBtn" Content="◀" Width="36" Height="36" Background="White" Foreground="Black"/>
+                    <TextBox Name="PageInput" Text="8" Width="80" HorizontalContentAlignment="Center" FontWeight="Bold" FontSize="18" VerticalAlignment="Center" Background="White" Foreground="Black"/>
+                    <Button Name="NextPageBtn" Content="▶" Width="36" Height="36" Background="White" Foreground="Black"/>
+                </StackPanel>
+                
+                <!-- Link Indicator (right) -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="4" Name="LinkIndicator" IsVisible="False">
+                    <TextBlock Text="🔗" FontSize="18" VerticalAlignment="Center">
+                        <ToolTip.Tip>
+                            <Border Background="#F5F5F5" BorderBrush="#999" BorderThickness="1" CornerRadius="4" Padding="8">
+                                <StackPanel Name="LinkTooltipContent" Spacing="4">
+                                    <!-- Links will be populated dynamically -->
+                                    <TextBlock Text="Links found on this page:" FontWeight="Bold" FontSize="12" />
+                                </StackPanel>
+                            </Border>
+                        </ToolTip.Tip>
+                    </TextBlock>
+                    <TextBlock Name="LinkCount" Text="" FontSize="12" VerticalAlignment="Center" Foreground="#666" />
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>

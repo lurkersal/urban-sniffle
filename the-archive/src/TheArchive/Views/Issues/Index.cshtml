@@ -1,0 +1,228 @@
+@model List<TheArchive.Models.Issue>
+@{
+    ViewData["Title"] = "All Issues";
+}
+
+<div class="main fade-in">
+    <div class="section-hd">
+        <div>
+            <h1 class="section-title">All <em>Issues</em></h1>
+            <p class="section-sub">Every issue across all magazines, newest first</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <button class="filter-toggle-btn" onclick="toggleFilters()" id="filterToggleBtn">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="margin-right: 6px;">
+                    <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Filters
+            </button>
+            <span class="count-badge">@Model.Count Issue@(Model.Count != 1 ? "s" : "")</span>
+        </div>
+    </div>
+
+    <!-- Filter Panel -->
+    <div class="filter-panel" id="filterPanel" style="display: none;">
+        <form method="get" action="/issues" id="filterForm">
+            <input type="hidden" name="magazines" id="magazinesInput" value="" />
+            <div class="filter-row">
+                <!-- Year Range Filter -->
+                <div class="filter-group">
+                    <label class="filter-label">Year Range</label>
+                    <div class="filter-year-inputs">
+                        <input 
+                            type="number" 
+                            name="yearFrom" 
+                            placeholder="From" 
+                            class="filter-input"
+                            value="@ViewBag.YearFrom"
+                            min="1970"
+                            max="2000"
+                        />
+                        <span class="filter-separator">–</span>
+                        <input 
+                            type="number" 
+                            name="yearTo" 
+                            placeholder="To" 
+                            class="filter-input"
+                            value="@ViewBag.YearTo"
+                            min="1970"
+                            max="2000"
+                        />
+                    </div>
+                </div>
+
+                <!-- Magazine Multi-Select -->
+                <div class="filter-group">
+                    <label class="filter-label">Magazines</label>
+                    <div class="filter-magazine-select">
+                        <button type="button" class="filter-dropdown-btn" onclick="toggleMagazineDropdown()">
+                            <span id="magazineSelectionText">
+                                @{
+                                    var selectedMagIds = (List<int>)ViewBag.SelectedMagazineIds;
+                                    if (selectedMagIds.Count > 0)
+                                    {
+                                        @($"{selectedMagIds.Count} selected")
+                                    }
+                                    else
+                                    {
+                                        @("All magazines")
+                                    }
+                                }
+                            </span>
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                <path d="M3 5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <div class="filter-dropdown" id="magazineDropdown" style="display: none;">
+                            @{
+                                var selectedIds = (List<int>)ViewBag.SelectedMagazineIds;
+                            }
+                            @foreach (var mag in ViewBag.AllMagazines)
+                            {
+                                var isSelected = selectedIds.Contains(mag.MagazineId);
+                                <label class="filter-checkbox-item">
+                                    <input 
+                                        type="checkbox" 
+                                        class="magazine-checkbox"
+                                        data-magazine-id="@mag.MagazineId"
+                                        @(isSelected ? "checked" : "")
+                                        onchange="updateMagazineSelection()"
+                                    />
+                                    <span>@mag.Name</span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filter Actions -->
+                <div class="filter-actions">
+                    <button type="submit" class="filter-apply-btn">Apply Filters</button>
+                    <button type="button" class="filter-clear-btn" onclick="clearFilters()">Clear</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="issue-grid">
+        @foreach (var issue in Model)
+        {
+            var magazineClass = issue.MagazineSlug.ToLower().Replace(" ", "-");
+            <a class="issue-card" href="/issues/@issue.IssueId">
+                <div class="issue-thumb @magazineClass lazy-bg" 
+                     data-bg-url="@(string.IsNullOrEmpty(issue.CoverImagePath) ? "" : $"/image?path={Uri.EscapeDataString(issue.CoverImagePath)}")">
+                    <div class="loading-spinner"></div>
+                </div>
+                <div class="issue-info">
+                    <div class="issue-num">@issue.MagazineName</div>
+                    <div class="issue-vol">@issue.VolumeDisplay</div>
+                    <div class="issue-date">@issue.DateLabel</div>
+                    <div class="issue-art-count">@issue.ArticleCount article@(issue.ArticleCount != 1 ? "s" : "")</div>
+                </div>
+            </a>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Lazy load background images using Intersection Observer
+        document.addEventListener('DOMContentLoaded', function() {
+            const lazyBackgrounds = document.querySelectorAll('.lazy-bg');
+            
+            const imageObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const div = entry.target;
+                        const bgUrl = div.getAttribute('data-bg-url');
+                        
+                        if (bgUrl) {
+                            // Preload the image
+                            const img = new Image();
+                            img.onload = () => {
+                                div.style.backgroundImage = `url('${bgUrl}')`;
+                                div.style.backgroundSize = 'contain';
+                                div.style.backgroundPosition = 'center';
+                                div.style.backgroundRepeat = 'no-repeat';
+                                div.classList.add('loaded');
+                                div.querySelector('.loading-spinner').style.display = 'none';
+                            };
+                            img.src = bgUrl;
+                        }
+                        
+                        observer.unobserve(div);
+                    }
+                });
+            }, {
+                rootMargin: '50px' // Start loading 50px before the element is visible
+            });
+            
+            lazyBackgrounds.forEach(bg => {
+                imageObserver.observe(bg);
+            });
+            
+            // Check if filters are active on page load
+            const urlParams = new URLSearchParams(window.location.search);
+            const hasFilters = urlParams.has('yearFrom') || urlParams.has('yearTo') || urlParams.has('magazines');
+            
+            if (hasFilters) {
+                document.getElementById('filterPanel').style.display = 'block';
+                document.getElementById('filterToggleBtn').classList.add('active');
+            }
+            
+            // Update magazines hidden input
+            updateMagazinesInput();
+        });
+
+        function toggleFilters() {
+            const panel = document.getElementById('filterPanel');
+            const btn = document.getElementById('filterToggleBtn');
+            
+            if (panel.style.display === 'none') {
+                panel.style.display = 'block';
+                btn.classList.add('active');
+            } else {
+                panel.style.display = 'none';
+                btn.classList.remove('active');
+            }
+        }
+
+        function toggleMagazineDropdown() {
+            const dropdown = document.getElementById('magazineDropdown');
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function updateMagazineSelection() {
+            const checkboxes = document.querySelectorAll('.magazine-checkbox:checked');
+            const count = checkboxes.length;
+            const text = count > 0 ? `${count} selected` : 'All magazines';
+            document.getElementById('magazineSelectionText').textContent = text;
+            
+            updateMagazinesInput();
+        }
+
+        function updateMagazinesInput() {
+            // Get all checked magazine IDs and create comma-separated string
+            const checkboxes = document.querySelectorAll('.magazine-checkbox:checked');
+            const ids = Array.from(checkboxes).map(cb => cb.getAttribute('data-magazine-id'));
+            
+            // Update hidden input with comma-separated IDs
+            document.getElementById('magazinesInput').value = ids.join(',');
+        }
+
+        function clearFilters() {
+            window.location.href = '/issues';
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('magazineDropdown');
+            const btn = event.target.closest('.filter-dropdown-btn');
+            
+            if (!btn && dropdown && !dropdown.contains(event.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+    </script>
+}
+

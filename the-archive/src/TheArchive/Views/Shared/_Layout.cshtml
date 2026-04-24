@@ -1,0 +1,628 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - The Archive</title>
+    <link rel="stylesheet" href="~/css/archive.css" asp-append-version="true" />
+</head>
+<body>
+    <nav class="topnav">
+        <a class="topnav-logo" asp-controller="Home" asp-action="Index">The <span>Archive</span></a>
+        <div class="topnav-tabs">
+            <a class="tab-btn active" asp-controller="Home" asp-action="Index">Magazines</a>
+            <a class="tab-btn" asp-controller="Issues" asp-action="Index">All Issues</a>
+            <a class="tab-btn" asp-controller="Models" asp-action="Index">Models</a>
+        </div>
+        <div class="topnav-search">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <circle cx="6" cy="6" r="4.5" stroke="white" stroke-width="1.2"/>
+                <line x1="9.5" y1="9.5" x2="13" y2="13" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            <input type="text" placeholder="Search magazines, models…" id="search-input" oninput="handleSearch(this.value)">
+        </div>
+    </nav>
+    
+    <!-- Search Results Dropdown -->
+    <div id="search-results" class="search-results" style="display: none;"></div>
+    
+    @if (ViewBag.Breadcrumbs != null)
+    {
+        <div class="breadcrumb">
+            @foreach (var crumb in ViewBag.Breadcrumbs)
+            {
+                if (crumb.IsActive)
+                {
+                    <span class="bc-item active">@crumb.Text</span>
+                }
+                else
+                {
+                    <a class="bc-item" href="@crumb.Url">@crumb.Text</a>
+                }
+                
+                if (!crumb.IsLast)
+                {
+                    <span class="bc-sep">/</span>
+                }
+            }
+        </div>
+    }
+    
+    @RenderBody()
+    
+    <!-- Spread Viewer Overlay -->
+    <div class="spread-overlay" id="spread-overlay">
+        <div class="spread-info" id="spread-info"></div>
+        <div class="spread-nav">
+            <button class="spread-btn" id="spread-prev" onclick="shiftSpread(-2)">← Prev</button>
+            <button class="spread-btn" id="spread-next" onclick="shiftSpread(2)">Next →</button>
+            <select id="page-links-dropdown" class="page-links-dropdown" style="display:none;" onchange="handleLinkSelection(this)">
+                <option value="">Select linked issue...</option>
+            </select>
+            <div class="spread-close" onclick="closeSpread()">✕</div>
+        </div>
+        <div class="spread-pages" id="spread-pages"></div>
+    </div>
+    
+    <script>
+        // Search functionality
+        let searchTimeout;
+        async function handleSearch(query) {
+            clearTimeout(searchTimeout);
+            
+            const resultsDiv = document.getElementById('search-results');
+            
+            if (!query || query.length < 2) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
+            
+            searchTimeout = setTimeout(async () => {
+                try {
+                    // Search articles and models
+                    const [articlesRes, modelsRes] = await Promise.all([
+                        fetch(`/api/v1/articles?q=${encodeURIComponent(query)}&per_page=5`),
+                        fetch(`/api/v1/models?q=${encodeURIComponent(query)}&per_page=5`)
+                    ]);
+                    
+                    const articles = await articlesRes.json();
+                    const models = await modelsRes.json();
+                    
+                    let html = '<div class="search-results-inner">';
+                    
+                    if (models.length > 0) {
+                        html += '<div class="search-section"><div class="search-section-label">Models</div>';
+                        models.forEach(model => {
+                            html += `<a href="/models/${model.id}" class="search-result">
+                                <span class="search-result-title">${model.name}</span>
+                                <span class="search-result-meta">${model.appearanceCount} appearances</span>
+                            </a>`;
+                        });
+                        html += '</div>';
+                    }
+                    
+                    if (articles.length > 0) {
+                        html += '<div class="search-section"><div class="search-section-label">Articles</div>';
+                        articles.slice(0, 5).forEach(article => {
+                            // Format magazine info: "Magazine Vol.X #Y (Year)"
+                            const volumeInfo = article.volume ? `Vol.${article.volume}` : '';
+                            const issueInfo = article.number ? `#${article.number}` : '';
+                            const yearInfo = article.year ? `(${article.year})` : '';
+                            const separator = (volumeInfo && issueInfo) ? ' ' : '';
+                            const metaInfo = [article.magazineName, volumeInfo + separator + issueInfo, yearInfo]
+                                .filter(x => x)
+                                .join(' ');
+                            
+                            html += `<a href="/articles/${article.articleId}" class="search-result">
+                                <span class="search-result-title">${article.title || 'Untitled'}</span>
+                                <span class="search-result-meta">${metaInfo}</span>
+                            </a>`;
+                        });
+                        html += '</div>';
+                    }
+                    
+                    if (models.length === 0 && articles.length === 0) {
+                        html += '<div class="search-no-results">No results found</div>';
+                    }
+                    
+                    html += '</div>';
+                    
+                    resultsDiv.innerHTML = html;
+                    resultsDiv.style.display = 'block';
+                } catch (error) {
+                    console.error('Search error:', error);
+                }
+            }, 300);
+        }
+        
+        // Close search results when clicking outside
+        document.addEventListener('click', function(e) {
+            const searchInput = document.getElementById('search-input');
+            const resultsDiv = document.getElementById('search-results');
+            if (!searchInput.contains(e.target) && !resultsDiv.contains(e.target)) {
+                resultsDiv.style.display = 'none';
+            }
+        });
+        
+        // Spread viewer state
+        let currentPage = 1;
+        let currentIssueId = null;
+        let maxPage = 100; // Will be updated based on issue
+        let pageImageCache = {}; // Cache page images
+        let currentArticlePages = null; // Pages for current article
+        let currentPageIndex = 0; // Current position in article pages array
+        let currentPageLinks = []; // Links from _index.json for current issue
+        
+        // Toast notification system
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.textContent = message;
+            toast.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background: ${type === 'error' ? '#dc3545' : type === 'warning' ? '#ffc107' : '#28a745'};
+                color: white;
+                padding: 12px 20px;
+                border-radius: 4px;
+                z-index: 10000;
+                animation: slideIn 0.3s ease;
+            `;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+        
+        // Initialize event delegation for article rows
+        document.addEventListener('DOMContentLoaded', () => {
+            const articleList = document.getElementById('article-list');
+            if (articleList) {
+                articleList.addEventListener('click', (e) => {
+                    // Check if click was on a model link
+                    const modelLink = e.target.closest('.model-link');
+                    if (modelLink) {
+                        // Let the link navigate normally, don't open article
+                        return;
+                    }
+                    
+                    // Find the article row
+                    const articleRow = e.target.closest('.article-row');
+                    if (articleRow) {
+                        const articleId = parseInt(articleRow.dataset.articleId);
+                        const articleTitle = articleRow.dataset.articleTitle || 'Untitled';
+                        const category = articleRow.dataset.articleCategory;
+                        const issueId = parseInt(articleRow.dataset.issueId);
+                        
+                        if (articleId && issueId) {
+                            openArticle(articleId, articleTitle, category, issueId);
+                        }
+                    }
+                });
+            }
+        });
+        
+        async function loadPageImages(issueId) {
+            if (pageImageCache[issueId]) {
+                return pageImageCache[issueId];
+            }
+
+            try {
+                const response = await fetch(`/api/v1/pages/issue/${issueId}`);
+                const data = await response.json();
+                pageImageCache[issueId] = data;
+                maxPage = data.maxPage;
+                return data;
+            } catch (error) {
+                console.error('Error loading page images:', error);
+                return null;
+            }
+        }
+
+        async function loadPageLinks(issueId) {
+            try {
+                const response = await fetch(`/index-editor/${issueId}/links`);
+                if (!response.ok) {
+                    console.warn('No links found for issue');
+                    return [];
+                }
+                const data = await response.json();
+                return data.links || [];
+            } catch (error) {
+                console.error('Error loading page links:', error);
+                return [];
+            }
+        }
+
+        async function handleLinkSelection(selectElement) {
+            const selectedValue = selectElement.value;
+            if (!selectedValue) return;
+
+            try {
+                const linkData = JSON.parse(selectedValue);
+                // Find the issue ID by magazine, volume, and issue number
+                const response = await fetch(`/api/v1/issues/find?magazine=${encodeURIComponent(linkData.magazine)}&volume=${linkData.volume}&number=${linkData.issue}`);
+
+                if (response.ok) {
+                    const issue = await response.json();
+                    if (issue && issue.issueId) {
+                        // Open the linked issue in a new tab
+                        window.open(`/issues/${issue.issueId}`, '_blank');
+                    } else {
+                        showToast('Linked issue not found in database', 'warning');
+                    }
+                } else {
+                    showToast('Could not find linked issue', 'error');
+                }
+            } catch (error) {
+                console.error('Error navigating to linked issue:', error);
+                showToast(`Error: ${error.message}`, 'error');
+            }
+
+            // Reset dropdown
+            selectElement.value = '';
+        }
+
+        function updatePageLinksDropdown() {
+            const dropdown = document.getElementById('page-links-dropdown');
+            if (!currentArticlePages || currentPageIndex >= currentArticlePages.length || !currentPageLinks || currentPageLinks.length === 0) {
+                dropdown.style.display = 'none';
+                return;
+            }
+
+            // Get current page(s) being displayed
+            const currentPageData = currentArticlePages[currentPageIndex];
+            const nextPageData = currentPageIndex + 1 < currentArticlePages.length ? currentArticlePages[currentPageIndex + 1] : null;
+
+            // Check if showing a spread
+            const isSpread = nextPageData && 
+                            (nextPageData.page === currentPageData.page + 1) &&
+                            (currentPageData.page % 2 === 0) && 
+                            (nextPageData.page % 2 === 1);
+
+            // Find links for the current page(s)
+            const visiblePages = [currentPageData.page];
+            if (isSpread) {
+                visiblePages.push(nextPageData.page);
+            }
+
+            const relevantLinks = currentPageLinks.filter(link => visiblePages.includes(link.page));
+
+            if (relevantLinks.length === 0) {
+                dropdown.style.display = 'none';
+                return;
+            }
+
+            // Clear and populate dropdown
+            dropdown.innerHTML = '<option value="">Select linked issue...</option>';
+            relevantLinks.forEach(link => {
+                const option = document.createElement('option');
+                option.value = JSON.stringify(link);
+                option.textContent = `Page ${link.page} → ${link.magazine} Vol.${link.volume} #${link.issue}`;
+                dropdown.appendChild(option);
+            });
+
+            dropdown.style.display = 'inline-block';
+        }
+
+        async function openArticle(articleId, articleTitle, category, issueId) {
+            try {
+                // If it's a Cover article, load all issue pages instead of just the cover
+                if (category && category.toLowerCase() === 'cover') {
+                    await openIssuePages(issueId);
+                    return;
+                }
+                
+                // Load article pages and page links in parallel
+                const [pagesResponse, links] = await Promise.all([
+                    fetch(`/api/v1/pages/article/${articleId}`),
+                    loadPageLinks(issueId)
+                ]);
+                
+                if (!pagesResponse.ok) {
+                    throw new Error(`HTTP ${pagesResponse.status}: ${pagesResponse.statusText}`);
+                }
+                
+                const data = await pagesResponse.json();
+                
+                if (!data.pages || data.pages.length === 0) {
+                    showToast('No pages found for this article', 'warning');
+                    return;
+                }
+                
+                currentArticlePages = data.pages;
+                currentPageIndex = 0;
+                currentIssueId = issueId;
+                currentPageLinks = links;
+                
+                // Display first page(s)
+                displayArticlePages();
+                
+                // Update links dropdown
+                updatePageLinksDropdown();
+                
+                // Show overlay
+                document.getElementById('spread-overlay').classList.add('open');
+            } catch (error) {
+                console.error('Error loading article pages:', error);
+                showToast(`Failed to load article: ${error.message}`, 'error');
+            }
+        }
+        
+        async function openIssuePages(issueId) {
+            try {
+                // Load all issue pages and links in parallel
+                const [pageData, links] = await Promise.all([
+                    loadPageImages(issueId),
+                    loadPageLinks(issueId)
+                ]);
+                
+                if (!pageData) {
+                    showToast('Error loading issue pages', 'error');
+                    return;
+                }
+                
+                // Convert page dictionary to array format
+                currentArticlePages = [];
+                for (const [pageNum, imagePath] of Object.entries(pageData.pages)) {
+                    if (imagePath) {
+                        currentArticlePages.push({
+                            page: parseInt(pageNum),
+                            imagePath: imagePath
+                        });
+                    }
+                }
+                
+                // Sort by page number
+                currentArticlePages.sort((a, b) => a.page - b.page);
+                
+                if (currentArticlePages.length === 0) {
+                    showToast('No pages found for this issue', 'warning');
+                    return;
+                }
+                
+                currentPageIndex = 0;
+                currentIssueId = issueId;
+                currentPageLinks = links;
+                
+                // Display first page(s)
+                displayArticlePages();
+                
+                // Update links dropdown
+                updatePageLinksDropdown();
+                
+                // Show overlay
+                document.getElementById('spread-overlay').classList.add('open');
+            } catch (error) {
+                console.error('Error loading issue pages:', error);
+                showToast(`Failed to load issue pages: ${error.message}`, 'error');
+            }
+        }
+        
+        function displayArticlePages() {
+            if (!currentArticlePages || currentArticlePages.length === 0) return;
+            
+            // Get current page and potentially next page for spread
+            const currentPageData = currentArticlePages[currentPageIndex];
+            const nextPageData = currentPageIndex + 1 < currentArticlePages.length ? currentArticlePages[currentPageIndex + 1] : null;
+            
+            // Check if we can show a double spread:
+            // 1. Pages must be consecutive (n, n+1)
+            // 2. First page must be even, second must be odd (8-9, 10-11, not 9-10)
+            const canShowSpread = nextPageData && 
+                                  (nextPageData.page === currentPageData.page + 1) &&
+                                  (currentPageData.page % 2 === 0) && 
+                                  (nextPageData.page % 2 === 1);
+            
+            // Update page info
+            const issueLinkHtml = currentIssueId ? `<a href="/issues/${currentIssueId}" class="issue-link" onclick="closeSpread()">← Issue</a>` : '';
+            if (canShowSpread) {
+                document.getElementById('spread-info').innerHTML = `${issueLinkHtml} Page <strong>${currentPageData.page}</strong> & <strong>${nextPageData.page}</strong>`;
+            } else {
+                document.getElementById('spread-info').innerHTML = `${issueLinkHtml} Page <strong>${currentPageData.page}</strong>`;
+            }
+            
+            // Build HTML - always show pages in numerical order (never swap)
+            let spreadHtml = '<div class="spread-container">';
+            
+            if (canShowSpread) {
+                // Show spread with pages in numerical order (even on left, odd on right)
+                if (currentPageData.imagePath) {
+                    const imageUrl = `/image?path=${encodeURIComponent(currentPageData.imagePath)}`;
+                    spreadHtml += `
+                        <div class="spread-page">
+                            <img src="${imageUrl}" alt="Page ${currentPageData.page}" class="spread-img" />
+                        </div>`;
+                }
+                
+                if (nextPageData.imagePath) {
+                    const imageUrl = `/image?path=${encodeURIComponent(nextPageData.imagePath)}`;
+                    spreadHtml += `
+                        <div class="spread-page">
+                            <img src="${imageUrl}" alt="Page ${nextPageData.page}" class="spread-img" />
+                        </div>`;
+                }
+            } else {
+                // Single page
+                if (currentPageData.imagePath) {
+                    const imageUrl = `/image?path=${encodeURIComponent(currentPageData.imagePath)}`;
+                    spreadHtml += `
+                        <div class="spread-page">
+                            <img src="${imageUrl}" alt="Page ${currentPageData.page}" class="spread-img" />
+                        </div>`;
+                }
+            }
+            
+            spreadHtml += '</div>';
+            document.getElementById('spread-pages').innerHTML = spreadHtml;
+            
+            // Update button states
+            document.getElementById('spread-prev').disabled = currentPageIndex === 0;
+            document.getElementById('spread-next').disabled = canShowSpread ? 
+                (currentPageIndex + 2 >= currentArticlePages.length) : 
+                (currentPageIndex + 1 >= currentArticlePages.length);
+        }
+        
+        function navigateArticlePages(direction) {
+            if (!currentArticlePages) return;
+            
+            // Check if current view is a spread
+            const currentPageData = currentArticlePages[currentPageIndex];
+            const nextPageData = currentPageIndex + 1 < currentArticlePages.length ? currentArticlePages[currentPageIndex + 1] : null;
+            const isSpread = nextPageData && 
+                            (nextPageData.page === currentPageData.page + 1) &&
+                            (currentPageData.page % 2 === 0) && 
+                            (nextPageData.page % 2 === 1);
+            
+            if (direction > 0) {
+                // Next: calculate new index
+                const newIndex = currentPageIndex + (isSpread ? 2 : 1);
+                
+                // Don't advance if we'd go past the end
+                if (newIndex >= currentArticlePages.length) {
+                    return; // Already at the end
+                }
+                
+                currentPageIndex = newIndex;
+            } else {
+                // Previous: go back
+                if (currentPageIndex === 0) return;
+                
+                // If current is showing a spread, go back 2
+                // If current is showing a single, go back 1
+                currentPageIndex--;
+                
+                // Check if the previous position would show a spread
+                // If so, we need to go back one more to land at the start of that spread
+                if (currentPageIndex > 0) {
+                    const prevPageData = currentArticlePages[currentPageIndex - 1];
+                    const currPageData = currentArticlePages[currentPageIndex];
+                    // If prev is even and curr is odd and consecutive, we're in middle of a spread
+                    if (currPageData.page === prevPageData.page + 1 &&
+                        prevPageData.page % 2 === 0 && 
+                        currPageData.page % 2 === 1) {
+                        currentPageIndex--;
+                    }
+                }
+            }
+            
+            displayArticlePages();
+            updatePageLinksDropdown();
+        }
+        
+        async function openSpread(page, issueId) {
+            currentPage = page;
+            currentIssueId = issueId;
+            
+            // Load page images
+            const pageData = await loadPageImages(issueId);
+            if (!pageData) {
+                alert('Error loading page images');
+                return;
+            }
+            
+            // Calculate left and right pages for spread
+            const leftPage = page % 2 === 0 ? page : page - 1;
+            const rightPage = leftPage + 1;
+            
+            // Get image paths
+            const leftImagePath = pageData.pages[leftPage];
+            const rightImagePath = pageData.pages[rightPage];
+            
+            // Check if it's a double spread or single page
+            const hasLeftImage = !!leftImagePath;
+            const hasRightImage = !!rightImagePath;
+            const isDoubleSpread = hasLeftImage && hasRightImage;
+            
+            // Update spread info
+            if (isDoubleSpread) {
+                document.getElementById('spread-info').innerHTML = `Page <strong>${leftPage}</strong> & <strong>${rightPage}</strong>`;
+            } else if (hasLeftImage) {
+                document.getElementById('spread-info').innerHTML = `Page <strong>${leftPage}</strong>`;
+            } else if (hasRightImage) {
+                document.getElementById('spread-info').innerHTML = `Page <strong>${rightPage}</strong>`;
+            }
+            
+            let spreadHtml = '<div class="spread-container">';
+            
+            // Only show pages that have images
+            if (hasLeftImage) {
+                const imageUrl = `/image?path=${encodeURIComponent(leftImagePath)}`;
+                spreadHtml += `
+                    <div class="spread-page">
+                        <img src="${imageUrl}" alt="Page ${leftPage}" class="spread-img" />
+                    </div>`;
+            }
+            
+            if (hasRightImage) {
+                const imageUrl = `/image?path=${encodeURIComponent(rightImagePath)}`;
+                spreadHtml += `
+                    <div class="spread-page">
+                        <img src="${imageUrl}" alt="Page ${rightPage}" class="spread-img" />
+                    </div>`;
+            }
+            
+            // If neither page has an image, show a message
+            if (!hasLeftImage && !hasRightImage) {
+                spreadHtml += `
+                    <div class="spread-page-empty">
+                        <div class="spread-page-empty-text">Pages ${leftPage} & ${rightPage}<br/>No images available</div>
+                    </div>`;
+            }
+            
+            spreadHtml += '</div>';
+            document.getElementById('spread-pages').innerHTML = spreadHtml;
+            
+            // Update button states
+            document.getElementById('spread-prev').disabled = leftPage <= 1;
+            document.getElementById('spread-next').disabled = rightPage >= maxPage;
+            
+            // Show overlay
+            document.getElementById('spread-overlay').classList.add('open');
+        }
+        
+        function closeSpread() {
+            document.getElementById('spread-overlay').classList.remove('open');
+            currentArticlePages = null; // Clear article pages on close
+        }
+        
+        function shiftSpread(delta) {
+            // If viewing article pages, use article navigation
+            if (currentArticlePages) {
+                navigateArticlePages(delta);
+                return;
+            }
+            
+            // Otherwise use old spread navigation
+            const newPage = currentPage + delta;
+            if (newPage >= 1 && newPage <= maxPage) {
+                openSpread(newPage, currentIssueId);
+            }
+        }
+        
+        // ESC key to close
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeSpread();
+            }
+        });
+        
+        // Arrow keys for navigation
+        document.addEventListener('keydown', function(e) {
+            const overlay = document.getElementById('spread-overlay');
+            if (overlay.classList.contains('open')) {
+                if (e.key === 'ArrowLeft') {
+                    shiftSpread(-2);
+                } else if (e.key === 'ArrowRight') {
+                    shiftSpread(2);
+                }
+            }
+        });
+    </script>
+    
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
