@@ -44,13 +44,14 @@ namespace IndexEditor.Services
                     Margin = new Thickness(0, 0, 0, 4)
                 };
 
-                // Create grid with 3 columns: color bar | content | category
+                // Create grid with 4 columns: color bar | content | checkbox | category
                 var grid = new Grid
                 {
                     ColumnDefinitions = new ColumnDefinitions
                     {
                         new ColumnDefinition(GridLength.Auto),    // Color bar
                         new ColumnDefinition(GridLength.Star),    // Content
+                        new ColumnDefinition(GridLength.Auto),    // Checkbox
                         new ColumnDefinition(GridLength.Auto)     // Category label
                     }
                 };
@@ -65,9 +66,14 @@ namespace IndexEditor.Services
                 Grid.SetColumn(contentStack, 1);
                 grid.Children.Add(contentStack);
 
+                // Add thumbnail checkbox
+                var thumbnailCheckbox = CreateThumbnailCheckbox(article);
+                Grid.SetColumn(thumbnailCheckbox, 2);
+                grid.Children.Add(thumbnailCheckbox);
+
                 // Add category label
                 var categoryText = CreateCategoryLabel(article.Category);
-                Grid.SetColumn(categoryText, 2);
+                Grid.SetColumn(categoryText, 3);
                 grid.Children.Add(categoryText);
 
                 cardBorder.Child = grid;
@@ -201,6 +207,83 @@ namespace IndexEditor.Services
                 || category == "interview";
         }
 
+        /// <summary>
+        /// Creates the thumbnail checkbox for the article card.
+        /// Checkbox indicates whether the current page is the thumbnail page for this article.
+        /// </summary>
+        private CheckBox CreateThumbnailCheckbox(Common.Shared.ArticleLine article)
+        {
+            var currentPage = _editorState?.CurrentPage ?? 0;
+            
+            // Check if current page is the thumbnail page (or first page if ThumbnailPage is null)
+            bool isCurrentPageThumbnail = false;
+            if (article.ThumbnailPage.HasValue)
+            {
+                isCurrentPageThumbnail = (article.ThumbnailPage.Value == currentPage);
+            }
+            else if (article.Pages != null && article.Pages.Count > 0)
+            {
+                // Default: first page is the thumbnail
+                isCurrentPageThumbnail = (article.Pages[0] == currentPage);
+            }
+
+            var checkbox = new CheckBox
+            {
+                Content = "Thumbnail",
+                IsChecked = isCurrentPageThumbnail,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 8, 0),
+                Tag = article // Store article reference for event handler
+            };
+
+            checkbox.Click += OnThumbnailCheckboxClicked;
+
+            return checkbox;
+        }
+
+        /// <summary>
+        /// Handles thumbnail checkbox clicks. Updates the article's ThumbnailPage property.
+        /// </summary>
+        private void OnThumbnailCheckboxClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+        {
+            try
+            {
+                if (sender is not CheckBox checkbox) return;
+                if (checkbox.Tag is not Common.Shared.ArticleLine article) return;
+                if (_editorState == null) return;
+
+                var currentPage = _editorState.CurrentPage;
+
+                // If checkbox is checked, set current page as thumbnail
+                if (checkbox.IsChecked == true)
+                {
+                    // If this is the first page, set to null (default behavior)
+                    if (article.Pages != null && article.Pages.Count > 0 && article.Pages[0] == currentPage)
+                    {
+                        article.ThumbnailPage = null;
+                    }
+                    else
+                    {
+                        article.ThumbnailPage = currentPage;
+                    }
+                    
+                    Shared.DebugLogger.Log($"Thumbnail page set to: {article.ThumbnailPage?.ToString() ?? "(default/first page)"}");
+                }
+                else
+                {
+                    // If unchecked, reset to default (first page)
+                    article.ThumbnailPage = null;
+                    Shared.DebugLogger.Log("Thumbnail page reset to default (first page)");
+                }
+
+                // Notify state change to refresh UI
+                _editorState.NotifyStateChanged();
+            }
+            catch (Exception ex)
+            {
+                Shared.DebugLogger.LogException("ArticleCardRenderer.OnThumbnailCheckboxClicked", ex);
+            }
+        }
 
         /// <summary>
         /// Creates the category label text block

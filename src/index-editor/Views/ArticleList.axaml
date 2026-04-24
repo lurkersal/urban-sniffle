@@ -54,7 +54,7 @@
                     <Border
                         Background="Transparent"
                         Width="380"
-                        Height="{Binding HasThumbnail, Converter={StaticResource ArticleRowHeightConverter}}"
+                        Height="100"
                         Margin="8,4" Padding="8" CornerRadius="4"
                         BorderBrush="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}, Converter={StaticResource SelectedArticleBorderConverter}}"
                         BorderThickness="1"
@@ -65,22 +65,10 @@
                                 <!-- Use the category color at 60% opacity for the main article bar to match spec -->
                                 <Border Background="{Binding Category, Converter={StaticResource ArticleCategoryToColorConverter}}" Opacity="0.6" CornerRadius="1" />
                             </Border>
-                            
-                            <!-- Thumbnail image (if available) - positioned on right side -->
-                            <Border Grid.Column="2" Grid.RowSpan="4" Width="120" Height="160" 
-                                    CornerRadius="4" Margin="8,0,0,0"
-                                    BorderBrush="#CCC" BorderThickness="1"
-                                    IsVisible="{Binding HasThumbnail}">
-                                <Image Source="{Binding ThumbnailPath}" 
-                                       Stretch="UniformToFill"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" />
-                            </Border>
 
                             <!-- Top row: Title (left, bold, large), Category (right, no label) -->
                             <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DisplayTitle}" FontWeight="Bold" FontSize="18" VerticalAlignment="Top"/>
-                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding Category}" FontWeight="Bold" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Top"
-                                       IsVisible="{Binding !HasThumbnail}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding Category}" FontWeight="Bold" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Top"/>
 
                             <!-- Second row: Model info for Model/Cover only -->
                             <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" IsVisible="{Binding Category, Converter={StaticResource CoverModelCategoryConverter}}">
